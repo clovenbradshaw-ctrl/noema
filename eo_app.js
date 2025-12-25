@@ -29,6 +29,7 @@ class EOApp {
     this.persistence = null;
     this.syncEngine = null;
     this.complianceChecker = null;
+    this.viewRegistry = null;
 
     // Current context
     this.currentWorkspace = APP_CONFIG.defaultWorkspace;
@@ -87,6 +88,12 @@ class EOApp {
     // Initialize compliance checker
     this.complianceChecker = initComplianceChecker(this.eventStore, this.horizonLattice);
     console.log('EOApp: Compliance checker initialized');
+
+    // Initialize view registry (compliant view hierarchy)
+    if (typeof initViewRegistry === 'function') {
+      this.viewRegistry = initViewRegistry(this.eventStore, this.horizonLattice);
+      console.log('EOApp: View registry initialized');
+    }
 
     // Set current actor
     this.currentActor = options.actor || this._generateActorId();
@@ -353,6 +360,94 @@ class EOApp {
    */
   getProvenanceChain(eventId) {
     return this.eventStore.getProvenanceChain(eventId);
+  }
+
+  // --------------------------------------------------------------------------
+  // View Hierarchy Operations (Compliant)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get the view registry
+   */
+  getViewRegistry() {
+    return this.viewRegistry;
+  }
+
+  /**
+   * Create a compliant workspace view
+   */
+  createWorkspaceView(config) {
+    if (!this.viewRegistry) return null;
+    return this.viewRegistry.createWorkspace(config, this.currentActor);
+  }
+
+  /**
+   * Create a compliant set view
+   */
+  createSetView(workspaceId, config) {
+    if (!this.viewRegistry) return null;
+    return this.viewRegistry.createSet(workspaceId, config, this.currentActor);
+  }
+
+  /**
+   * Create a compliant lens view
+   */
+  createLensView(setId, config) {
+    if (!this.viewRegistry) return null;
+    return this.viewRegistry.createLens(setId, config, this.currentActor);
+  }
+
+  /**
+   * Create a compliant focus view (filtered perspective)
+   * Rule 5: Focus can only restrict, never expand
+   */
+  createFocusView(lensId, config) {
+    if (!this.viewRegistry) return null;
+    return this.viewRegistry.createFocus(lensId, config, this.currentActor);
+  }
+
+  /**
+   * Create a snapshot of a view
+   * Rule 9: Immutable capture that can be superseded
+   */
+  createSnapshotView(sourceViewId, config, data) {
+    if (!this.viewRegistry) return null;
+    return this.viewRegistry.createSnapshot(sourceViewId, config, data, this.currentActor);
+  }
+
+  /**
+   * Get view data through horizon-mediated access
+   * Rule 4: All access is perspectival
+   */
+  getHierarchyViewData(viewId) {
+    if (!this.viewRegistry) return null;
+    return this.viewRegistry.getViewData(viewId, this.currentHorizon);
+  }
+
+  /**
+   * Get the view lineage (ancestry chain)
+   * Rule 7: Trace provenance
+   */
+  getViewLineage(viewId) {
+    if (!this.viewRegistry) return [];
+    return this.viewRegistry.getLineage(viewId);
+  }
+
+  /**
+   * Supersede a view with new configuration
+   * Rule 9: Views can be superseded, never deleted
+   */
+  supersedeView(viewId, newConfig, reason) {
+    if (!this.viewRegistry) return null;
+    return this.viewRegistry.supersedeView(viewId, newConfig, reason, this.currentActor);
+  }
+
+  /**
+   * Get the full view hierarchy tree
+   */
+  getViewHierarchyTree() {
+    if (!this.viewRegistry) return [];
+    return this.viewRegistry.getHierarchyTree();
   }
 
   /**
