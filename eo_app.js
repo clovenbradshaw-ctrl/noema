@@ -474,16 +474,308 @@ class EOApp {
 
 // Singleton
 let _app = null;
+let _dataWorkbench = null;
 
 function getApp() {
   return _app;
 }
 
 async function initApp(options = {}) {
-  _app = new EOApp();
-  await _app.init(options);
-  return _app;
+  console.log('EO Lake: Initializing application...');
+
+  // Initialize the data workbench (the main UI)
+  _dataWorkbench = initDataWorkbench('content-area');
+
+  // Set up global event handlers
+  setupGlobalHandlers();
+
+  // Update sync status indicator
+  updateSyncStatus('synced');
+
+  console.log('EO Lake: Application initialized');
+
+  return _dataWorkbench;
 }
+
+// ============================================================================
+// Global Event Handlers
+// ============================================================================
+
+function setupGlobalHandlers() {
+  // Global search
+  const searchInput = document.getElementById('global-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce((e) => {
+      handleGlobalSearch(e.target.value);
+    }, 300));
+  }
+
+  // Settings button
+  document.getElementById('nav-settings')?.addEventListener('click', () => {
+    showSettingsModal();
+  });
+
+  // Sync status click
+  document.getElementById('nav-sync')?.addEventListener('click', () => {
+    showSyncDetails();
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', handleGlobalKeyboard);
+
+  // Listen for storage changes (cross-tab sync)
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'eo_lake_data') {
+      console.log('Data changed in another tab, refreshing...');
+      _dataWorkbench?._loadData();
+      _dataWorkbench?.refresh();
+    }
+  });
+}
+
+// ============================================================================
+// Global Search
+// ============================================================================
+
+function handleGlobalSearch(query) {
+  if (!query || query.length < 2) {
+    hideSearchResults();
+    return;
+  }
+
+  const workbench = getDataWorkbench();
+  if (!workbench) return;
+
+  const results = [];
+  const queryLower = query.toLowerCase();
+
+  workbench.getSets().forEach(set => {
+    if (set.name.toLowerCase().includes(queryLower)) {
+      results.push({ type: 'set', id: set.id, title: set.name, subtitle: `${set.records.length} records` });
+    }
+
+    const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
+    set.records.forEach(record => {
+      const primaryValue = record.values[primaryField?.id] || '';
+      if (String(primaryValue).toLowerCase().includes(queryLower)) {
+        results.push({ type: 'record', id: record.id, setId: set.id, title: String(primaryValue), subtitle: set.name });
+      }
+    });
+  });
+
+  showSearchResults(results.slice(0, 10));
+}
+
+function showSearchResults(results) {
+  let dropdown = document.getElementById('search-results');
+  if (!dropdown) {
+    dropdown = document.createElement('div');
+    dropdown.id = 'search-results';
+    dropdown.className = 'search-results-dropdown';
+    document.querySelector('.sidebar-search')?.appendChild(dropdown);
+  }
+
+  if (results.length === 0) {
+    dropdown.innerHTML = '<div class="search-no-results"><i class="ph ph-magnifying-glass"></i><span>No results found</span></div>';
+  } else {
+    dropdown.innerHTML = results.map(r => `
+      <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-set-id="${r.setId || ''}">
+        <i class="ph ${r.type === 'set' ? 'ph-table' : 'ph-file'}"></i>
+        <div class="search-result-content">
+          <div class="search-result-title">${escapeHtmlApp(r.title)}</div>
+          <div class="search-result-subtitle">${escapeHtmlApp(r.subtitle)}</div>
+        </div>
+      </div>
+    `).join('');
+
+    dropdown.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        if (item.dataset.type === 'set') _dataWorkbench?._selectSet(item.dataset.id);
+        else if (item.dataset.setId) {
+          _dataWorkbench?._selectSet(item.dataset.setId);
+          setTimeout(() => _dataWorkbench?._showRecordDetail(item.dataset.id), 100);
+        }
+        hideSearchResults();
+        document.getElementById('global-search').value = '';
+      });
+    });
+  }
+  dropdown.style.display = 'block';
+}
+
+function hideSearchResults() {
+  const dropdown = document.getElementById('search-results');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+// ============================================================================
+// Sync Status
+// ============================================================================
+
+function updateSyncStatus(status) {
+  const badge = document.getElementById('sync-status-badge');
+  if (!badge) return;
+  badge.className = 'sync-badge ' + status;
+  const icons = { synced: 'ph-check-circle', syncing: 'ph-arrows-clockwise', error: 'ph-warning-circle' };
+  badge.innerHTML = `<i class="ph ${icons[status] || icons.synced}"></i>`;
+}
+
+function showSyncDetails() {
+  const workbench = getDataWorkbench();
+  if (!workbench) return;
+  const data = workbench.exportData();
+  const size = new Blob([JSON.stringify(data)]).size;
+  const sizeStr = size < 1024 ? `${size} B` : `${(size / 1024).toFixed(1)} KB`;
+  alert(`EO Lake Sync Status\n\nSets: ${data.sets?.length || 0}\nTotal Records: ${data.sets?.reduce((sum, s) => sum + s.records.length, 0) || 0}\nData Size: ${sizeStr}\nStorage: localStorage\nStatus: Synced`);
+}
+
+// ============================================================================
+// Settings
+// ============================================================================
+
+function showSettingsModal() {
+  const modal = document.getElementById('modal-overlay');
+  const modalTitle = modal?.querySelector('.modal-title');
+  const modalBody = document.getElementById('modal-body');
+  const modalFooter = document.getElementById('modal-footer');
+  if (!modal || !modalBody) return;
+
+  modalTitle.textContent = 'Settings';
+  modalBody.innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Data Management</label>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" onclick="exportAllData()"><i class="ph ph-export"></i> Export</button>
+        <button class="btn btn-secondary" onclick="importData()"><i class="ph ph-download"></i> Import</button>
+        <button class="btn btn-danger" onclick="clearAllData()"><i class="ph ph-trash"></i> Clear</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">About</label>
+      <div style="font-size: 12px; color: var(--text-muted);">EO Lake v1.0.0<br>Data Workbench with EO Sync</div>
+    </div>
+  `;
+  modalFooter.innerHTML = '<button class="btn btn-secondary" onclick="closeModal()">Close</button>';
+  modal.classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay')?.classList.remove('active');
+}
+
+// ============================================================================
+// Data Export/Import
+// ============================================================================
+
+function exportAllData() {
+  const workbench = getDataWorkbench();
+  if (!workbench) return;
+  const data = workbench.exportData();
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `eo-lake-export-${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  closeModal();
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        getDataWorkbench()?.importData(data);
+        closeModal();
+        alert('Data imported successfully!');
+      } catch (err) {
+        alert('Failed to import: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function clearAllData() {
+  if (!confirm('Clear all data? This cannot be undone.')) return;
+  localStorage.removeItem('eo_lake_data');
+  window.location.reload();
+}
+
+// ============================================================================
+// Keyboard Shortcuts
+// ============================================================================
+
+function handleGlobalKeyboard(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('global-search')?.focus();
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.target.closest('input, textarea')) {
+    e.preventDefault();
+    exportAllData();
+  }
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
+function escapeHtmlApp(text) {
+  if (text == null) return '';
+  const div = document.createElement('div');
+  div.textContent = String(text);
+  return div.innerHTML;
+}
+
+// ============================================================================
+// Additional Styles
+// ============================================================================
+
+const additionalStyles = document.createElement('style');
+additionalStyles.textContent = `
+  .search-results-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px;
+    background: var(--bg-secondary); border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+    max-height: 300px; overflow-y: auto; z-index: 100; display: none;
+  }
+  .search-result-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
+  }
+  .search-result-item:hover { background: var(--bg-hover); }
+  .search-result-item i { font-size: 16px; color: var(--text-muted); width: 20px; }
+  .search-result-content { flex: 1; min-width: 0; }
+  .search-result-title { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search-result-subtitle { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search-no-results { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; color: var(--text-muted); font-size: 13px; }
+  .search-no-results i { font-size: 24px; }
+  .sidebar-search { position: relative; }
+  .select-dropdown { position: absolute; top: 100%; left: 0; min-width: 200px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); z-index: 100; max-height: 200px; overflow-y: auto; }
+  .select-option { padding: 8px 12px; cursor: pointer; }
+  .select-option:hover { background: var(--bg-hover); }
+  .select-option.selected { background: var(--bg-active); }
+`;
+document.head.appendChild(additionalStyles);
 
 // Exports
 if (typeof module !== 'undefined' && module.exports) {
@@ -500,4 +792,8 @@ if (typeof window !== 'undefined') {
   window.EOApp = EOApp;
   window.getApp = getApp;
   window.initApp = initApp;
+  window.exportAllData = exportAllData;
+  window.importData = importData;
+  window.clearAllData = clearAllData;
+  window.closeModal = closeModal;
 }
