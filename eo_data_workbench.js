@@ -2,16 +2,19 @@
  * EO Lake - Data Workbench
  * Airtable-style data management with EO sync principles
  *
- * Core Concepts:
- * - Sets: Collections of records (like Airtable bases/tables)
- * - Views: Different ways to visualize a Set (Table, Cards, Kanban, etc.)
- * - Records: Individual data entries with typed fields
- * - Fields: Typed columns with various data types
+ * Core Concepts (Nine Rules-Compliant Hierarchy):
+ * - Workspaces: Contextual boundaries (broadest horizon)
+ * - Sets: Typed data collections with schema
+ * - Lenses: View types (Grid, Cards, Kanban, Timeline, Calendar, Graph)
+ * - Focuses: Filtered/restricted views
+ * - Snapshots: Immutable frozen captures
  *
  * EO Integration:
- * - All record operations create Given events (raw data)
- * - Computed fields and derivations create Meant events (interpretations)
- * - Full provenance tracking for all changes
+ * - All views are MEANT events (Rule 1: interpretations)
+ * - All access mediated through horizons (Rule 4)
+ * - Focuses can only restrict, never expand (Rule 5)
+ * - Full provenance tracking for all changes (Rule 7)
+ * - Views are superseded, never deleted (Rule 9)
  */
 
 // ============================================================================
@@ -177,13 +180,21 @@ class EODataWorkbench {
       ? document.getElementById(container)
       : container;
 
-    // State
+    // View Hierarchy (Nine Rules-Compliant)
+    this.viewRegistry = null;
+
+    // Legacy State (for backward compatibility)
     this.sets = [];
     this.currentSetId = null;
     this.currentViewId = null;
     this.selectedRecords = new Set();
     this.editingCell = null;
     this.clipboard = null;
+
+    // Hierarchy State
+    this.currentWorkspaceId = null;
+    this.currentLensId = null;
+    this.currentFocusId = null;
 
     // UI References
     this.elements = {};
@@ -203,8 +214,16 @@ class EODataWorkbench {
   init(eoApp = null) {
     this.eoApp = eoApp;
 
+    // Initialize View Hierarchy Registry
+    this._initViewHierarchy();
+
     // Load persisted data
     this._loadData();
+
+    // If no workspaces exist, create a default one
+    if (this.viewRegistry.getAllWorkspaces().length === 0) {
+      this._createDefaultWorkspace();
+    }
 
     // If no sets exist, create a default one
     if (this.sets.length === 0) {
@@ -216,6 +235,9 @@ class EODataWorkbench {
       this.currentSetId = this.sets[0].id;
       this.currentViewId = this.sets[0].views[0]?.id;
     }
+
+    // Sync legacy sets with view registry
+    this._syncSetsToRegistry();
 
     // Bind elements
     this._bindElements();
@@ -230,8 +252,142 @@ class EODataWorkbench {
     // Update status
     this._updateStatus();
 
-    console.log('EO Data Workbench initialized');
+    console.log('EO Data Workbench initialized with compliant view hierarchy');
     return this;
+  }
+
+  /**
+   * Initialize the View Hierarchy Registry
+   */
+  _initViewHierarchy() {
+    // Get or create the view registry
+    if (typeof initViewRegistry === 'function') {
+      this.viewRegistry = initViewRegistry(
+        this.eoApp?.getGate?.() || null,
+        this.eoApp?.eventStore || null
+      );
+    } else {
+      // Fallback: create a simple registry
+      this.viewRegistry = {
+        workspaces: new Map(),
+        sets: new Map(),
+        lenses: new Map(),
+        focuses: new Map(),
+        snapshots: new Map(),
+        activeWorkspaceId: null,
+        getAllWorkspaces: () => [],
+        getAllSets: () => [],
+        createWorkspace: () => null,
+        subscribe: () => () => {}
+      };
+    }
+
+    // Subscribe to registry events
+    this.viewRegistry.subscribe?.((eventType, data) => {
+      this._handleRegistryEvent(eventType, data);
+    });
+  }
+
+  /**
+   * Create the default workspace
+   */
+  _createDefaultWorkspace() {
+    if (!this.viewRegistry.createWorkspace) return;
+
+    try {
+      const workspace = this.viewRegistry.createWorkspace({
+        name: 'My Workspace',
+        description: 'Default workspace for organizing data',
+        icon: 'ph-folder-simple',
+        horizon: {
+          timeRange: null,
+          actors: [],
+          entityTypes: []
+        }
+      }, ['system_init']);
+
+      this.currentWorkspaceId = workspace.id;
+      this.viewRegistry.activeWorkspaceId = workspace.id;
+    } catch (e) {
+      console.warn('Failed to create default workspace:', e);
+    }
+  }
+
+  /**
+   * Sync legacy sets with the view registry
+   */
+  _syncSetsToRegistry() {
+    if (!this.viewRegistry.createSet) return;
+
+    for (const set of this.sets) {
+      // Check if set already exists in registry
+      if (!this.viewRegistry.sets.has(set.id)) {
+        try {
+          // Create set in registry with schema
+          const registrySet = this.viewRegistry.createSet({
+            id: set.id,
+            name: set.name,
+            icon: set.icon,
+            schema: { fields: set.fields },
+            records: set.records
+          }, this.currentWorkspaceId, ['system_init']);
+
+          // Create lenses for each view
+          for (const view of set.views || []) {
+            const lens = this.viewRegistry.createLens({
+              id: view.id,
+              name: view.name,
+              lensType: this._mapViewTypeToLensType(view.type),
+              config: view.config || {}
+            }, set.id);
+          }
+        } catch (e) {
+          console.warn('Failed to sync set to registry:', e);
+        }
+      }
+    }
+  }
+
+  /**
+   * Map legacy view type to lens type
+   */
+  _mapViewTypeToLensType(viewType) {
+    const mapping = {
+      'table': 'grid',
+      'cards': 'cards',
+      'kanban': 'kanban',
+      'calendar': 'calendar',
+      'graph': 'graph',
+      'timeline': 'timeline'
+    };
+    return mapping[viewType] || 'grid';
+  }
+
+  /**
+   * Handle events from the view registry
+   */
+  _handleRegistryEvent(eventType, data) {
+    switch (eventType) {
+      case 'workspace_activated':
+        this.currentWorkspaceId = data?.id;
+        this._renderSidebar();
+        break;
+      case 'set_activated':
+        this.currentSetId = data?.id;
+        this._renderView();
+        break;
+      case 'lens_activated':
+        this.currentLensId = data?.id;
+        this._renderView();
+        break;
+      case 'focus_activated':
+        this.currentFocusId = data?.id;
+        this._renderView();
+        break;
+      case 'snapshot_created':
+        this._showNotification('Snapshot created: ' + data.name);
+        break;
+    }
   }
 
   _createDefaultSet() {
@@ -339,9 +495,15 @@ class EODataWorkbench {
       this.elements.sidebar.classList.toggle('mobile-open');
     });
 
-    // Filter/Sort buttons
-    document.getElementById('btn-filter')?.addEventListener('click', () => this._showFilterPanel());
+    // Filter/Sort buttons - Now opens Focus modal (Rule 5)
+    document.getElementById('btn-filter')?.addEventListener('click', () => this._showNewFocusModal());
     document.getElementById('btn-sort')?.addEventListener('click', () => this._showSortPanel());
+
+    // Snapshot button (Rule 9)
+    document.getElementById('btn-snapshot')?.addEventListener('click', () => this._showNewSnapshotModal());
+
+    // New workspace button
+    document.getElementById('btn-new-workspace')?.addEventListener('click', () => this._showNewWorkspaceModal());
   }
 
   // --------------------------------------------------------------------------
@@ -459,8 +621,148 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderSidebar() {
+    this._renderWorkspacesNav();
     this._renderSetsNav();
     this._renderViewsNav();
+    this._renderFocusesNav();
+  }
+
+  /**
+   * Render workspaces navigation
+   */
+  _renderWorkspacesNav() {
+    const container = document.getElementById('workspaces-nav');
+    if (!container) return;
+
+    const workspaces = this.viewRegistry?.getAllWorkspaces?.() || [];
+
+    if (workspaces.length === 0) {
+      container.innerHTML = `
+        <div class="nav-item empty-hint" id="create-first-workspace">
+          <i class="ph ph-plus-circle"></i>
+          <span>Create Workspace</span>
+        </div>
+      `;
+      container.querySelector('#create-first-workspace')?.addEventListener('click', () => {
+        this._showNewWorkspaceModal();
+      });
+      return;
+    }
+
+    container.innerHTML = workspaces.map(workspace => `
+      <div class="nav-item ${workspace.id === this.currentWorkspaceId ? 'active' : ''}"
+           data-workspace-id="${workspace.id}">
+        <i class="ph ${workspace.icon || 'ph-folder-simple'}"></i>
+        <span>${this._escapeHtml(workspace.name)}</span>
+        <span class="nav-item-badge" title="Horizon: ${workspace.epistemicStatus}">
+          <i class="ph ph-eye"></i>
+        </span>
+      </div>
+    `).join('');
+
+    // Attach click handlers
+    container.querySelectorAll('.nav-item[data-workspace-id]').forEach(item => {
+      item.addEventListener('click', () => {
+        this._selectWorkspace(item.dataset.workspaceId);
+      });
+
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this._showWorkspaceContextMenu(e, item.dataset.workspaceId);
+      });
+    });
+  }
+
+  /**
+   * Render focuses navigation (filtered views)
+   */
+  _renderFocusesNav() {
+    const container = document.getElementById('focuses-nav');
+    if (!container) return;
+
+    // Get focuses for current lens
+    const focuses = this.viewRegistry?.getFocusesForLens?.(this.currentLensId || this.currentViewId) || [];
+
+    if (focuses.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="nav-section-header">
+        <span class="nav-section-title">Focuses</span>
+        <button class="nav-section-action" id="btn-new-focus" title="Add Focus (Rule 5: Restrict only)">
+          <i class="ph ph-funnel"></i>
+        </button>
+      </div>
+      ${focuses.map(focus => `
+        <div class="nav-item focus-item ${focus.id === this.currentFocusId ? 'active' : ''}"
+             data-focus-id="${focus.id}">
+          <i class="ph ph-funnel"></i>
+          <span>${this._escapeHtml(focus.name)}</span>
+          <span class="nav-item-badge rule-badge" title="Rule 5: Can only restrict">R5</span>
+        </div>
+      `).join('')}
+    `;
+
+    // Attach click handlers
+    container.querySelectorAll('.nav-item[data-focus-id]').forEach(item => {
+      item.addEventListener('click', () => {
+        this._selectFocus(item.dataset.focusId);
+      });
+    });
+
+    document.getElementById('btn-new-focus')?.addEventListener('click', () => {
+      this._showNewFocusModal();
+    });
+  }
+
+  /**
+   * Select a workspace
+   */
+  _selectWorkspace(workspaceId) {
+    this.currentWorkspaceId = workspaceId;
+    this.viewRegistry?.setActiveWorkspace?.(workspaceId);
+
+    // Get sets for this workspace
+    const sets = this.viewRegistry?.getSetsForWorkspace?.(workspaceId) || [];
+    if (sets.length > 0) {
+      this._selectSet(sets[0].id);
+    }
+
+    this._renderSidebar();
+    this._updateBreadcrumb();
+    this._saveData();
+  }
+
+  /**
+   * Select a focus
+   */
+  _selectFocus(focusId) {
+    this.currentFocusId = focusId;
+    this.viewRegistry?.setActiveFocus?.(focusId);
+    this._renderView();
+    this._renderFocusesNav();
+    this._updateBreadcrumb();
+  }
+
+  /**
+   * Clear focus (back to lens view)
+   */
+  _clearFocus() {
+    this.currentFocusId = null;
+    this.viewRegistry?.setActiveFocus?.(null);
+    this._renderView();
+    this._renderFocusesNav();
+    this._updateBreadcrumb();
+  }
+
+  /**
+   * Show notification
+   */
+  _showNotification(message) {
+    // Simple notification - could be enhanced
+    console.log('Notification:', message);
   }
 
   _renderSetsNav() {
@@ -576,15 +878,66 @@ class EODataWorkbench {
   }
 
   _updateBreadcrumb() {
+    const workspace = this.viewRegistry?.getWorkspace?.(this.currentWorkspaceId);
     const set = this.getCurrentSet();
     const view = this.getCurrentView();
+    const focus = this.viewRegistry?.getFocus?.(this.currentFocusId);
 
+    // Workspace breadcrumb
+    const workspaceBreadcrumb = document.getElementById('current-workspace-name');
+    if (workspaceBreadcrumb) {
+      workspaceBreadcrumb.innerHTML = `
+        <i class="ph ${workspace?.icon || 'ph-folder-simple'}"></i>
+        ${this._escapeHtml(workspace?.name || 'Workspace')}
+      `;
+    }
+
+    // Set breadcrumb
     if (this.elements.currentSetName) {
       this.elements.currentSetName.textContent = set?.name || 'No Set';
     }
+
+    // View/Lens breadcrumb
     if (this.elements.currentViewName) {
-      this.elements.currentViewName.textContent = view?.name || 'No View';
+      this.elements.currentViewName.innerHTML = `
+        <i class="ph ${this._getLensIcon(view?.type)}"></i>
+        ${this._escapeHtml(view?.name || 'No Lens')}
+      `;
     }
+
+    // Focus breadcrumb (only show if a focus is active)
+    const focusBreadcrumb = document.getElementById('current-focus-name');
+    if (focusBreadcrumb) {
+      if (focus) {
+        focusBreadcrumb.innerHTML = `
+          <i class="ph ph-caret-right"></i>
+          <i class="ph ph-funnel"></i>
+          ${this._escapeHtml(focus.name)}
+          <button class="breadcrumb-clear" title="Clear focus" onclick="getDataWorkbench()?._clearFocus()">
+            <i class="ph ph-x"></i>
+          </button>
+        `;
+        focusBreadcrumb.style.display = 'inline-flex';
+      } else {
+        focusBreadcrumb.style.display = 'none';
+      }
+    }
+  }
+
+  /**
+   * Get icon for lens type
+   */
+  _getLensIcon(viewType) {
+    const icons = {
+      'table': 'ph-table',
+      'grid': 'ph-table',
+      'cards': 'ph-cards',
+      'kanban': 'ph-kanban',
+      'calendar': 'ph-calendar-blank',
+      'graph': 'ph-graph',
+      'timeline': 'ph-timeline'
+    };
+    return icons[viewType] || 'ph-table';
   }
 
   // --------------------------------------------------------------------------
@@ -1912,20 +2265,25 @@ class EODataWorkbench {
   }
 
   _showNewViewModal() {
-    this._showModal('Create New View', `
+    this._showModal('Create New Lens', `
       <div class="form-group">
-        <label class="form-label">View Name</label>
+        <label class="form-label">Lens Name</label>
         <input type="text" class="form-input" id="new-view-name" placeholder="My View">
       </div>
       <div class="form-group">
-        <label class="form-label">View Type</label>
+        <label class="form-label">Lens Type</label>
         <select class="form-select" id="new-view-type">
-          <option value="table">Table</option>
+          <option value="table">Grid (Table)</option>
           <option value="cards">Cards</option>
           <option value="kanban">Kanban</option>
           <option value="calendar">Calendar</option>
           <option value="graph">Graph</option>
+          <option value="timeline">Timeline</option>
         </select>
+      </div>
+      <div class="compliance-note">
+        <i class="ph ph-info"></i>
+        <span>Lenses are MEANT events - interpretations of how to visualize data (Rule 1)</span>
       </div>
     `, () => {
       const name = document.getElementById('new-view-name')?.value || 'New View';
@@ -1934,14 +2292,353 @@ class EODataWorkbench {
       const set = this.getCurrentSet();
       if (!set) return;
 
+      // Create in legacy format
       const view = createView(name, type);
       set.views.push(view);
       this.currentViewId = view.id;
+
+      // Also create in registry
+      try {
+        this.viewRegistry?.createLens?.({
+          id: view.id,
+          name: name,
+          lensType: this._mapViewTypeToLensType(type),
+          config: view.config || {}
+        }, set.id);
+      } catch (e) {
+        console.warn('Failed to create lens in registry:', e);
+      }
 
       this._saveData();
       this._renderViewsNav();
       this._renderView();
       this._updateBreadcrumb();
+    });
+  }
+
+  /**
+   * Show modal to create a new workspace
+   */
+  _showNewWorkspaceModal() {
+    this._showModal('Create New Workspace', `
+      <div class="form-group">
+        <label class="form-label">Workspace Name</label>
+        <input type="text" class="form-input" id="new-workspace-name" placeholder="My Workspace" autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="new-workspace-desc" rows="2" placeholder="Optional description..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Icon</label>
+        <select class="form-select" id="new-workspace-icon">
+          <option value="ph-folder-simple">Folder</option>
+          <option value="ph-briefcase">Briefcase</option>
+          <option value="ph-buildings">Buildings</option>
+          <option value="ph-users">Team</option>
+          <option value="ph-rocket">Project</option>
+          <option value="ph-lightbulb">Ideas</option>
+        </select>
+      </div>
+      <div class="compliance-note">
+        <i class="ph ph-shield-check"></i>
+        <span>Workspaces define horizon boundaries (Rule 4: Perspectivality)</span>
+      </div>
+    `, () => {
+      const name = document.getElementById('new-workspace-name')?.value || 'Untitled Workspace';
+      const desc = document.getElementById('new-workspace-desc')?.value || '';
+      const icon = document.getElementById('new-workspace-icon')?.value || 'ph-folder-simple';
+
+      try {
+        const workspace = this.viewRegistry?.createWorkspace?.({
+          name,
+          description: desc,
+          icon,
+          horizon: { timeRange: null, actors: [], entityTypes: [] }
+        }, ['user_action']);
+
+        if (workspace) {
+          this.currentWorkspaceId = workspace.id;
+          this._renderSidebar();
+          this._updateBreadcrumb();
+          this._saveData();
+        }
+      } catch (e) {
+        alert('Failed to create workspace: ' + e.message);
+      }
+    });
+
+    setTimeout(() => {
+      document.getElementById('new-workspace-name')?.focus();
+    }, 100);
+  }
+
+  /**
+   * Show modal to create a new focus (filtered view)
+   * Rule 5: Focus can only RESTRICT, never expand
+   */
+  _showNewFocusModal() {
+    const set = this.getCurrentSet();
+    if (!set) return;
+
+    const fields = set.fields || [];
+
+    this._showModal('Create Focus (Filtered View)', `
+      <div class="form-group">
+        <label class="form-label">Focus Name</label>
+        <input type="text" class="form-input" id="new-focus-name" placeholder="e.g., My Tasks This Week" autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Filter By</label>
+        <select class="form-select" id="focus-filter-field">
+          <option value="">Select field...</option>
+          ${fields.map(f => `<option value="${f.id}">${this._escapeHtml(f.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Operator</label>
+        <select class="form-select" id="focus-filter-op">
+          <option value="equals">Equals</option>
+          <option value="not_equals">Not Equals</option>
+          <option value="contains">Contains</option>
+          <option value="is_empty">Is Empty</option>
+          <option value="is_not_empty">Is Not Empty</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Value</label>
+        <input type="text" class="form-input" id="focus-filter-value" placeholder="Filter value...">
+      </div>
+      <div class="compliance-note warning">
+        <i class="ph ph-warning"></i>
+        <span><strong>Rule 5:</strong> Focuses can only RESTRICT what's visible, never expand beyond the parent lens.</span>
+      </div>
+    `, () => {
+      const name = document.getElementById('new-focus-name')?.value || 'Filtered View';
+      const fieldId = document.getElementById('focus-filter-field')?.value;
+      const operator = document.getElementById('focus-filter-op')?.value || 'equals';
+      const value = document.getElementById('focus-filter-value')?.value;
+
+      if (!fieldId) {
+        alert('Please select a field to filter by');
+        return;
+      }
+
+      try {
+        const focus = this.viewRegistry?.createFocus?.({
+          name,
+          restrictions: {
+            filters: [{
+              fieldId,
+              operator,
+              value
+            }]
+          },
+          provenance: { filterReason: 'user_created_focus' }
+        }, this.currentLensId || this.currentViewId);
+
+        if (focus) {
+          this.currentFocusId = focus.id;
+          this._renderFocusesNav();
+          this._renderView();
+          this._updateBreadcrumb();
+          this._saveData();
+        }
+      } catch (e) {
+        alert('Failed to create focus: ' + e.message);
+      }
+    });
+
+    setTimeout(() => {
+      document.getElementById('new-focus-name')?.focus();
+    }, 100);
+  }
+
+  /**
+   * Show modal to create a snapshot
+   * Rule 9: Snapshots are immutable captures that can be superseded
+   */
+  _showNewSnapshotModal() {
+    this._showModal('Create Snapshot', `
+      <div class="form-group">
+        <label class="form-label">Snapshot Name</label>
+        <input type="text" class="form-input" id="new-snapshot-name"
+               placeholder="e.g., Q1 Review - ${new Date().toLocaleDateString()}" autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Purpose</label>
+        <select class="form-select" id="snapshot-purpose">
+          <option value="review">Review/Audit</option>
+          <option value="backup">Backup</option>
+          <option value="milestone">Milestone</option>
+          <option value="comparison">Comparison Point</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" id="snapshot-notes" rows="2" placeholder="Optional notes about this snapshot..."></textarea>
+      </div>
+      <div class="compliance-note">
+        <i class="ph ph-camera"></i>
+        <span><strong>Rule 9:</strong> Snapshots are immutable. They capture the current state and can be superseded but never modified.</span>
+      </div>
+    `, () => {
+      const name = document.getElementById('new-snapshot-name')?.value ||
+                   `Snapshot ${new Date().toLocaleDateString()}`;
+      const purpose = document.getElementById('snapshot-purpose')?.value || 'review';
+      const notes = document.getElementById('snapshot-notes')?.value || '';
+
+      try {
+        const sourceViewId = this.currentFocusId || this.currentLensId || this.currentViewId;
+        const snapshot = this.viewRegistry?.createSnapshot?.({
+          name,
+          annotations: { purpose, notes }
+        }, sourceViewId, 'current_user');
+
+        if (snapshot) {
+          this._showNotification(`Snapshot "${name}" created successfully`);
+          alert(`Snapshot created!\n\nID: ${snapshot.id}\nCaptured at: ${snapshot.capturedAt}`);
+        }
+      } catch (e) {
+        alert('Failed to create snapshot: ' + e.message);
+      }
+    });
+
+    setTimeout(() => {
+      document.getElementById('new-snapshot-name')?.focus();
+    }, 100);
+  }
+
+  /**
+   * Show workspace context menu
+   */
+  _showWorkspaceContextMenu(e, workspaceId) {
+    const menu = this.elements.contextMenu;
+    if (!menu) return;
+
+    menu.innerHTML = `
+      <div class="context-menu-item" data-action="rename">
+        <i class="ph ph-pencil"></i>
+        <span>Rename</span>
+      </div>
+      <div class="context-menu-item" data-action="snapshot">
+        <i class="ph ph-camera"></i>
+        <span>Create Snapshot</span>
+      </div>
+      <div class="context-menu-item" data-action="lineage">
+        <i class="ph ph-tree-structure"></i>
+        <span>View Lineage (Rule 7)</span>
+      </div>
+      <div class="context-menu-divider"></div>
+      <div class="context-menu-item danger" data-action="supersede">
+        <i class="ph ph-arrows-clockwise"></i>
+        <span>Supersede (Rule 9)</span>
+      </div>
+    `;
+
+    menu.style.left = e.pageX + 'px';
+    menu.style.top = e.pageY + 'px';
+    menu.classList.add('active');
+
+    menu.querySelectorAll('.context-menu-item').forEach(item => {
+      item.addEventListener('click', () => {
+        menu.classList.remove('active');
+        const action = item.dataset.action;
+
+        switch (action) {
+          case 'snapshot':
+            this._showNewSnapshotModal();
+            break;
+          case 'lineage':
+            this._showViewLineage(workspaceId);
+            break;
+          case 'supersede':
+            this._showSupersedeModal(workspaceId);
+            break;
+        }
+      });
+    });
+  }
+
+  /**
+   * Show view lineage (Rule 7: Traceability)
+   */
+  _showViewLineage(viewId) {
+    const lineage = this.viewRegistry?.getViewLineage?.(viewId) || [];
+
+    if (lineage.length === 0) {
+      alert('No lineage information available');
+      return;
+    }
+
+    const lineageHtml = lineage.map((item, index) => `
+      ${index > 0 ? '<div class="lineage-arrow"><i class="ph ph-arrow-down"></i></div>' : ''}
+      <div class="lineage-item ${index === 0 ? 'current' : ''}">
+        <div class="lineage-type">${item.viewType.toUpperCase()}</div>
+        <div class="lineage-name">${this._escapeHtml(item.name)}</div>
+        <div class="lineage-id">${item.id}</div>
+      </div>
+    `).join('');
+
+    this._showModal('View Lineage (Rule 7: Groundedness)', `
+      <div class="lineage-chain">
+        ${lineageHtml}
+      </div>
+      <div class="compliance-note">
+        <i class="ph ph-link"></i>
+        <span>All interpretations must trace back to Given events (raw experience)</span>
+      </div>
+    `, null);
+
+    // Hide confirm button for info-only modal
+    document.getElementById('modal-confirm').style.display = 'none';
+    document.getElementById('modal-cancel').textContent = 'Close';
+  }
+
+  /**
+   * Show supersede modal (Rule 9: Defeasibility)
+   */
+  _showSupersedeModal(viewId) {
+    const view = this.viewRegistry?.workspaces?.get(viewId) ||
+                 this.viewRegistry?.sets?.get(viewId) ||
+                 this.viewRegistry?.lenses?.get(viewId);
+
+    if (!view) return;
+
+    this._showModal('Supersede View (Rule 9)', `
+      <div class="form-group">
+        <label class="form-label">Current: ${this._escapeHtml(view.name)}</label>
+        <input type="text" class="form-input" id="supersede-new-name"
+               value="${this._escapeHtml(view.name)} (Updated)" autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason for Supersession</label>
+        <textarea class="form-input" id="supersede-reason" rows="2"
+                  placeholder="Why is this being superseded?"></textarea>
+      </div>
+      <div class="compliance-note warning">
+        <i class="ph ph-warning"></i>
+        <span><strong>Rule 9:</strong> The original view will be marked as superseded but NOT deleted. Views are never erased, only replaced.</span>
+      </div>
+    `, () => {
+      const newName = document.getElementById('supersede-new-name')?.value;
+      const reason = document.getElementById('supersede-reason')?.value;
+
+      if (!newName) return;
+
+      try {
+        const newView = this.viewRegistry?.supersedeView?.(viewId, {
+          ...view.toJSON?.() || view,
+          name: newName
+        }, reason);
+
+        if (newView) {
+          this._showNotification(`View superseded. New ID: ${newView.id}`);
+          this._renderSidebar();
+        }
+      } catch (e) {
+        alert('Failed to supersede: ' + e.message);
+      }
     });
   }
 

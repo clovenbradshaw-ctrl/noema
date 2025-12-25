@@ -34,11 +34,31 @@
         </div>
       </div>
 
-      <!-- Sets Navigation -->
+      <!-- View Hierarchy Navigation (Nine Rules-Compliant) -->
       <nav class="sidebar-nav">
+        <!-- Level 1: Workspaces (Horizon Boundaries) -->
         <div class="nav-section">
           <div class="nav-section-header">
-            <span class="nav-section-title">Sets</span>
+            <span class="nav-section-title">
+              <i class="ph ph-eye" title="Rule 4: Perspectival Access"></i>
+              Workspaces
+            </span>
+            <button class="nav-section-action" id="btn-new-workspace" title="Add Workspace">
+              <i class="ph ph-plus"></i>
+            </button>
+          </div>
+          <div class="nav-items" id="workspaces-nav">
+            <!-- Workspaces rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Level 2: Sets (Typed Data Collections) -->
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <span class="nav-section-title">
+              <i class="ph ph-database" title="Rule 7: Schema as Interpretation"></i>
+              Sets
+            </span>
             <button class="nav-section-action" id="btn-new-set" title="Add Set">
               <i class="ph ph-plus"></i>
             </button>
@@ -48,15 +68,26 @@
           </div>
         </div>
 
+        <!-- Level 3: Lenses (View Types) -->
         <div class="nav-section">
           <div class="nav-section-header">
-            <span class="nav-section-title">Views</span>
-            <button class="nav-section-action" id="btn-new-view" title="Add View">
+            <span class="nav-section-title">
+              <i class="ph ph-eye-slash" title="Rule 1: MEANT Event"></i>
+              Lenses
+            </span>
+            <button class="nav-section-action" id="btn-new-view" title="Add Lens">
               <i class="ph ph-plus"></i>
             </button>
           </div>
           <div class="nav-items" id="views-nav">
-            <!-- Views rendered dynamically -->
+            <!-- Lenses rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Level 4: Focuses (Filtered Views) -->
+        <div class="nav-section focuses-section">
+          <div class="nav-items" id="focuses-nav">
+            <!-- Focuses rendered dynamically (Rule 5: Restrict only) -->
           </div>
         </div>
       </nav>
@@ -86,9 +117,19 @@
             <i class="ph ph-list"></i>
           </button>
           <div class="breadcrumb">
+            <span class="breadcrumb-item" id="current-workspace-name" title="Workspace (Rule 4)">
+              <i class="ph ph-folder-simple"></i>
+              Workspace
+            </span>
+            <i class="ph ph-caret-right"></i>
             <span class="breadcrumb-item" id="current-set-name">All Records</span>
             <i class="ph ph-caret-right"></i>
-            <span class="breadcrumb-item active" id="current-view-name">Table View</span>
+            <span class="breadcrumb-item" id="current-view-name">Lens</span>
+            <span class="breadcrumb-item active focus-breadcrumb" id="current-focus-name" style="display: none;">
+              <i class="ph ph-caret-right"></i>
+              <i class="ph ph-funnel"></i>
+              Focus
+            </span>
           </div>
         </div>
         <div class="header-center">
@@ -113,17 +154,17 @@
         </div>
         <div class="header-right">
           <div class="header-actions">
-            <button class="header-btn" id="btn-filter" title="Filter">
+            <button class="header-btn" id="btn-filter" title="Create Focus (Rule 5: Restrict only)">
               <i class="ph ph-funnel"></i>
-              <span class="btn-label">Filter</span>
+              <span class="btn-label">Focus</span>
             </button>
             <button class="header-btn" id="btn-sort" title="Sort">
               <i class="ph ph-sort-ascending"></i>
               <span class="btn-label">Sort</span>
             </button>
-            <button class="header-btn" id="btn-group" title="Group">
-              <i class="ph ph-rows"></i>
-              <span class="btn-label">Group</span>
+            <button class="header-btn" id="btn-snapshot" title="Create Snapshot (Rule 9: Immutable capture)">
+              <i class="ph ph-camera"></i>
+              <span class="btn-label">Snapshot</span>
             </button>
             <div class="header-divider"></div>
             <button class="header-btn primary" id="btn-add-record">
@@ -293,6 +334,7 @@
   <!-- Scripts - Feature Modules -->
   <script src="eo_event_bus.js"></script>
   <script src="eo_views.js"></script>
+  <script src="eo_view_hierarchy.js"></script>
   <script src="eo_graph.js"></script>
   <script src="eo_data_workbench.js"></script>
 

@@ -2560,3 +2560,231 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== View Hierarchy Styles ===== */
+
+/* Navigation section titles with icons */
+.nav-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-section-title i {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Nav item badge for hierarchy info */
+.nav-item-badge {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.nav-item-badge i {
+  font-size: 12px;
+}
+
+/* Rule badges */
+.rule-badge {
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--meant-bg);
+  color: var(--meant-color);
+}
+
+/* Focus items in sidebar */
+.focus-item {
+  padding-left: 28px !important;
+  font-size: 12px;
+}
+
+.focus-item i.ph-funnel {
+  color: var(--warning-500);
+}
+
+/* Focuses section styling */
+.focuses-section {
+  border-top: 1px dashed var(--border-primary);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+/* Empty hint for navigation */
+.nav-item.empty-hint {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+.nav-item.empty-hint:hover {
+  color: var(--primary-400);
+  cursor: pointer;
+}
+
+/* Compliance note in modals */
+.compliance-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  margin-top: 16px;
+  background: var(--info-50);
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.compliance-note i {
+  font-size: 16px;
+  color: var(--primary-500);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.compliance-note.warning {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.compliance-note.warning i {
+  color: var(--warning-500);
+}
+
+/* Lineage chain visualization */
+.lineage-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+}
+
+.lineage-arrow {
+  color: var(--text-muted);
+}
+
+.lineage-item {
+  width: 100%;
+  max-width: 300px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.lineage-item.current {
+  border-color: var(--primary-500);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.lineage-type {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--meant-color);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.lineage-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.lineage-id {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+}
+
+/* Breadcrumb enhancements */
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.breadcrumb-item i {
+  font-size: 12px;
+}
+
+.breadcrumb-clear {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  margin-left: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.breadcrumb-clear:hover {
+  background: var(--bg-active);
+  color: var(--danger-500);
+}
+
+.focus-breadcrumb {
+  color: var(--warning-500);
+  align-items: center;
+  gap: 4px;
+}
+
+/* Workspace icon in breadcrumb */
+#current-workspace-name i {
+  color: var(--primary-400);
+}
+
+/* Hierarchy-aware status bar */
+.eo-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.eo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.eo-dot.given {
+  background: var(--given-color);
+}
+
+.eo-dot.meant {
+  background: var(--meant-color);
+}
+
+/* Snapshot button styling */
+#btn-snapshot i {
+  color: var(--warning-500);
+}
+
+/* View type icons in lenses nav */
+#views-nav .nav-item i {
+  color: var(--meant-color);
+}
+
+/* Workspaces nav styling */
+#workspaces-nav .nav-item {
+  font-weight: 500;
+}
+
+#workspaces-nav .nav-item.active {
+  background: var(--primary-500);
+  color: white;
+}
+
+#workspaces-nav .nav-item.active .nav-item-badge i {
+  color: rgba(255, 255, 255, 0.7);
+}
