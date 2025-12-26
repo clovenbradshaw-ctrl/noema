@@ -2201,7 +2201,7 @@ class EODataWorkbench {
     this._renderView();
   }
 
-  _changeFieldType(fieldId, newType) {
+  _changeFieldType(fieldId, newType, options = {}) {
     const set = this.getCurrentSet();
     const field = set?.fields.find(f => f.id === fieldId);
     if (!field) return;
@@ -2244,8 +2244,9 @@ class EODataWorkbench {
         field.options.format = 'local';
         break;
       case FieldTypes.LINK:
-        field.options.linkedSetId = null;
-        field.options.allowMultiple = false;
+        // Use provided options or defaults
+        field.options.linkedSetId = options.linkedSetId || null;
+        field.options.allowMultiple = options.allowMultiple || false;
         break;
       case FieldTypes.FORMULA:
         field.options.formula = '';
@@ -2373,8 +2374,8 @@ class EODataWorkbench {
             this._showRenameFieldModal(fieldId);
             break;
           case 'change-type':
-            this._showFieldTypePicker(clickEvent, (newType) => {
-              this._changeFieldType(fieldId, newType);
+            this._showFieldTypePicker(clickEvent, (newType, options = {}) => {
+              this._changeFieldType(fieldId, newType, options);
             });
             break;
           case 'hide':
@@ -2475,10 +2476,30 @@ class EODataWorkbench {
       item.addEventListener('click', () => {
         picker.classList.remove('active');
         const type = item.dataset.type;
-        if (callback) {
-          callback(type);
+
+        // For LINK type, show a modal to select the target set
+        if (type === FieldTypes.LINK) {
+          this._showLinkedSetSelectionModal(({ linkedSetId, allowMultiple }) => {
+            if (callback) {
+              // When changing type, pass the options through callback
+              callback(type, { linkedSetId, allowMultiple });
+            } else {
+              // When adding new field, create with options
+              const field = this._addField(type, 'Link');
+              if (field) {
+                field.options.linkedSetId = linkedSetId;
+                field.options.allowMultiple = allowMultiple;
+                this._saveData();
+                this._renderView();
+              }
+            }
+          });
         } else {
-          this._addField(type);
+          if (callback) {
+            callback(type);
+          } else {
+            this._addField(type);
+          }
         }
       }, { once: true });
     });
@@ -2946,6 +2967,69 @@ class EODataWorkbench {
       const input = document.getElementById('rename-field-input');
       input?.focus();
       input?.select();
+    }, 100);
+  }
+
+  /**
+   * Show modal to select which set to link to when creating/changing to a LINK field
+   * @param {Function} callback - Called with { linkedSetId, allowMultiple } when confirmed
+   * @param {Object} existingOptions - Optional existing options to pre-populate
+   */
+  _showLinkedSetSelectionModal(callback, existingOptions = {}) {
+    const currentSet = this.getCurrentSet();
+
+    // Get all sets except the current one (can't link to self in most cases, but we'll allow it)
+    const availableSets = this.sets || [];
+
+    if (availableSets.length === 0) {
+      alert('No sets available to link to. Please create at least one set first.');
+      return;
+    }
+
+    const setOptions = availableSets.map(s => {
+      const selected = existingOptions.linkedSetId === s.id ? 'selected' : '';
+      const isCurrent = s.id === currentSet?.id ? ' (current set)' : '';
+      return `<option value="${s.id}" ${selected}>${this._escapeHtml(s.name)}${isCurrent}</option>`;
+    }).join('');
+
+    const allowMultipleChecked = existingOptions.allowMultiple ? 'checked' : '';
+
+    this._showModal('Link to Records', `
+      <div class="form-group">
+        <label class="form-label">Link to which set?</label>
+        <select class="form-select" id="linked-set-select">
+          <option value="">Select a set...</option>
+          ${setOptions}
+        </select>
+        <div class="form-hint" style="margin-top: 6px; font-size: 11px; color: var(--text-tertiary);">
+          Choose the set containing records you want to link to
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-checkbox" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="allow-multiple-check" ${allowMultipleChecked}>
+          <span>Allow linking to multiple records</span>
+        </label>
+        <div class="form-hint" style="margin-top: 6px; font-size: 11px; color: var(--text-tertiary);">
+          When enabled, each cell can link to multiple records from the selected set
+        </div>
+      </div>
+    `, () => {
+      const linkedSetId = document.getElementById('linked-set-select')?.value;
+      const allowMultiple = document.getElementById('allow-multiple-check')?.checked || false;
+
+      if (!linkedSetId) {
+        alert('Please select a set to link to');
+        return;
+      }
+
+      if (callback) {
+        callback({ linkedSetId, allowMultiple });
+      }
+    });
+
+    setTimeout(() => {
+      document.getElementById('linked-set-select')?.focus();
     }, 100);
   }
 
