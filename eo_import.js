@@ -737,8 +737,11 @@ class ImportOrchestrator {
 
       for (const row of batch) {
         const values = {};
-        set.fields.forEach((field, index) => {
-          const header = headers[index];
+        set.fields.forEach((field) => {
+          // Use field name to lookup the value from the row
+          // This is more robust than index-based lookup which can break
+          // if fields get reordered
+          const header = field.name;
           let value = row[header];
 
           // Convert values based on type
