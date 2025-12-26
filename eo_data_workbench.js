@@ -206,6 +206,11 @@ class EODataWorkbench {
     this.editingCell = null;
     this.clipboard = null;
 
+    // Undo/Redo Stack
+    this.undoStack = [];
+    this.redoStack = [];
+    this.maxUndoStackSize = 50;
+
     // Hierarchy State
     this.currentWorkspaceId = null;
     this.currentLensId = null;
@@ -2451,17 +2456,34 @@ class EODataWorkbench {
     this._updateRecordValue(recordId, fieldId, value);
   }
 
-  _updateRecordValue(recordId, fieldId, value) {
+  _updateRecordValue(recordId, fieldId, value, skipUndo = false) {
     const set = this.getCurrentSet();
     const record = set?.records.find(r => r.id === recordId);
     if (!record) return;
+
+    const oldValue = record.values[fieldId];
+
+    // Skip if value hasn't changed
+    if (oldValue === value) return;
+
+    // Track for undo/redo (unless this is an undo/redo operation)
+    if (!skipUndo) {
+      this._pushUndoAction({
+        type: 'update_field',
+        recordId,
+        fieldId,
+        oldValue,
+        newValue: value,
+        setId: set.id
+      });
+    }
 
     // Create EO event for the change
     if (this.eoApp) {
       this._createEOEvent('record_updated', {
         recordId,
         fieldId,
-        oldValue: record.values[fieldId],
+        oldValue,
         newValue: value
       });
     }
@@ -2470,6 +2492,114 @@ class EODataWorkbench {
     record.updatedAt = new Date().toISOString();
 
     this._saveData();
+  }
+
+  _pushUndoAction(action) {
+    this.undoStack.push(action);
+    if (this.undoStack.length > this.maxUndoStackSize) {
+      this.undoStack.shift();
+    }
+    // Clear redo stack when a new action is performed
+    this.redoStack = [];
+    this._updateUndoRedoStatus();
+  }
+
+  _undo() {
+    if (this.undoStack.length === 0) {
+      this._showToast('Nothing to undo', 'info');
+      return;
+    }
+
+    const action = this.undoStack.pop();
+    this.redoStack.push(action);
+
+    switch (action.type) {
+      case 'update_field':
+        this._updateRecordValue(action.recordId, action.fieldId, action.oldValue, true);
+        this._renderView();
+        this._showToast('Undone', 'success');
+        break;
+
+      case 'delete_record':
+        // Restore deleted record
+        const set = this.sets.find(s => s.id === action.setId);
+        if (set) {
+          set.records.push(action.record);
+          this._saveData();
+          this._renderView();
+          this._showToast('Record restored', 'success');
+        }
+        break;
+
+      case 'create_record':
+        // Remove created record
+        const createSet = this.sets.find(s => s.id === action.setId);
+        if (createSet) {
+          const idx = createSet.records.findIndex(r => r.id === action.recordId);
+          if (idx > -1) {
+            createSet.records.splice(idx, 1);
+            this._saveData();
+            this._renderView();
+            this._showToast('Record creation undone', 'success');
+          }
+        }
+        break;
+    }
+
+    this._updateUndoRedoStatus();
+  }
+
+  _redo() {
+    if (this.redoStack.length === 0) {
+      this._showToast('Nothing to redo', 'info');
+      return;
+    }
+
+    const action = this.redoStack.pop();
+    this.undoStack.push(action);
+
+    switch (action.type) {
+      case 'update_field':
+        this._updateRecordValue(action.recordId, action.fieldId, action.newValue, true);
+        this._renderView();
+        this._showToast('Redone', 'success');
+        break;
+
+      case 'delete_record':
+        // Re-delete the record
+        const set = this.sets.find(s => s.id === action.setId);
+        if (set) {
+          const idx = set.records.findIndex(r => r.id === action.record.id);
+          if (idx > -1) {
+            set.records.splice(idx, 1);
+            this._saveData();
+            this._renderView();
+            this._showToast('Record deleted again', 'success');
+          }
+        }
+        break;
+
+      case 'create_record':
+        // Re-create the record
+        const createSet = this.sets.find(s => s.id === action.setId);
+        if (createSet) {
+          createSet.records.push(action.record);
+          this._saveData();
+          this._renderView();
+          this._showToast('Record recreated', 'success');
+        }
+        break;
+    }
+
+    this._updateUndoRedoStatus();
+  }
+
+  _updateUndoRedoStatus() {
+    // Update any UI elements that show undo/redo status
+    const undoBtn = document.getElementById('btn-undo');
+    const redoBtn = document.getElementById('btn-redo');
+    if (undoBtn) undoBtn.disabled = this.undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = this.redoStack.length === 0;
   }
 
   _toggleCheckbox(recordId, fieldId) {
@@ -2660,6 +2790,7 @@ class EODataWorkbench {
         return column.id === null ? (val == null || val === '') : val === column.id;
       });
 
+      const isUncategorized = column.id === null;
       html += `
         <div class="kanban-column" data-column-id="${column.id || 'null'}">
           <div class="kanban-column-header">
@@ -2667,6 +2798,11 @@ class EODataWorkbench {
               <span class="select-tag color-${column.color || 'gray'}">${this._escapeHtml(column.name)}</span>
               <span class="kanban-column-count">${columnRecords.length}</span>
             </div>
+            ${!isUncategorized ? `
+              <button class="kanban-column-edit" data-choice-id="${column.id}" title="Edit status">
+                <i class="ph ph-pencil-simple"></i>
+              </button>
+            ` : ''}
           </div>
           <div class="kanban-column-body" data-column-id="${column.id || 'null'}">
             ${columnRecords.map(record => {
@@ -2685,6 +2821,16 @@ class EODataWorkbench {
         </div>
       `;
     });
+
+    // Add "Add Status" button at the end
+    html += `
+      <div class="kanban-add-column">
+        <button class="kanban-add-status-btn" id="kanban-add-status">
+          <i class="ph ph-plus"></i>
+          <span>Add Status</span>
+        </button>
+      </div>
+    `;
 
     html += '</div>';
     this.elements.contentArea.innerHTML = html;
@@ -2709,6 +2855,158 @@ class EODataWorkbench {
         }
       });
     });
+
+    // Edit status buttons
+    document.querySelectorAll('.kanban-column-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const choiceId = btn.dataset.choiceId;
+        this._showEditStatusModal(groupField, choiceId);
+      });
+    });
+
+    // Add status button
+    document.getElementById('kanban-add-status')?.addEventListener('click', () => {
+      this._showAddStatusModal(groupField);
+    });
+  }
+
+  _showEditStatusModal(field, choiceId) {
+    const choice = field.options?.choices?.find(c => c.id === choiceId);
+    if (!choice) return;
+
+    const colors = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
+
+    this._showModal('Edit Status', `
+      <div class="modal-form">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="status-name" value="${this._escapeHtml(choice.name)}" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <div class="color-picker">
+            ${colors.map(color => `
+              <button class="color-option color-${color} ${choice.color === color ? 'selected' : ''}"
+                      data-color="${color}" title="${color}"></button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-primary);">
+          <button class="btn btn-danger" id="delete-status-btn">
+            <i class="ph ph-trash"></i>
+            Delete Status
+          </button>
+        </div>
+      </div>
+    `, () => {
+      const name = document.getElementById('status-name')?.value?.trim();
+      const selectedColor = document.querySelector('.color-option.selected')?.dataset.color || choice.color;
+
+      if (!name) {
+        alert('Please enter a name');
+        return;
+      }
+
+      // Update the choice
+      choice.name = name;
+      choice.color = selectedColor;
+
+      this._saveData();
+      this._renderKanbanView();
+      this._showToast('Status updated', 'success');
+    });
+
+    // Attach color picker handlers
+    setTimeout(() => {
+      document.querySelectorAll('.color-option').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.querySelectorAll('.color-option').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+        });
+      });
+
+      document.getElementById('delete-status-btn')?.addEventListener('click', () => {
+        if (confirm(`Delete status "${choice.name}"? Records with this status will become uncategorized.`)) {
+          // Remove the choice
+          const idx = field.options.choices.findIndex(c => c.id === choiceId);
+          if (idx > -1) {
+            field.options.choices.splice(idx, 1);
+
+            // Clear this value from all records
+            const set = this.getCurrentSet();
+            set?.records.forEach(r => {
+              if (r.values[field.id] === choiceId) {
+                r.values[field.id] = null;
+              }
+            });
+
+            this._saveData();
+            this._closeModal();
+            this._renderKanbanView();
+            this._showToast('Status deleted', 'success');
+          }
+        }
+      });
+    }, 0);
+  }
+
+  _showAddStatusModal(field) {
+    const colors = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
+
+    this._showModal('Add Status', `
+      <div class="modal-form">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="status-name" placeholder="Enter status name" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <div class="color-picker">
+            ${colors.map((color, i) => `
+              <button class="color-option color-${color} ${i === 0 ? 'selected' : ''}"
+                      data-color="${color}" title="${color}"></button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `, () => {
+      const name = document.getElementById('status-name')?.value?.trim();
+      const selectedColor = document.querySelector('.color-option.selected')?.dataset.color || 'gray';
+
+      if (!name) {
+        alert('Please enter a name');
+        return;
+      }
+
+      // Add the new choice
+      if (!field.options.choices) {
+        field.options.choices = [];
+      }
+
+      field.options.choices.push({
+        id: generateId(),
+        name,
+        color: selectedColor
+      });
+
+      this._saveData();
+      this._renderKanbanView();
+      this._showToast('Status added', 'success');
+    });
+
+    // Attach color picker handlers
+    setTimeout(() => {
+      document.querySelectorAll('.color-option').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.querySelectorAll('.color-option').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+        });
+      });
+      document.getElementById('status-name')?.focus();
+    }, 0);
   }
 
   _attachKanbanDragHandlers(groupField) {
@@ -2868,40 +3166,181 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderGraphView() {
+    const set = this.getCurrentSet();
+    const records = this.getFilteredRecords();
+    const primaryField = set?.fields.find(f => f.isPrimary) || set?.fields[0];
+
+    // Check for link fields to show relationships
+    const linkFields = set?.fields.filter(f => f.type === FieldTypes.LINK) || [];
+
     this.elements.contentArea.innerHTML = `
       <div class="graph-container">
-        <canvas class="graph-canvas" id="graph-canvas"></canvas>
-        <div class="graph-controls">
-          <button class="graph-control-btn" id="graph-zoom-in" title="Zoom In">
-            <i class="ph ph-magnifying-glass-plus"></i>
-          </button>
-          <button class="graph-control-btn" id="graph-zoom-out" title="Zoom Out">
-            <i class="ph ph-magnifying-glass-minus"></i>
-          </button>
-          <button class="graph-control-btn" id="graph-center" title="Center">
-            <i class="ph ph-crosshair"></i>
-          </button>
+        <div class="graph-toolbar">
+          <div class="graph-info">
+            <i class="ph ph-graph"></i>
+            <span>${records.length} nodes${linkFields.length > 0 ? `, ${linkFields.length} relationship type${linkFields.length !== 1 ? 's' : ''}` : ''}</span>
+          </div>
+          <div class="graph-controls-inline">
+            <button class="graph-control-btn" id="graph-zoom-in" title="Zoom In">
+              <i class="ph ph-magnifying-glass-plus"></i>
+            </button>
+            <button class="graph-control-btn" id="graph-zoom-out" title="Zoom Out">
+              <i class="ph ph-magnifying-glass-minus"></i>
+            </button>
+            <button class="graph-control-btn" id="graph-center" title="Center">
+              <i class="ph ph-crosshair"></i>
+            </button>
+          </div>
         </div>
+        <div class="graph-canvas-wrapper">
+          <svg class="graph-svg" id="graph-svg"></svg>
+        </div>
+        ${linkFields.length === 0 && records.length > 0 ? `
+          <div class="graph-hint">
+            <i class="ph ph-info"></i>
+            <span>Add Link fields to visualize relationships between records</span>
+          </div>
+        ` : ''}
       </div>
     `;
 
-    // If we have the graph module, initialize it
-    if (typeof initGraph === 'function') {
-      const graph = initGraph('graph-canvas', this);
-      this._graphInstance = graph;
-    }
+    // Render the graph using SVG
+    this._renderRecordGraph(records, primaryField, linkFields);
+  }
+
+  _renderRecordGraph(records, primaryField, linkFields) {
+    const svg = document.getElementById('graph-svg');
+    if (!svg || records.length === 0) return;
+
+    const width = svg.clientWidth || 800;
+    const height = svg.clientHeight || 600;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    // Position nodes in a circle or force-directed layout
+    const nodeRadius = 30;
+    const nodes = records.map((record, i) => {
+      const angle = (2 * Math.PI * i) / records.length;
+      const radius = Math.min(width, height) * 0.35;
+      return {
+        id: record.id,
+        x: centerX + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+        title: record.values[primaryField?.id] || 'Untitled',
+        record
+      };
+    });
+
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+    // Build edges from link fields
+    const edges = [];
+    records.forEach(record => {
+      linkFields.forEach(field => {
+        const linkedIds = record.values[field.id] || [];
+        if (Array.isArray(linkedIds)) {
+          linkedIds.forEach(linkedId => {
+            if (nodeMap.has(linkedId)) {
+              edges.push({
+                source: record.id,
+                target: linkedId,
+                fieldName: field.name
+              });
+            }
+          });
+        }
+      });
+    });
+
+    // Render SVG
+    let svgContent = '';
+
+    // Draw edges
+    edges.forEach(edge => {
+      const source = nodeMap.get(edge.source);
+      const target = nodeMap.get(edge.target);
+      if (source && target) {
+        svgContent += `
+          <line class="graph-edge"
+                x1="${source.x}" y1="${source.y}"
+                x2="${target.x}" y2="${target.y}"
+                stroke="var(--primary-400)"
+                stroke-width="2"
+                marker-end="url(#arrowhead)"/>
+        `;
+      }
+    });
+
+    // Draw nodes
+    nodes.forEach(node => {
+      const truncatedTitle = node.title.length > 15 ? node.title.substring(0, 12) + '...' : node.title;
+      svgContent += `
+        <g class="graph-node" data-record-id="${node.id}" transform="translate(${node.x}, ${node.y})">
+          <circle r="${nodeRadius}" fill="var(--primary-500)" stroke="var(--primary-600)" stroke-width="2"/>
+          <text dy="4" text-anchor="middle" fill="white" font-size="11" font-weight="500">
+            ${this._escapeHtml(truncatedTitle)}
+          </text>
+        </g>
+      `;
+    });
+
+    svg.innerHTML = `
+      <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="35" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary-400)"/>
+        </marker>
+      </defs>
+      ${svgContent}
+    `;
+
+    // Add click handlers
+    svg.querySelectorAll('.graph-node').forEach(node => {
+      node.style.cursor = 'pointer';
+      node.addEventListener('click', () => {
+        this._showRecordDetail(node.dataset.recordId);
+      });
+    });
+
+    // Zoom controls
+    let scale = 1;
+    const wrapper = document.querySelector('.graph-canvas-wrapper');
+
+    document.getElementById('graph-zoom-in')?.addEventListener('click', () => {
+      scale = Math.min(2, scale + 0.1);
+      svg.style.transform = `scale(${scale})`;
+    });
+
+    document.getElementById('graph-zoom-out')?.addEventListener('click', () => {
+      scale = Math.max(0.5, scale - 0.1);
+      svg.style.transform = `scale(${scale})`;
+    });
+
+    document.getElementById('graph-center')?.addEventListener('click', () => {
+      scale = 1;
+      svg.style.transform = `scale(1)`;
+    });
   }
 
   // --------------------------------------------------------------------------
   // Record Operations
   // --------------------------------------------------------------------------
 
-  addRecord(values = {}) {
+  addRecord(values = {}, skipUndo = false) {
     const set = this.getCurrentSet();
     if (!set) return null;
 
     const record = createRecord(set.id, values);
     set.records.push(record);
+
+    // Track for undo (unless skipping)
+    if (!skipUndo) {
+      this._pushUndoAction({
+        type: 'create_record',
+        recordId: record.id,
+        record: { ...record },
+        setId: set.id
+      });
+    }
 
     // Create EO event
     if (this.eoApp) {
@@ -2914,16 +3353,28 @@ class EODataWorkbench {
     return record;
   }
 
-  deleteRecord(recordId) {
+  deleteRecord(recordId, skipUndo = false) {
     const set = this.getCurrentSet();
     if (!set) return;
 
     const index = set.records.findIndex(r => r.id === recordId);
     if (index === -1) return;
 
+    const record = set.records[index];
+
+    // Track for undo (unless skipping)
+    if (!skipUndo) {
+      this._pushUndoAction({
+        type: 'delete_record',
+        recordId,
+        record: { ...record, values: { ...record.values } },
+        setId: set.id
+      });
+    }
+
     // Create EO event
     if (this.eoApp) {
-      this._createEOEvent('record_deleted', { recordId, record: set.records[index] });
+      this._createEOEvent('record_deleted', { recordId, record });
     }
 
     set.records.splice(index, 1);
@@ -4113,39 +4564,65 @@ class EODataWorkbench {
         break;
 
       case FieldTypes.DATE:
-        el.innerHTML = `<input type="${field.options?.includeTime ? 'datetime-local' : 'date'}" class="detail-editor" value="${currentValue || ''}">`;
-        const dateEditor = el.querySelector('input');
-        let dateBlurTimeout = null;
-        dateEditor.focus();
-        dateEditor.addEventListener('change', () => {
-          if (dateBlurTimeout) clearTimeout(dateBlurTimeout);
-          this._updateRecordValue(recordId, fieldId, dateEditor.value || null);
-          el.classList.remove('editing');
-          el.innerHTML = this._renderDetailFieldValue(field, dateEditor.value || null);
-          this._renderView();
-        });
-        dateEditor.addEventListener('blur', () => {
-          dateBlurTimeout = setTimeout(() => {
-            el.classList.remove('editing');
-            el.innerHTML = this._renderDetailFieldValue(field, record.values[fieldId]);
-          }, 100);
-        });
+        this._showDatePickerEditor(el, field, recordId, currentValue);
         break;
 
       case FieldTypes.LONG_TEXT:
-        el.innerHTML = `<textarea class="detail-editor" rows="4">${this._escapeHtml(currentValue || '')}</textarea>`;
+        el.innerHTML = `
+          <div class="detail-editor-wrapper">
+            <textarea class="detail-editor" rows="4">${this._escapeHtml(currentValue || '')}</textarea>
+            <div class="detail-editor-actions">
+              <button class="detail-editor-cancel" title="Cancel (Escape)">
+                <i class="ph ph-x"></i>
+              </button>
+              <button class="detail-editor-save" title="Save (Enter)">
+                <i class="ph ph-check"></i>
+              </button>
+            </div>
+          </div>
+        `;
         const textareaEditor = el.querySelector('textarea');
         textareaEditor.focus();
-        textareaEditor.addEventListener('blur', () => {
+
+        const saveTextarea = () => {
           this._updateRecordValue(recordId, fieldId, textareaEditor.value);
           el.classList.remove('editing');
           el.innerHTML = this._renderDetailFieldValue(field, textareaEditor.value);
           this._renderView();
+        };
+
+        const cancelTextarea = () => {
+          el.classList.remove('editing');
+          el.innerHTML = this._renderDetailFieldValue(field, currentValue);
+        };
+
+        el.querySelector('.detail-editor-save')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          saveTextarea();
+        });
+        el.querySelector('.detail-editor-cancel')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          cancelTextarea();
+        });
+        textareaEditor.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') cancelTextarea();
         });
         break;
 
       default:
-        el.innerHTML = `<input type="text" class="detail-editor" value="${this._escapeHtml(currentValue || '')}">`;
+        el.innerHTML = `
+          <div class="detail-editor-wrapper">
+            <input type="text" class="detail-editor" value="${this._escapeHtml(currentValue || '')}">
+            <div class="detail-editor-actions">
+              <button class="detail-editor-cancel" title="Cancel (Escape)">
+                <i class="ph ph-x"></i>
+              </button>
+              <button class="detail-editor-save" title="Save (Enter)">
+                <i class="ph ph-check"></i>
+              </button>
+            </div>
+          </div>
+        `;
         const inputEditor = el.querySelector('input');
         inputEditor.focus();
         inputEditor.select();
@@ -4157,18 +4634,184 @@ class EODataWorkbench {
           this._renderView();
         };
 
-        inputEditor.addEventListener('blur', saveInput);
+        const cancelInput = () => {
+          el.classList.remove('editing');
+          el.innerHTML = this._renderDetailFieldValue(field, currentValue);
+        };
+
+        el.querySelector('.detail-editor-save')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          saveInput();
+        });
+        el.querySelector('.detail-editor-cancel')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          cancelInput();
+        });
         inputEditor.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
             saveInput();
           }
           if (e.key === 'Escape') {
-            el.classList.remove('editing');
-            el.innerHTML = this._renderDetailFieldValue(field, currentValue);
+            cancelInput();
           }
         });
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Date Picker
+  // --------------------------------------------------------------------------
+
+  _showDatePickerEditor(el, field, recordId, currentValue) {
+    const includeTime = field.options?.includeTime;
+    const currentDate = currentValue ? new Date(currentValue) : new Date();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    el.innerHTML = this._renderDatePicker(currentDate, includeTime);
+    el.classList.add('date-picker-open');
+
+    const picker = el.querySelector('.date-picker');
+    if (!picker) return;
+
+    // Attach navigation
+    picker.querySelector('.dp-prev')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._navigateDatePicker(el, field, recordId, -1);
+    });
+
+    picker.querySelector('.dp-next')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._navigateDatePicker(el, field, recordId, 1);
+    });
+
+    // Attach day click handlers
+    picker.querySelectorAll('.dp-day:not(.other-month):not(.empty)').forEach(day => {
+      day.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const selectedDay = parseInt(day.textContent);
+        const displayedDate = new Date(picker.dataset.year, picker.dataset.month, selectedDay);
+
+        let value = displayedDate.toISOString().split('T')[0];
+
+        if (includeTime) {
+          const timeInput = picker.querySelector('.dp-time-input');
+          if (timeInput?.value) {
+            value += 'T' + timeInput.value;
+          }
+        }
+
+        this._updateRecordValue(recordId, field.id, value);
+        el.classList.remove('editing', 'date-picker-open');
+        el.innerHTML = this._renderDetailFieldValue(field, value);
+        this._renderView();
+      });
+    });
+
+    // Today button
+    picker.querySelector('.dp-today')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const today = new Date();
+      let value = today.toISOString().split('T')[0];
+      if (includeTime) {
+        value = today.toISOString().slice(0, 16);
+      }
+      this._updateRecordValue(recordId, field.id, value);
+      el.classList.remove('editing', 'date-picker-open');
+      el.innerHTML = this._renderDetailFieldValue(field, value);
+      this._renderView();
+    });
+
+    // Clear button
+    picker.querySelector('.dp-clear')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._updateRecordValue(recordId, field.id, null);
+      el.classList.remove('editing', 'date-picker-open');
+      el.innerHTML = this._renderDetailFieldValue(field, null);
+      this._renderView();
+    });
+
+    // Store context for navigation
+    picker.dataset.recordId = recordId;
+    picker.dataset.fieldId = field.id;
+    picker.dataset.year = year;
+    picker.dataset.month = month;
+  }
+
+  _navigateDatePicker(el, field, recordId, delta) {
+    const picker = el.querySelector('.date-picker');
+    if (!picker) return;
+
+    let year = parseInt(picker.dataset.year);
+    let month = parseInt(picker.dataset.month) + delta;
+
+    if (month < 0) {
+      month = 11;
+      year--;
+    } else if (month > 11) {
+      month = 0;
+      year++;
+    }
+
+    const currentDate = new Date(year, month, 1);
+    el.innerHTML = this._renderDatePicker(currentDate, field.options?.includeTime);
+
+    // Reattach event handlers
+    this._showDatePickerEditor(el, field, recordId, currentDate.toISOString());
+  }
+
+  _renderDatePicker(currentDate, includeTime) {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const today = new Date();
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDay = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    let daysHtml = '';
+    // Empty cells
+    for (let i = 0; i < startDay; i++) {
+      daysHtml += '<div class="dp-day empty"></div>';
+    }
+    // Days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+      const isSelected = d === currentDate.getDate() && month === currentDate.getMonth() && year === currentDate.getFullYear();
+      daysHtml += `<div class="dp-day${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}">${d}</div>`;
+    }
+
+    return `
+      <div class="date-picker" data-year="${year}" data-month="${month}">
+        <div class="dp-header">
+          <button class="dp-nav dp-prev" type="button"><i class="ph ph-caret-left"></i></button>
+          <span class="dp-title">${monthNames[month]} ${year}</span>
+          <button class="dp-nav dp-next" type="button"><i class="ph ph-caret-right"></i></button>
+        </div>
+        <div class="dp-weekdays">
+          ${dayNames.map(d => `<div class="dp-weekday">${d}</div>`).join('')}
+        </div>
+        <div class="dp-days">
+          ${daysHtml}
+        </div>
+        ${includeTime ? `
+          <div class="dp-time">
+            <label>Time:</label>
+            <input type="time" class="dp-time-input" value="${currentDate.toTimeString().slice(0, 5)}">
+          </div>
+        ` : ''}
+        <div class="dp-footer">
+          <button class="dp-btn dp-today" type="button">Today</button>
+          <button class="dp-btn dp-clear" type="button">Clear</button>
+        </div>
+      </div>
+    `;
   }
 
   // --------------------------------------------------------------------------
@@ -4181,8 +4824,68 @@ class EODataWorkbench {
   }
 
   _showSortPanel() {
-    // TODO: Implement sort dropdown
-    console.log('Show sort panel');
+    const panel = document.getElementById('sort-panel');
+    if (!panel) return;
+
+    const set = this.getCurrentSet();
+    const view = this.getCurrentView();
+    if (!set) return;
+
+    // Populate the sort rules from current view config
+    const container = document.getElementById('sort-rules');
+    if (container) {
+      container.innerHTML = '';
+
+      // Add existing sorts
+      const sorts = view?.config.sorts || [];
+      sorts.forEach((sort, index) => {
+        this._addSortRule(container, set.fields, sort, index);
+      });
+    }
+
+    panel.style.display = 'block';
+
+    // Position near the sort button
+    const btn = document.getElementById('btn-sort');
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      panel.style.top = `${rect.bottom + 4}px`;
+      panel.style.right = `${window.innerWidth - rect.right}px`;
+    }
+  }
+
+  _addSortRule(container, fields, sort = null, index = -1) {
+    const ruleId = index >= 0 ? index : container.children.length;
+    const sortableFields = fields.filter(f =>
+      ![FieldTypes.FORMULA, FieldTypes.ROLLUP, FieldTypes.MULTI_SELECT].includes(f.type)
+    );
+
+    const rule = document.createElement('div');
+    rule.className = 'sort-rule';
+    rule.dataset.ruleIndex = ruleId;
+    rule.innerHTML = `
+      <select class="sort-field-select">
+        <option value="">Select field...</option>
+        ${sortableFields.map(f => `
+          <option value="${f.id}" ${sort?.fieldId === f.id ? 'selected' : ''}>
+            ${this._escapeHtml(f.name)}
+          </option>
+        `).join('')}
+      </select>
+      <select class="sort-direction-select">
+        <option value="asc" ${sort?.direction === 'asc' ? 'selected' : ''}>A → Z</option>
+        <option value="desc" ${sort?.direction === 'desc' ? 'selected' : ''}>Z → A</option>
+      </select>
+      <button class="sort-rule-remove" title="Remove sort">
+        <i class="ph ph-x"></i>
+      </button>
+    `;
+
+    rule.querySelector('.sort-rule-remove').addEventListener('click', () => {
+      rule.remove();
+    });
+
+    container.appendChild(rule);
   }
 
   // --------------------------------------------------------------------------
@@ -4212,7 +4915,7 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _handleKeyDown(e) {
-    // Escape to close modals/menus
+    // Escape to close modals/menus and clear selection
     if (e.key === 'Escape') {
       this._closeModal();
       this._hideKeyboardShortcuts();
@@ -4227,6 +4930,15 @@ class EODataWorkbench {
       if (this.editingCell) {
         this._cancelCellEdit();
       }
+
+      // Clear selection when Escape is pressed (if no modal is open)
+      if (this.selectedRecords.size > 0) {
+        this._clearSelection();
+        this._showToast('Selection cleared', 'info');
+      }
+
+      // Hide search results
+      this._hideSearchResults();
     }
 
     // ? to show keyboard shortcuts
@@ -4253,6 +4965,20 @@ class EODataWorkbench {
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'T' && !e.target.closest('input, textarea')) {
       e.preventDefault();
       this._reopenClosedTab();
+    }
+
+    // ========== UNDO/REDO ==========
+
+    // Ctrl + Z for undo
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey && !e.target.closest('input, textarea')) {
+      e.preventDefault();
+      this._undo();
+    }
+
+    // Ctrl + Shift + Z or Ctrl + Y for redo
+    if ((e.metaKey || e.ctrlKey) && ((e.shiftKey && e.key === 'Z') || e.key === 'y') && !e.target.closest('input, textarea')) {
+      e.preventDefault();
+      this._redo();
     }
 
     // Ctrl + Tab to go to next tab
@@ -4734,9 +5460,11 @@ class EODataWorkbench {
   _handleSearch(query) {
     if (!query || query.length < 2) {
       this._hideSearchResults();
+      this.currentSearchQuery = null;
       return;
     }
 
+    this.currentSearchQuery = query;
     const results = [];
     const lowerQuery = query.toLowerCase();
 
@@ -4744,35 +5472,77 @@ class EODataWorkbench {
     this.sets.forEach(set => {
       // Search set name
       if (set.name.toLowerCase().includes(lowerQuery)) {
-        results.push({ type: 'set', id: set.id, name: set.name, icon: 'ph-table' });
+        results.push({ type: 'set', id: set.id, name: set.name, icon: 'ph-table', matchedField: null });
       }
 
-      // Search records
+      // Search records - check ALL fields, not just primary
       set.records.forEach(record => {
         const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
-        const primaryValue = record.values[primaryField?.id];
+        const primaryValue = record.values[primaryField?.id] || 'Untitled';
+        let matchedField = null;
+        let matchedValue = null;
 
-        if (primaryValue && String(primaryValue).toLowerCase().includes(lowerQuery)) {
+        // Check each field for matches
+        for (const field of set.fields) {
+          const value = record.values[field.id];
+          if (value && String(value).toLowerCase().includes(lowerQuery)) {
+            matchedField = field;
+            matchedValue = String(value);
+            break;
+          }
+        }
+
+        if (matchedField) {
           results.push({
             type: 'record',
             id: record.id,
             setId: set.id,
             name: primaryValue,
             setName: set.name,
-            icon: 'ph-note'
+            icon: 'ph-note',
+            matchedField: matchedField.name,
+            matchedValue: matchedValue,
+            query: query
           });
         }
       });
     });
 
-    this._renderSearchResults(results.slice(0, 10));
+    this._renderSearchResults(results.slice(0, 15), query);
   }
 
-  _renderSearchResults(results) {
+  _highlightMatch(text, query) {
+    if (!text || !query) return this._escapeHtml(text || '');
+
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const startIndex = lowerText.indexOf(lowerQuery);
+
+    if (startIndex === -1) return this._escapeHtml(text);
+
+    const before = text.substring(0, startIndex);
+    const match = text.substring(startIndex, startIndex + query.length);
+    const after = text.substring(startIndex + query.length);
+
+    return `${this._escapeHtml(before)}<mark class="search-highlight">${this._escapeHtml(match)}</mark>${this._escapeHtml(after)}`;
+  }
+
+  _renderSearchResults(results, query) {
     let dropdown = document.querySelector('.search-results-dropdown');
 
     if (results.length === 0) {
-      if (dropdown) dropdown.remove();
+      // Show "no results" message
+      if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.className = 'search-results-dropdown';
+        document.querySelector('.sidebar-search')?.appendChild(dropdown);
+      }
+      dropdown.innerHTML = `
+        <div class="search-no-results">
+          <i class="ph ph-magnifying-glass"></i>
+          <span>No results found for "${this._escapeHtml(query)}"</span>
+        </div>
+      `;
       return;
     }
 
@@ -4782,13 +5552,28 @@ class EODataWorkbench {
       document.querySelector('.sidebar-search')?.appendChild(dropdown);
     }
 
-    dropdown.innerHTML = results.map(r => `
-      <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-set-id="${r.setId || ''}">
-        <i class="ph ${r.icon}"></i>
-        <span class="result-title">${this._escapeHtml(r.name)}</span>
-        <span class="result-type">${r.type}${r.setName ? ` · ${this._escapeHtml(r.setName)}` : ''}</span>
+    dropdown.innerHTML = `
+      <div class="search-results-header">
+        <span>${results.length} result${results.length !== 1 ? 's' : ''}</span>
       </div>
-    `).join('');
+      ${results.map(r => `
+        <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-set-id="${r.setId || ''}">
+          <div class="search-result-icon">
+            <i class="ph ${r.icon}"></i>
+          </div>
+          <div class="search-result-content">
+            <span class="result-title">${this._highlightMatch(r.name, query)}</span>
+            ${r.matchedField && r.matchedField !== 'Name' ? `
+              <span class="result-context">
+                <span class="result-field">${this._escapeHtml(r.matchedField)}:</span>
+                ${this._highlightMatch(r.matchedValue?.substring(0, 50) + (r.matchedValue?.length > 50 ? '...' : ''), query)}
+              </span>
+            ` : ''}
+            <span class="result-type">${r.type}${r.setName ? ` in ${this._escapeHtml(r.setName)}` : ''}</span>
+          </div>
+        </div>
+      `).join('')}
+    `;
 
     dropdown.querySelectorAll('.search-result-item').forEach(item => {
       item.addEventListener('click', () => {
@@ -4799,12 +5584,28 @@ class EODataWorkbench {
           if (item.dataset.setId) {
             this._selectSet(item.dataset.setId);
           }
+          // Scroll to and highlight the record in the grid
+          setTimeout(() => {
+            this._highlightRecordInGrid(item.dataset.id);
+          }, 100);
           this._showRecordDetail(item.dataset.id);
         }
         this._hideSearchResults();
         document.getElementById('global-search').value = '';
       });
     });
+  }
+
+  _highlightRecordInGrid(recordId) {
+    // Find and scroll to the record in the grid
+    const row = document.querySelector(`tr[data-record-id="${recordId}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('search-highlight-row');
+      setTimeout(() => {
+        row.classList.remove('search-highlight-row');
+      }, 2000);
+    }
   }
 
   _showSearchResults() {
