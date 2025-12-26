@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EO Operator Stream Demo</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg-secondary: #16213e;
+      --text: #eaeaea;
+      --text-muted: #8b8b8b;
+      --accent: #00d9ff;
+      --accent-dim: #0077b6;
+      --success: #00cc66;
+      --warning: #ffcc00;
+      --error: #ff4444;
+      --border: #2a2a4a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    h1 {
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-size: 24px;
+    }
+
+    h2 {
+      color: var(--text);
+      font-size: 16px;
+      margin: 20px 0 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .panel h3 {
+      color: var(--accent);
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .operator-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .op-seg { background: #2563eb; color: white; }
+    .op-con { background: #7c3aed; color: white; }
+    .op-syn { background: #059669; color: white; }
+    .op-sup { background: #dc2626; color: white; }
+    .op-des { background: #ca8a04; color: white; }
+    .op-rec { background: #db2777; color: white; }
+
+    button {
+      background: var(--accent-dim);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      margin: 4px;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: var(--accent); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-group { margin: 12px 0; }
+
+    pre {
+      background: #0d0d1a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .log {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .log-entry:last-child { border-bottom: none; }
+
+    .log-time {
+      color: var(--text-muted);
+      margin-right: 8px;
+    }
+
+    .log-type {
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .log-type.intent { color: var(--accent); }
+    .log-type.slice { color: var(--success); }
+    .log-type.error { color: var(--error); }
+    .log-type.info { color: var(--warning); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .stat {
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+
+    .status-connected { background: var(--success); }
+    .status-disconnected { background: var(--error); }
+    .status-connecting { background: var(--warning); }
+
+    input[type="text"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      width: 200px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 8px 0;
+    }
+
+    label {
+      color: var(--text-muted);
+      font-size: 12px;
+      min-width: 80px;
+    }
+
+    .highlight {
+      background: rgba(0, 217, 255, 0.1);
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+
+    .full-width { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>EO Operator Stream Demo</h1>
+    <p class="subtitle">
+      Demonstrating the 9 operators as data contracts for intelligent, demand-driven data streaming
+    </p>
+
+    <div class="stats" id="stats">
+      <div class="stat">
+        <div class="stat-value" id="stat-events">0</div>
+        <div class="stat-label">Events</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-requests">0</div>
+        <div class="stat-label">Requests</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-bytes">0</div>
+        <div class="stat-label">Bytes</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-subs">0</div>
+        <div class="stat-label">Subscriptions</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Left Column: Operators -->
+      <div>
+        <div class="panel">
+          <h3>
+            <span class="status-indicator status-connected" id="status-indicator"></span>
+            Stream Status: <span id="stream-status">Initializing...</span>
+          </h3>
+        </div>
+
+        <div class="panel">
+          <h3><span class="operator-badge op-seg">SEG</span> Segmentation (Filter)</h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Returns only matching entities. Avoids downloading everything.
+          </p>
+          <div class="form-row">
+            <label>Collection:</label>
+            <input type="text" id="seg-collection" value="deals" placeholder="deals">
+          </div>
+          <div class="form-row">
+            <label>Filter:</label>
+            <input type="text" id="seg-filter" value='{"status": "active"}' placeholder='{"status": "active"}'>
+          </div>
+          <div class="btn-group">
+            <button onclick="runSEG()">Execute SEG</button>
+            <button onclick="runSEGPaginated()">SEG (Paginated)</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3><span class="operator-badge op-syn">SYN</span> Synthesis (Aggregation)</h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Server computes aggregates, returns only the result. No raw data transfer.
+          </p>
+          <div class="form-row">
+            <label>Collection:</label>
+            <input type="text" id="syn-collection" value="deals" placeholder="deals">
+          </div>
+          <div class="form-row">
+            <label>Group By:</label>
+            <input type="text" id="syn-groupby" value="payload.quarter" placeholder="payload.quarter">
+          </div>
+          <div class="form-row">
+            <label>Aggregate:</label>
+            <input type="text" id="syn-aggregate" value='{"field": "payload.amount", "mode": "sum"}' placeholder='{"field": "...", "mode": "sum"}'>
+          </div>
+          <div class="btn-group">
+            <button onclick="runSYN()">Execute SYN</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3><span class="operator-badge op-con">CON</span> Connection (Relationships)</h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Traverse relationships on demand. Fetch only connected entities.
+          </p>
+          <div class="form-row">
+            <label>Source:</label>
+            <input type="text" id="con-source" value="" placeholder="event ID">
+          </div>
+          <div class="form-row">
+            <label>Relationship:</label>
+            <input type="text" id="con-relationship" value="customer" placeholder="customer">
+          </div>
+          <div class="btn-group">
+            <button onclick="runCON()">Execute CON</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3><span class="operator-badge op-sup">SUP</span> Superposition (Multi-Truth)</h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Handle conflicting values from multiple sources. Contradiction as data.
+          </p>
+          <div class="form-row">
+            <label>Entity:</label>
+            <input type="text" id="sup-entity" value="" placeholder="entity ID">
+          </div>
+          <div class="form-row">
+            <label>Property:</label>
+            <input type="text" id="sup-property" value="amount" placeholder="property name">
+          </div>
+          <div class="btn-group">
+            <button onclick="runSUP()">Execute SUP</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3><span class="operator-badge op-rec">REC</span> Recursion (Re-center)</h3>
+          <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+            Rebuild perspective around a new center. Enables prefetch prediction.
+          </p>
+          <div class="form-row">
+            <label>New Center:</label>
+            <input type="text" id="rec-center" value="customer" placeholder="customer">
+          </div>
+          <div class="btn-group">
+            <button onclick="runREC()">Execute REC</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Results & Log -->
+      <div>
+        <div class="panel">
+          <h3>Last Result</h3>
+          <pre id="result">// Results will appear here...</pre>
+        </div>
+
+        <div class="panel">
+          <h3>Activity Log</h3>
+          <div class="log" id="log">
+            <!-- Log entries -->
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Sample Data</h3>
+          <div class="btn-group">
+            <button onclick="loadSampleData()">Load Sample Deals</button>
+            <button onclick="clearData()">Clear All</button>
+          </div>
+          <pre id="sample-info" style="max-height: 150px;">// Click "Load Sample Deals" to populate test data</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load EO modules -->
+  <script src="eo_event_store.js"></script>
+  <script src="eo_horizon.js"></script>
+  <script src="eo_compliance.js"></script>
+  <script src="eo_state_derivation.js"></script>
+  <script src="eo_persistence.js"></script>
+  <script src="eo_sync.js"></script>
+  <script src="eo_operator_stream.js"></script>
+
+  <script>
+    // Global state
+    let eventStore;
+    let streamClient;
+    let requestCount = 0;
+    let totalBytes = 0;
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Initialize event store
+      eventStore = new EOEventStore();
+
+      // Initialize operator stream client
+      streamClient = new OperatorStreamClient({
+        eventStore: eventStore,
+        onStatusChange: updateStatus,
+        onError: (err) => logEntry('error', err.message)
+      });
+
+      // Connect (local-only mode)
+      await streamClient.connect();
+
+      updateStats();
+      logEntry('info', 'Operator Stream initialized in local-only mode');
+    });
+
+    function updateStatus(status) {
+      const indicator = document.getElementById('status-indicator');
+      const statusText = document.getElementById('stream-status');
+
+      statusText.textContent = status;
+
+      indicator.className = 'status-indicator';
+      if (status === 'connected') {
+        indicator.classList.add('status-connected');
+      } else if (status === 'connecting' || status === 'reconnecting') {
+        indicator.classList.add('status-connecting');
+      } else {
+        indicator.classList.add('status-disconnected');
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('stat-events').textContent = eventStore.size;
+      document.getElementById('stat-requests').textContent = requestCount;
+      document.getElementById('stat-bytes').textContent = formatBytes(totalBytes);
+      document.getElementById('stat-subs').textContent = streamClient._subscriptions.size;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + 'B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+    }
+
+    function logEntry(type, message) {
+      const log = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-type ${type}">${type.toUpperCase()}</span>
+        <span>${message}</span>
+      `;
+      log.insertBefore(entry, log.firstChild);
+
+      // Keep only last 50 entries
+      while (log.children.length > 50) {
+        log.removeChild(log.lastChild);
+      }
+    }
+
+    function showResult(slice) {
+      requestCount++;
+      totalBytes += slice.byteSize || 0;
+      updateStats();
+
+      const resultEl = document.getElementById('result');
+      resultEl.textContent = JSON.stringify({
+        events: slice.events.length,
+        synthesized: slice.synthesized,
+        superposition: slice.superposition,
+        meta: slice.meta,
+        relationships: slice.relationships?.slice(0, 5)
+      }, null, 2);
+    }
+
+    // =========================================================================
+    // OPERATOR EXECUTION
+    // =========================================================================
+
+    async function runSEG() {
+      try {
+        const collection = document.getElementById('seg-collection').value;
+        const filterStr = document.getElementById('seg-filter').value;
+        const filter = filterStr ? JSON.parse(filterStr) : {};
+
+        logEntry('intent', `SEG(${collection}, ${JSON.stringify(filter)})`);
+
+        const intent = OperatorIntent.seg(collection, filter, { limit: 50 });
+        const slice = await streamClient.request(intent);
+
+        logEntry('slice', `Received ${slice.events.length} events (${slice.meta.totalMatching} total)`);
+        showResult(slice);
+
+      } catch (err) {
+        logEntry('error', err.message);
+      }
+    }
+
+    async function runSEGPaginated() {
+      try {
+        const collection = document.getElementById('seg-collection').value;
+
+        logEntry('intent', `SEG(${collection}, limit=10, paginated)`);
+
+        // First page
+        const intent1 = OperatorIntent.seg(collection, {}, { limit: 10, offset: 0 });
+        const slice1 = await streamClient.request(intent1);
+        logEntry('slice', `Page 1: ${slice1.events.length} of ${slice1.meta.totalMatching}`);
+
+        // Second page
+        const intent2 = OperatorIntent.seg(collection, {}, { limit: 10, offset: 10 });
+        const slice2 = await streamClient.request(intent2);
+        logEntry('slice', `Page 2: ${slice2.events.length} of ${slice2.meta.totalMatching}`);
+
+        showResult({
+          ...slice2,
+          meta: {
+            ...slice2.meta,
+            pages: 'Demonstrated pagination: 2 pages of 10'
+          }
+        });
+
+      } catch (err) {
+        logEntry('error', err.message);
+      }
+    }
+
+    async function runSYN() {
+      try {
+        const collection = document.getElementById('syn-collection').value;
+        const groupBy = document.getElementById('syn-groupby').value;
+        const aggStr = document.getElementById('syn-aggregate').value;
+        const aggregate = JSON.parse(aggStr);
+
+        logEntry('intent', `SYN(${collection}, groupBy=${groupBy}, ${aggregate.mode}(${aggregate.field}))`);
+
+        const intent = OperatorIntent.syn(collection, aggregate, { groupBy });
+        const slice = await streamClient.request(intent);
+
+        logEntry('slice', `Aggregation complete: ${Object.keys(slice.synthesized || {}).length} groups`);
+        showResult(slice);
+
+      } catch (err) {
+        logEntry('error', err.message);
+      }
+    }
+
+    async function runCON() {
+      try {
+        const source = document.getElementById('con-source').value;
+        const relationship = document.getElementById('con-relationship').value;
+
+        if (!source) {
+          // Use first event as source
+          const events = eventStore.getAll();
+          if (events.length === 0) {
+            logEntry('error', 'No events available. Load sample data first.');
+            return;
+          }
+          document.getElementById('con-source').value = events[0].id;
+        }
+
+        const sourceId = document.getElementById('con-source').value;
+        logEntry('intent', `CON(${sourceId.substring(0, 20)}..., ${relationship})`);
+
+        const intent = OperatorIntent.con(sourceId, relationship);
+        const slice = await streamClient.request(intent);
+
+        logEntry('slice', `Found ${slice.events.length} related entities`);
+        showResult(slice);
+
+      } catch (err) {
+        logEntry('error', err.message);
+      }
+    }
+
+    async function runSUP() {
+      try {
+        const entityId = document.getElementById('sup-entity').value;
+        const property = document.getElementById('sup-property').value;
+
+        if (!entityId) {
+          const events = eventStore.getAll();
+          if (events.length === 0) {
+            logEntry('error', 'No events available. Load sample data first.');
+            return;
+          }
+          document.getElementById('sup-entity').value = events[0].id;
+        }
+
+        const id = document.getElementById('sup-entity').value;
+        logEntry('intent', `SUP(${id.substring(0, 20)}..., ${property})`);
+
+        const intent = OperatorIntent.sup(id, property);
+        const slice = await streamClient.request(intent);
+
+        const valueCount = slice.superposition?.values?.length || 0;
+        logEntry('slice', `Found ${valueCount} conflicting values`);
+        showResult(slice);
+
+      } catch (err) {
+        logEntry('error', err.message);
+      }
+    }
+
+    async function runREC() {
+      try {
+        const center = document.getElementById('rec-center').value;
+
+        logEntry('intent', `REC(center=${center})`);
+
+        const intent = OperatorIntent.rec(center);
+        const slice = await streamClient.request(intent);
+
+        logEntry('slice', `Re-centered around ${center}: ${slice.events.length} entities`);
+        showResult(slice);
+
+      } catch (err) {
+        logEntry('error', err.message);
+      }
+    }
+
+    // =========================================================================
+    // SAMPLE DATA
+    // =========================================================================
+
+    function loadSampleData() {
+      const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+      const statuses = ['active', 'pending', 'closed_won', 'closed_lost'];
+      const customers = ['Acme Corp', 'Globex Inc', 'Initech', 'Umbrella Corp', 'Stark Industries'];
+
+      const deals = [];
+
+      for (let i = 0; i < 50; i++) {
+        const quarter = quarters[Math.floor(Math.random() * quarters.length)];
+        const status = statuses[Math.floor(Math.random() * statuses.length)];
+        const customer = customers[Math.floor(Math.random() * customers.length)];
+        const amount = Math.floor(Math.random() * 500000) + 10000;
+
+        const event = {
+          id: generateEventId({ deal: i }),
+          type: 'given',
+          actor: 'demo_user',
+          timestamp: new Date().toISOString(),
+          mode: 'received',
+          parents: [],
+          context: {
+            workspace: 'demo',
+            schemaVersion: '1.0',
+            collection: 'deals'
+          },
+          payload: {
+            collection: 'deals',
+            entityType: 'deal',
+            entityId: `deal_${i}`,
+            name: `Deal ${i + 1}`,
+            customer,
+            amount,
+            status,
+            quarter
+          }
+        };
+
+        eventStore.append(event);
+        deals.push(event);
+      }
+
+      // Add some conflicting data (for SUP demo)
+      const conflictDeal = deals[0];
+      const conflict1 = {
+        ...conflictDeal,
+        id: generateEventId({ conflict: 1 }),
+        actor: 'crm_system',
+        payload: { ...conflictDeal.payload, amount: conflictDeal.payload.amount * 1.1 }
+      };
+      const conflict2 = {
+        ...conflictDeal,
+        id: generateEventId({ conflict: 2 }),
+        actor: 'finance_system',
+        payload: { ...conflictDeal.payload, amount: conflictDeal.payload.amount * 0.95 }
+      };
+      eventStore.append(conflict1);
+      eventStore.append(conflict2);
+
+      updateStats();
+      logEntry('info', `Loaded 50 sample deals + 2 conflicting records`);
+
+      document.getElementById('sample-info').textContent = JSON.stringify({
+        dealsCreated: 50,
+        conflictsCreated: 2,
+        collections: ['deals'],
+        statuses: statuses,
+        customers: customers,
+        quarters: quarters,
+        firstDealId: deals[0].id
+      }, null, 2);
+
+      // Pre-fill some inputs
+      document.getElementById('con-source').value = deals[0].id;
+      document.getElementById('sup-entity').value = deals[0].id;
+    }
+
+    function clearData() {
+      eventStore._clear();
+      requestCount = 0;
+      totalBytes = 0;
+      updateStats();
+      logEntry('info', 'All data cleared');
+      document.getElementById('result').textContent = '// Cleared';
+      document.getElementById('sample-info').textContent = '// Click "Load Sample Deals" to populate test data';
+    }
+  </script>
+</body>
+</html>

@@ -30,6 +30,10 @@ class EOApp {
     this.syncEngine = null;
     this.complianceChecker = null;
 
+    // Operator streaming
+    this.operatorStream = null;
+    this.operatorExecutor = null;
+
     // Current context
     this.currentWorkspace = APP_CONFIG.defaultWorkspace;
     this.currentHorizon = null;
@@ -83,6 +87,27 @@ class EOApp {
     // Initialize sync engine
     this.syncEngine = initSyncEngine(this.eventStore, this.persistence);
     console.log('EOApp: Sync engine initialized');
+
+    // Initialize operator streaming
+    if (typeof OperatorExecutor !== 'undefined' && typeof OperatorStreamClient !== 'undefined') {
+      this.operatorExecutor = new OperatorExecutor(this.eventStore, {
+        stateDerivation: this.stateDerivation,
+        horizonGate: null // Will be set when horizon changes
+      });
+
+      this.operatorStream = new OperatorStreamClient({
+        eventStore: this.eventStore,
+        executor: this.operatorExecutor,
+        horizon: { workspace: this.currentWorkspace },
+        serverUrl: options.streamServerUrl || null,
+        onStatusChange: (status) => this._emit('stream_status', status),
+        onError: (err) => console.error('OperatorStream error:', err)
+      });
+
+      // Connect in local-only mode by default
+      this.operatorStream.connect();
+      console.log('EOApp: Operator stream initialized');
+    }
 
     // Initialize compliance checker
     this.complianceChecker = initComplianceChecker(this.eventStore, this.horizonLattice);
@@ -404,7 +429,8 @@ class EOApp {
       },
       horizons: this.horizonLattice.getAll().length,
       derivation: this.stateDerivation.getStats(),
-      sync: this.syncEngine.getStatus()
+      sync: this.syncEngine.getStatus(),
+      stream: this.getStreamStatus()
     };
   }
 
@@ -444,6 +470,113 @@ class EOApp {
    */
   async sync() {
     return this.syncEngine.sync(this.currentWorkspace);
+  }
+
+  // ==========================================================================
+  // OPERATOR STREAM API
+  // ==========================================================================
+
+  /**
+   * Execute a SEG (segmentation/filter) operation
+   * Returns only matching entities, paginated
+   */
+  async seg(collection, filter = {}, options = {}) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    const intent = OperatorIntent.seg(collection, filter, {
+      ...options,
+      localEventCount: this.eventStore.size,
+      lastSyncClock: this.eventStore.clock
+    });
+    return this.operatorStream.request(intent);
+  }
+
+  /**
+   * Execute a CON (connection/relationship) operation
+   * Returns related entities
+   */
+  async con(sourceEntity, relationship, options = {}) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    const intent = OperatorIntent.con(sourceEntity, relationship, options);
+    return this.operatorStream.request(intent);
+  }
+
+  /**
+   * Execute a SYN (synthesis/aggregation) operation
+   * Returns computed aggregates, not raw data
+   */
+  async syn(collection, aggregate, options = {}) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    const intent = OperatorIntent.syn(collection, aggregate, options);
+    return this.operatorStream.request(intent);
+  }
+
+  /**
+   * Execute a SUP (superposition) operation
+   * Returns all conflicting values with their contexts
+   */
+  async sup(entityId, property, options = {}) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    const intent = OperatorIntent.sup(entityId, property, options);
+    return this.operatorStream.request(intent);
+  }
+
+  /**
+   * Execute a DES (designation/schema) operation
+   * Returns type definitions and schemas
+   */
+  async des(entityType, options = {}) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    const intent = OperatorIntent.des(entityType, options);
+    return this.operatorStream.request(intent);
+  }
+
+  /**
+   * Execute a REC (recursion/re-center) operation
+   * Rebuilds perspective around a new center
+   */
+  async rec(newCenter, options = {}) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    const intent = OperatorIntent.rec(newCenter, options);
+    return this.operatorStream.request(intent);
+  }
+
+  /**
+   * Subscribe to live updates for an operator result
+   */
+  subscribe(intent, callback) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    return this.operatorStream.subscribe(intent, callback);
+  }
+
+  /**
+   * Get operator stream status
+   */
+  getStreamStatus() {
+    return this.operatorStream?.getStatus() || { status: 'not_initialized' };
+  }
+
+  /**
+   * Configure stream server URL for cloud sync
+   */
+  async configureStreamServer(serverUrl, options = {}) {
+    if (!this.operatorStream) {
+      throw new Error('Operator stream not initialized');
+    }
+    return this.operatorStream.connect(serverUrl);
   }
 
   /**
