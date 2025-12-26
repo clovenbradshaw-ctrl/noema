@@ -347,23 +347,18 @@
 
   <!-- Initialize Application -->
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // Initialize the data workbench
-      if (window.initApp) {
-        window.initApp();
-      }
-
-      // Initialize the transparency panel
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Initialize the transparency panel first (so it's ready for connection)
       if (window.initTransparencyPanel) {
         const transparency = window.initTransparencyPanel({
           eventBus: window.getEventBus ? window.getEventBus() : null
         });
         transparency.init('principles-panel');
+      }
 
-        // Connect to app if available
-        if (window.EOApp) {
-          transparency.connect(window.EOApp);
-        }
+      // Initialize the main application (this will connect the transparency panel)
+      if (window.initApp) {
+        await window.initApp();
       }
     });
   </script>

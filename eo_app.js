@@ -483,14 +483,28 @@ function getApp() {
 async function initApp(options = {}) {
   console.log('EO Lake: Initializing application...');
 
+  // Initialize the EOApp instance (core Experience Engine)
+  _app = new EOApp();
+  await _app.init(options);
+  console.log('EO Lake: EOApp core initialized');
+
   // Initialize the data workbench (the main UI)
-  _dataWorkbench = initDataWorkbench('content-area');
+  _dataWorkbench = initDataWorkbench('content-area', _app);
 
   // Set up global event handlers
   setupGlobalHandlers();
 
   // Update sync status indicator
   updateSyncStatus('synced');
+
+  // Connect transparency panel to the app
+  if (window.getTransparencyPanel) {
+    const transparency = window.getTransparencyPanel();
+    if (transparency) {
+      transparency.connect(_app);
+      console.log('EO Lake: Transparency panel connected to EOApp');
+    }
+  }
 
   console.log('EO Lake: Application initialized');
 
