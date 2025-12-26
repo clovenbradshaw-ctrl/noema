@@ -1,12 +1,16 @@
 /**
- * EO Import System - CSV and JSON Import with Schema Inference
+ * EO Import System - CSV, JSON, and Excel Import with Schema Inference
  *
  * Features:
  * - CSV parsing with auto-delimiter detection
  * - JSON parsing with structure normalization
+ * - Graph data detection (nodes/edges pattern)
+ * - Excel (.xlsx) support with multiple sheets
  * - Schema inference with field type detection
+ * - EO 9-element provenance collection
+ * - View creation from field values (split by type)
+ * - Original source preservation
  * - Progress events for real-time UI updates
- * - Immediate data display after import
  */
 
 // ============================================================================
@@ -713,14 +717,29 @@ class ImportOrchestrator {
   }
 
   /**
-   * Create set with records in batches
+   * Create set with records in batches (Enhanced with provenance and view creation)
    */
-  async _createSetWithRecords(setName, schema, parseResult, options) {
+  async _createSetWithRecords(setName, schema, parseResult, options = {}) {
     const BATCH_SIZE = 100;
     const { headers, rows } = parseResult;
+    const viewsCreated = [];
 
     // Create the set
     const set = createSet(setName);
+
+    // Store dataset-level provenance
+    if (options.provenance || options.originalSource) {
+      set.datasetProvenance = {
+        importedAt: new Date().toISOString(),
+        originalFilename: options.setName || setName,
+        originalSource: options.originalSource || null,
+        provenance: options.provenance || {
+          agent: null, method: null, source: null,
+          term: null, definition: null, jurisdiction: null,
+          scale: null, timeframe: null, background: null
+        }
+      };
+    }
 
     // Replace default fields with inferred ones
     set.fields = schema.fields.map((field, index) => {
@@ -730,23 +749,29 @@ class ImportOrchestrator {
       });
     });
 
+    // Find the type field for view creation
+    const typeFieldName = options.viewSplitField || 'type';
+    const typeField = set.fields.find(f => f.name === typeFieldName);
+
     // Add records in batches
     let processed = 0;
+    const typeValues = new Set();
+
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
 
       for (const row of batch) {
         const values = {};
         set.fields.forEach((field) => {
-          // Use field name to lookup the value from the row
-          // This is more robust than index-based lookup which can break
-          // if fields get reordered
           const header = field.name;
           let value = row[header];
-
-          // Convert values based on type
           value = this._convertValue(value, field.type, field.options);
           values[field.id] = value;
+
+          // Track type values for view creation
+          if (field.id === typeField?.id && value) {
+            typeValues.add(String(value));
+          }
         });
 
         set.records.push(createRecord(set.id, values));
@@ -756,19 +781,45 @@ class ImportOrchestrator {
 
       this._emitProgress('progress', {
         phase: 'importing',
-        percentage: 50 + Math.round((processed / rows.length) * 45),
+        percentage: 50 + Math.round((processed / rows.length) * 40),
         recordsProcessed: processed,
         totalRecords: rows.length
       });
 
-      // Yield to UI thread
       await new Promise(r => setTimeout(r, 0));
+    }
+
+    // Create views by type if requested and type field exists
+    if (options.createViewsByType && typeField && typeValues.size > 0) {
+      this._emitProgress('progress', {
+        phase: 'creating_views',
+        percentage: 92
+      });
+
+      for (const typeValue of typeValues) {
+        const viewName = this._formatViewName(typeValue);
+        const view = createView(viewName, 'table', {
+          filters: [{
+            fieldId: typeField.id,
+            operator: 'equals',
+            value: typeValue,
+            enabled: true
+          }]
+        });
+        set.views.push(view);
+        viewsCreated.push(viewName);
+      }
     }
 
     // Add to workbench
     this.workbench.sets.push(set);
     this.workbench.currentSetId = set.id;
     this.workbench.currentViewId = set.views[0]?.id;
+
+    // Handle edges if provided (graph data)
+    if (options.includeEdges && options.graphInfo?.edges) {
+      await this._importEdgesAsSet(setName, options.graphInfo);
+    }
 
     // Create EO event for the import
     if (this.workbench.eoApp) {
@@ -777,7 +828,9 @@ class ImportOrchestrator {
           setId: set.id,
           setName: set.name,
           recordCount: set.records.length,
-          fieldCount: set.fields.length
+          fieldCount: set.fields.length,
+          hasProvenance: !!options.provenance,
+          viewsCreated: viewsCreated.length
         }, { action: 'import_data' });
       } catch (e) {
         console.error('Failed to create EO import event:', e);
@@ -794,8 +847,68 @@ class ImportOrchestrator {
       success: true,
       setId: set.id,
       recordCount: set.records.length,
-      fieldCount: set.fields.length
+      fieldCount: set.fields.length,
+      viewsCreated
     };
+  }
+
+  /**
+   * Format a type value as a view name
+   */
+  _formatViewName(value) {
+    // Capitalize first letter, replace underscores with spaces
+    const formatted = String(value)
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+    return formatted;
+  }
+
+  /**
+   * Import edges as a separate dataset (for graph data)
+   */
+  async _importEdgesAsSet(baseSetName, graphInfo) {
+    if (!graphInfo.edges || graphInfo.edges.length === 0) return;
+
+    const edgeSetName = `${baseSetName} - Relationships`;
+    const edgeSet = createSet(edgeSetName);
+    edgeSet.icon = 'ph-arrows-left-right';
+
+    // Create fields for edge data
+    edgeSet.fields = [
+      createField('id', 'text', { isPrimary: true }),
+      createField('from', 'text'),
+      createField('to', 'text'),
+      createField('type', 'text'),
+      createField('properties', 'longText')
+    ];
+
+    // Add edge records
+    for (const edge of graphInfo.edges) {
+      const values = {
+        [edgeSet.fields[0].id]: edge.id || '',
+        [edgeSet.fields[1].id]: edge.from || '',
+        [edgeSet.fields[2].id]: edge.to || '',
+        [edgeSet.fields[3].id]: edge.type || '',
+        [edgeSet.fields[4].id]: edge.properties ? JSON.stringify(edge.properties) : ''
+      };
+      edgeSet.records.push(createRecord(edgeSet.id, values));
+    }
+
+    // Create views by edge type
+    const edgeTypes = new Set(graphInfo.edges.map(e => e.type).filter(Boolean));
+    for (const edgeType of edgeTypes) {
+      const view = createView(this._formatViewName(edgeType), 'table', {
+        filters: [{
+          fieldId: edgeSet.fields[3].id,
+          operator: 'equals',
+          value: edgeType,
+          enabled: true
+        }]
+      });
+      edgeSet.views.push(view);
+    }
+
+    this.workbench.sets.push(edgeSet);
   }
 
   /**
@@ -865,11 +978,289 @@ class ImportOrchestrator {
 
 
 // ============================================================================
-// Import UI Component
+// Import Analyzer - Detects structure, graph data, view split candidates
+// ============================================================================
+
+class ImportAnalyzer {
+  /**
+   * Analyze parsed data for structure patterns
+   */
+  analyze(parseResult, rawText) {
+    const analysis = {
+      // Basic stats
+      totalRecords: parseResult.rows?.length || 0,
+      totalFields: parseResult.headers?.length || 0,
+
+      // Graph data detection
+      isGraphData: false,
+      graphInfo: null,
+
+      // View split candidates (fields with low cardinality)
+      viewSplitCandidates: [],
+
+      // Embedded provenance detection
+      hasEmbeddedProvenance: false,
+      provenanceFields: [],
+
+      // Original source
+      originalSource: rawText,
+      originalFormat: null
+    };
+
+    // Detect graph data
+    const graphAnalysis = this._analyzeGraphData(parseResult, rawText);
+    if (graphAnalysis.isGraph) {
+      analysis.isGraphData = true;
+      analysis.graphInfo = graphAnalysis;
+    }
+
+    // Find view split candidates
+    analysis.viewSplitCandidates = this._findViewSplitCandidates(parseResult);
+
+    // Detect embedded provenance
+    const provAnalysis = this._detectEmbeddedProvenance(parseResult);
+    analysis.hasEmbeddedProvenance = provAnalysis.found;
+    analysis.provenanceFields = provAnalysis.fields;
+
+    return analysis;
+  }
+
+  /**
+   * Detect if this is graph data (nodes/edges pattern)
+   */
+  _analyzeGraphData(parseResult, rawText) {
+    const result = {
+      isGraph: false,
+      nodes: null,
+      edges: null,
+      edgeEvents: null,
+      nodeTypes: [],
+      edgeTypes: [],
+      nodeCount: 0,
+      edgeCount: 0
+    };
+
+    // Check if raw text contains graph patterns
+    if (typeof rawText === 'string') {
+      const hasNodes = /\bnodes\s*[=:]/i.test(rawText);
+      const hasEdges = /\bedges\s*[=:]/i.test(rawText);
+
+      if (hasNodes || hasEdges) {
+        // Try to extract graph structure from JS module
+        try {
+          // Look for const nodes = [...] patterns
+          const nodeMatch = rawText.match(/(?:const|let|var)\s+nodes\s*=\s*(\[[\s\S]*?\]);/);
+          const edgeMatch = rawText.match(/(?:const|let|var)\s+edges\s*=\s*(\[[\s\S]*?\]);/);
+          const edgeEventsMatch = rawText.match(/(?:const|let|var)\s+edgeEvents\s*=\s*(\[[\s\S]*?\]);/);
+
+          // Try Function constructor for safe evaluation
+          if (nodeMatch) {
+            try {
+              const fn = new Function('return ' + nodeMatch[1]);
+              result.nodes = fn();
+              result.nodeCount = result.nodes.length;
+              result.isGraph = true;
+
+              // Extract node types
+              const types = new Set();
+              result.nodes.forEach(n => {
+                if (n.type) types.add(n.type);
+              });
+              result.nodeTypes = Array.from(types);
+            } catch (e) {
+              console.warn('Failed to parse nodes:', e);
+            }
+          }
+
+          if (edgeMatch) {
+            try {
+              const fn = new Function('return ' + edgeMatch[1]);
+              result.edges = fn();
+              result.edgeCount = result.edges.length;
+              result.isGraph = true;
+
+              // Extract edge types
+              const types = new Set();
+              result.edges.forEach(e => {
+                if (e.type) types.add(e.type);
+              });
+              result.edgeTypes = Array.from(types);
+            } catch (e) {
+              console.warn('Failed to parse edges:', e);
+            }
+          }
+
+          if (edgeEventsMatch) {
+            try {
+              const fn = new Function('return ' + edgeEventsMatch[1]);
+              result.edgeEvents = fn();
+            } catch (e) {
+              console.warn('Failed to parse edgeEvents:', e);
+            }
+          }
+        } catch (e) {
+          console.warn('Graph analysis error:', e);
+        }
+      }
+    }
+
+    // Also check if the rows have 'type' field with consistent patterns
+    if (!result.isGraph && parseResult.rows?.length > 0) {
+      const hasTypeField = parseResult.headers?.includes('type');
+      if (hasTypeField) {
+        const types = new Set(parseResult.rows.map(r => r.type).filter(Boolean));
+        if (types.size >= 2 && types.size <= 20) {
+          // Multiple types suggest this could be entity data worth splitting
+          result.nodeTypes = Array.from(types);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Find fields suitable for creating separate views
+   */
+  _findViewSplitCandidates(parseResult) {
+    const candidates = [];
+    const rows = parseResult.rows || [];
+    const headers = parseResult.headers || [];
+
+    if (rows.length < 2) return candidates;
+
+    for (const header of headers) {
+      const values = rows.map(r => r[header]).filter(v => v != null && v !== '');
+      const uniqueValues = new Set(values);
+
+      // Good candidate: 2-20 unique values, covering at least 50% of records
+      if (uniqueValues.size >= 2 && uniqueValues.size <= 20 && values.length >= rows.length * 0.5) {
+        const valueCounts = {};
+        values.forEach(v => {
+          const key = String(v);
+          valueCounts[key] = (valueCounts[key] || 0) + 1;
+        });
+
+        candidates.push({
+          field: header,
+          uniqueCount: uniqueValues.size,
+          values: Array.from(uniqueValues).map(v => ({
+            value: v,
+            count: valueCounts[String(v)] || 0
+          })).sort((a, b) => b.count - a.count)
+        });
+      }
+    }
+
+    // Sort by how good a candidate it is (fewer unique values = better)
+    candidates.sort((a, b) => a.uniqueCount - b.uniqueCount);
+
+    return candidates;
+  }
+
+  /**
+   * Detect embedded provenance in the data
+   */
+  _detectEmbeddedProvenance(parseResult) {
+    const result = { found: false, fields: [] };
+    const rows = parseResult.rows || [];
+
+    if (rows.length === 0) return result;
+
+    // Check first few rows for provenance-like fields
+    const sample = rows.slice(0, 5);
+
+    // Look for context objects or provenance fields
+    const provenancePatterns = ['context', 'source', 'provenance', 'meta', 'metadata'];
+    const headers = parseResult.headers || [];
+
+    for (const header of headers) {
+      const lowerHeader = header.toLowerCase();
+      if (provenancePatterns.some(p => lowerHeader.includes(p))) {
+        result.found = true;
+        result.fields.push(header);
+      }
+    }
+
+    // Check for nested context objects
+    for (const row of sample) {
+      for (const [key, value] of Object.entries(row)) {
+        if (typeof value === 'object' && value !== null) {
+          if ('source' in value || 'confidence' in value || 'agent' in value) {
+            result.found = true;
+            if (!result.fields.includes(key)) {
+              result.fields.push(key);
+            }
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+}
+
+
+// ============================================================================
+// Excel Parser (using SheetJS/xlsx library if available)
+// ============================================================================
+
+class ExcelParser {
+  /**
+   * Check if xlsx library is available
+   */
+  static isAvailable() {
+    return typeof XLSX !== 'undefined';
+  }
+
+  /**
+   * Parse Excel file
+   * @param {ArrayBuffer} buffer - File content as ArrayBuffer
+   * @returns {{ sheets: Array<{name, headers, rows}> }}
+   */
+  parse(buffer) {
+    if (!ExcelParser.isAvailable()) {
+      throw new Error('Excel support requires the SheetJS library. Please include xlsx.min.js');
+    }
+
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheets = [];
+
+    for (const sheetName of workbook.SheetNames) {
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      if (jsonData.length === 0) continue;
+
+      const headers = jsonData[0].map((h, i) => h || `Column ${i + 1}`);
+      const rows = jsonData.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((header, i) => {
+          obj[header] = row[i] !== undefined ? row[i] : '';
+        });
+        return obj;
+      });
+
+      sheets.push({
+        name: sheetName,
+        headers,
+        rows,
+        rowCount: rows.length,
+        columnCount: headers.length
+      });
+    }
+
+    return { sheets };
+  }
+}
+
+
+// ============================================================================
+// Import UI Component (Enhanced)
 // ============================================================================
 
 /**
- * Create and show import modal
+ * Create and show enhanced import modal with provenance and view options
  */
 function showImportModal() {
   const modal = document.getElementById('modal-overlay');
@@ -881,23 +1272,31 @@ function showImportModal() {
 
   modalTitle.textContent = 'Import Data';
 
+  const acceptTypes = ExcelParser.isAvailable()
+    ? '.csv,.json,.xlsx,.xls'
+    : '.csv,.json';
+
+  const dropzoneText = ExcelParser.isAvailable()
+    ? 'Drop CSV, JSON, or Excel file here'
+    : 'Drop CSV or JSON file here';
+
   modalBody.innerHTML = `
     <div class="import-container">
       <!-- Drop Zone -->
       <div class="import-dropzone" id="import-dropzone">
         <div class="dropzone-content">
           <i class="ph ph-upload-simple dropzone-icon"></i>
-          <p class="dropzone-text">Drop CSV or JSON file here</p>
+          <p class="dropzone-text">${dropzoneText}</p>
           <p class="dropzone-subtext">or click to browse</p>
         </div>
-        <input type="file" id="import-file-input" accept=".csv,.json" hidden>
+        <input type="file" id="import-file-input" accept="${acceptTypes}" hidden>
       </div>
 
       <!-- Preview Section (hidden initially) -->
       <div class="import-preview" id="import-preview" style="display: none;">
         <div class="preview-header">
           <div class="preview-file-info">
-            <i class="ph ph-file-csv"></i>
+            <i class="ph ph-file-csv" id="preview-file-icon"></i>
             <span id="preview-filename">filename.csv</span>
             <span id="preview-filesize" class="text-muted"></span>
           </div>
@@ -906,41 +1305,118 @@ function showImportModal() {
           </button>
         </div>
 
+        <!-- Graph Data Detection Banner -->
+        <div class="import-graph-detected" id="import-graph-detected" style="display: none;">
+          <div class="graph-detected-icon">
+            <i class="ph ph-graph"></i>
+          </div>
+          <div class="graph-detected-content">
+            <strong>Graph Data Detected</strong>
+            <p id="graph-detected-info">Found nodes and edges</p>
+          </div>
+        </div>
+
         <div class="preview-stats">
           <div class="stat-item">
             <span class="stat-value" id="preview-rows">0</span>
-            <span class="stat-label">Rows</span>
+            <span class="stat-label">Records</span>
           </div>
           <div class="stat-item">
             <span class="stat-value" id="preview-fields">0</span>
             <span class="stat-label">Fields</span>
           </div>
           <div class="stat-item">
-            <span class="stat-value" id="preview-delimiter">-</span>
-            <span class="stat-label">Delimiter</span>
+            <span class="stat-value" id="preview-types">-</span>
+            <span class="stat-label">Types</span>
           </div>
         </div>
 
-        <div class="preview-schema">
-          <h4>Detected Schema</h4>
-          <div class="schema-table" id="schema-table">
-            <!-- Schema rows rendered here -->
+        <!-- Type Distribution -->
+        <div class="import-type-distribution" id="import-type-distribution" style="display: none;">
+          <h4>Record Types</h4>
+          <div class="type-bars" id="type-bars"></div>
+        </div>
+
+        <!-- View Creation Options -->
+        <div class="import-view-options" id="import-view-options" style="display: none;">
+          <div class="view-option">
+            <label class="checkbox-label">
+              <input type="checkbox" id="import-create-views" checked>
+              <span>Create views by type</span>
+            </label>
+            <p class="option-hint">Create separate filtered views for each type</p>
           </div>
         </div>
 
+        <!-- Edges Section for Graph Data -->
+        <div class="import-edges-section" id="import-edges-section" style="display: none;">
+          <h4>Relationships</h4>
+          <div class="edges-info" id="edges-info"></div>
+          <div class="edge-option">
+            <label class="checkbox-label">
+              <input type="checkbox" id="import-include-edges" checked>
+              <span>Import edges as separate dataset</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Sample Data -->
         <div class="preview-sample">
           <h4>Sample Data</h4>
           <div class="sample-table-wrapper">
             <table class="sample-table" id="sample-table">
-              <!-- Sample rows rendered here -->
             </table>
           </div>
         </div>
 
+        <!-- Import Options -->
         <div class="import-options">
           <div class="form-group">
-            <label class="form-label">Set Name</label>
-            <input type="text" class="form-input" id="import-set-name" placeholder="Enter name for the new set">
+            <label class="form-label">Dataset Name</label>
+            <input type="text" class="form-input" id="import-set-name" placeholder="Enter name for the new dataset">
+          </div>
+        </div>
+
+        <!-- Provenance Section -->
+        <div class="import-provenance-section">
+          <div class="import-provenance-title">
+            <i class="ph ph-fingerprint"></i>
+            Provenance (optional)
+          </div>
+          <div class="import-provenance-subtitle">
+            Help track where this data comes from
+          </div>
+          <div class="import-provenance-grid">
+            <div class="import-provenance-field">
+              <label class="import-provenance-label">Who provided this?</label>
+              <input type="text" class="import-provenance-input" id="prov-agent"
+                     placeholder="Person, organization, or system...">
+            </div>
+            <div class="import-provenance-field">
+              <label class="import-provenance-label">How was it produced?</label>
+              <input type="text" class="import-provenance-input" id="prov-method"
+                     placeholder="Export, FOIA, scrape, manual entry...">
+            </div>
+            <div class="import-provenance-field full-width">
+              <label class="import-provenance-label">Original source or publication?</label>
+              <input type="text" class="import-provenance-input" id="prov-source"
+                     placeholder="Database name, document, URL...">
+            </div>
+            <div class="import-provenance-field">
+              <label class="import-provenance-label">Jurisdiction/scope</label>
+              <input type="text" class="import-provenance-input" id="prov-jurisdiction"
+                     placeholder="City of Riverside, US Federal...">
+            </div>
+            <div class="import-provenance-field">
+              <label class="import-provenance-label">Time period covered</label>
+              <input type="text" class="import-provenance-input" id="prov-timeframe"
+                     placeholder="2019-2024, as of March 2024...">
+            </div>
+            <div class="import-provenance-field full-width">
+              <label class="import-provenance-label">Any important context?</label>
+              <input type="text" class="import-provenance-input" id="prov-background"
+                     placeholder="During investigation, post-COVID, etc...">
+            </div>
           </div>
         </div>
       </div>
@@ -965,6 +1441,7 @@ function showImportModal() {
           <i class="ph ph-check-circle success-icon"></i>
           <h3>Import Complete!</h3>
           <p id="success-message">Successfully imported 0 records</p>
+          <div id="success-views-created" style="margin-top: 12px; font-size: 13px; color: var(--text-secondary);"></div>
         </div>
       </div>
     </div>
@@ -984,7 +1461,7 @@ function showImportModal() {
 }
 
 /**
- * Initialize import modal handlers
+ * Initialize import modal handlers (Enhanced)
  */
 function initImportHandlers() {
   const dropzone = document.getElementById('import-dropzone');
@@ -998,7 +1475,10 @@ function initImportHandlers() {
 
   let currentFile = null;
   let previewData = null;
+  let analysisData = null;
+  let rawFileContent = null;
   let orchestrator = null;
+  const analyzer = new ImportAnalyzer();
 
   // Get workbench reference
   const workbench = typeof getDataWorkbench === 'function' ? getDataWorkbench() : null;
@@ -1031,7 +1511,8 @@ function initImportHandlers() {
     dropzone.classList.remove('dragover');
 
     const file = e.dataTransfer.files[0];
-    if (file && (file.name.endsWith('.csv') || file.name.endsWith('.json'))) {
+    const validExtensions = ['.csv', '.json', '.xlsx', '.xls'];
+    if (file && validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
       await handleFileSelect(file);
     }
   });
@@ -1061,7 +1542,24 @@ function initImportHandlers() {
     cancelBtn.disabled = true;
 
     const setName = document.getElementById('import-set-name')?.value ||
-                    currentFile.name.replace(/\.(csv|json)$/i, '');
+                    currentFile.name.replace(/\.(csv|json|xlsx|xls)$/i, '');
+
+    // Collect provenance
+    const provenance = {
+      agent: document.getElementById('prov-agent')?.value || null,
+      method: document.getElementById('prov-method')?.value || null,
+      source: document.getElementById('prov-source')?.value || null,
+      jurisdiction: document.getElementById('prov-jurisdiction')?.value || null,
+      timeframe: document.getElementById('prov-timeframe')?.value || null,
+      background: document.getElementById('prov-background')?.value || null,
+      term: null,
+      definition: null,
+      scale: null
+    };
+
+    // Check if we should create views by type
+    const createViewsByType = document.getElementById('import-create-views')?.checked || false;
+    const includeEdges = document.getElementById('import-include-edges')?.checked || false;
 
     try {
       // Listen for progress events
@@ -1070,7 +1568,16 @@ function initImportHandlers() {
       };
       window.addEventListener('eo-import-progress', progressHandler);
 
-      const result = await orchestrator.import(currentFile, { setName });
+      // Import with enhanced options
+      const result = await orchestrator.import(currentFile, {
+        setName,
+        provenance,
+        originalSource: rawFileContent,
+        createViewsByType,
+        viewSplitField: analysisData?.viewSplitCandidates?.[0]?.field || 'type',
+        graphInfo: analysisData?.graphInfo,
+        includeEdges
+      });
 
       window.removeEventListener('eo-import-progress', progressHandler);
 
@@ -1080,10 +1587,16 @@ function initImportHandlers() {
       document.getElementById('success-message').textContent =
         `Successfully imported ${result.recordCount} records with ${result.fieldCount} fields`;
 
+      // Show created views info
+      if (result.viewsCreated && result.viewsCreated.length > 0) {
+        document.getElementById('success-views-created').innerHTML =
+          `<i class="ph ph-eye"></i> Created ${result.viewsCreated.length} views: ${result.viewsCreated.join(', ')}`;
+      }
+
       // Close after delay
       setTimeout(() => {
         closeModal();
-      }, 1500);
+      }, 1800);
 
     } catch (error) {
       progressSection.style.display = 'none';
@@ -1094,7 +1607,7 @@ function initImportHandlers() {
     }
   });
 
-  // Handle file selection
+  // Handle file selection (Enhanced)
   async function handleFileSelect(file) {
     currentFile = file;
 
@@ -1112,8 +1625,45 @@ function initImportHandlers() {
         </div>
       `;
 
-      // Get preview
-      previewData = await orchestrator.preview(file);
+      // Read raw file content for preservation and analysis
+      const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+
+      if (isExcel) {
+        // Handle Excel files
+        if (!ExcelParser.isAvailable()) {
+          throw new Error('Excel support requires the SheetJS library');
+        }
+        const buffer = await readFileAsArrayBuffer(file);
+        rawFileContent = buffer; // Store as binary for Excel
+        const excelParser = new ExcelParser();
+        const excelData = excelParser.parse(buffer);
+
+        // For Excel, use first sheet for preview (or combine all)
+        if (excelData.sheets.length === 0) {
+          throw new Error('No data found in Excel file');
+        }
+
+        // Combine all sheets for preview
+        const firstSheet = excelData.sheets[0];
+        previewData = {
+          fileName: file.name,
+          fileSize: file.size,
+          isCSV: false,
+          isExcel: true,
+          sheets: excelData.sheets,
+          headers: firstSheet.headers,
+          schema: new SchemaInferrer().inferSchema(firstSheet.headers, firstSheet.rows),
+          rowCount: excelData.sheets.reduce((sum, s) => sum + s.rowCount, 0),
+          sampleRows: firstSheet.rows.slice(0, 5)
+        };
+      } else {
+        // CSV or JSON
+        rawFileContent = await readFileAsText(file);
+        previewData = await orchestrator.preview(file);
+      }
+
+      // Run analysis
+      analysisData = analyzer.analyze(previewData, rawFileContent);
 
       // Update UI with preview
       dropzone.style.display = 'none';
@@ -1124,42 +1674,99 @@ function initImportHandlers() {
       document.getElementById('preview-filesize').textContent =
         `(${formatFileSize(file.size)})`;
 
+      // Update file icon
+      const fileIcon = document.getElementById('preview-file-icon');
+      if (isExcel) {
+        fileIcon.className = 'ph ph-file-xls';
+      } else if (file.name.endsWith('.json')) {
+        fileIcon.className = 'ph ph-file-js';
+      } else {
+        fileIcon.className = 'ph ph-file-csv';
+      }
+
       // Stats
       document.getElementById('preview-rows').textContent = previewData.rowCount;
       document.getElementById('preview-fields').textContent = previewData.schema.fields.length;
-      document.getElementById('preview-delimiter').textContent =
-        previewData.isCSV ? getDelimiterName(previewData.delimiter) : 'JSON';
 
-      // Schema table
-      const schemaTable = document.getElementById('schema-table');
-      schemaTable.innerHTML = previewData.schema.fields.map(field => `
-        <div class="schema-row">
-          <div class="schema-field-name">
-            <i class="${getFieldTypeIcon(field.type)}"></i>
-            ${escapeHtml(field.name)}
-          </div>
-          <div class="schema-field-type">
-            ${getFieldTypeName(field.type)}
-            <span class="confidence">${Math.round(field.confidence * 100)}%</span>
-          </div>
-          <div class="schema-field-sample">
-            ${field.samples.slice(0, 2).map(s => `<span class="sample-value">${escapeHtml(String(s).substring(0, 30))}</span>`).join('')}
-          </div>
-        </div>
-      `).join('');
+      // Show type count if available
+      const typesDisplay = document.getElementById('preview-types');
+      if (analysisData.graphInfo?.nodeTypes?.length > 0) {
+        typesDisplay.textContent = analysisData.graphInfo.nodeTypes.length;
+      } else if (analysisData.viewSplitCandidates.length > 0) {
+        typesDisplay.textContent = analysisData.viewSplitCandidates[0].uniqueCount;
+      } else {
+        typesDisplay.textContent = '-';
+      }
+
+      // Show graph data detected banner
+      const graphBanner = document.getElementById('import-graph-detected');
+      if (analysisData.isGraphData && analysisData.graphInfo) {
+        graphBanner.style.display = 'flex';
+        const graphInfo = analysisData.graphInfo;
+        document.getElementById('graph-detected-info').textContent =
+          `${graphInfo.nodeCount} nodes (${graphInfo.nodeTypes.join(', ')})` +
+          (graphInfo.edgeCount > 0 ? ` and ${graphInfo.edgeCount} edges` : '');
+      } else {
+        graphBanner.style.display = 'none';
+      }
+
+      // Show type distribution
+      const typeDistSection = document.getElementById('import-type-distribution');
+      const typeBars = document.getElementById('type-bars');
+      const typeCandidate = analysisData.viewSplitCandidates.find(c => c.field === 'type') ||
+                           analysisData.viewSplitCandidates[0];
+
+      if (typeCandidate && typeCandidate.values.length > 0) {
+        typeDistSection.style.display = 'block';
+        const maxCount = Math.max(...typeCandidate.values.map(v => v.count));
+        typeBars.innerHTML = typeCandidate.values.slice(0, 10).map(v => {
+          const pct = (v.count / maxCount) * 100;
+          return `
+            <div class="type-bar-row">
+              <span class="type-bar-label">${escapeHtml(String(v.value))}</span>
+              <div class="type-bar-track">
+                <div class="type-bar-fill" style="width: ${pct}%"></div>
+              </div>
+              <span class="type-bar-count">${v.count}</span>
+            </div>
+          `;
+        }).join('');
+
+        // Show view options
+        document.getElementById('import-view-options').style.display = 'block';
+      } else {
+        typeDistSection.style.display = 'none';
+        document.getElementById('import-view-options').style.display = 'none';
+      }
+
+      // Show edges section for graph data
+      const edgesSection = document.getElementById('import-edges-section');
+      if (analysisData.isGraphData && analysisData.graphInfo?.edgeCount > 0) {
+        edgesSection.style.display = 'block';
+        const edgeInfo = analysisData.graphInfo;
+        document.getElementById('edges-info').innerHTML = `
+          <span class="edges-count">${edgeInfo.edgeCount} relationships</span>
+          <span class="edges-types">${edgeInfo.edgeTypes.slice(0, 5).join(', ')}${edgeInfo.edgeTypes.length > 5 ? '...' : ''}</span>
+        `;
+      } else {
+        edgesSection.style.display = 'none';
+      }
 
       // Sample table
       const sampleTable = document.getElementById('sample-table');
+      const displayHeaders = previewData.headers.slice(0, 6); // Limit columns for readability
       sampleTable.innerHTML = `
         <thead>
           <tr>
-            ${previewData.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}
+            ${displayHeaders.map(h => `<th>${escapeHtml(h)}</th>`).join('')}
+            ${previewData.headers.length > 6 ? '<th>...</th>' : ''}
           </tr>
         </thead>
         <tbody>
           ${previewData.sampleRows.slice(0, 3).map(row => `
             <tr>
-              ${previewData.headers.map(h => `<td>${escapeHtml(String(row[h] || '').substring(0, 50))}</td>`).join('')}
+              ${displayHeaders.map(h => `<td>${escapeHtml(String(row[h] || '').substring(0, 40))}</td>`).join('')}
+              ${previewData.headers.length > 6 ? '<td>...</td>' : ''}
             </tr>
           `).join('')}
         </tbody>
@@ -1167,22 +1774,46 @@ function initImportHandlers() {
 
       // Set name input
       document.getElementById('import-set-name').value =
-        file.name.replace(/\.(csv|json)$/i, '');
+        file.name.replace(/\.(csv|json|xlsx|xls)$/i, '');
 
       // Enable confirm
       confirmBtn.disabled = false;
 
     } catch (error) {
       // Reset dropzone
+      const dropzoneText = ExcelParser.isAvailable()
+        ? 'Drop CSV, JSON, or Excel file here'
+        : 'Drop CSV or JSON file here';
       dropzone.innerHTML = `
         <div class="dropzone-content">
           <i class="ph ph-upload-simple dropzone-icon"></i>
-          <p class="dropzone-text">Drop CSV or JSON file here</p>
+          <p class="dropzone-text">${dropzoneText}</p>
           <p class="dropzone-subtext">or click to browse</p>
         </div>
       `;
+      dropzone.style.display = 'flex';
       alert('Failed to parse file: ' + error.message);
     }
+  }
+
+  // Helper: Read file as text
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  // Helper: Read file as ArrayBuffer (for Excel)
+  function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(new Uint8Array(e.target.result));
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsArrayBuffer(file);
+    });
   }
 
   // Update progress display
@@ -1578,6 +2209,239 @@ importStyles.textContent = `
     padding: 6px 12px;
     font-size: 12px;
   }
+
+  /* Graph Data Detected Banner */
+  .import-graph-detected {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: var(--radius-md);
+    margin-bottom: 16px;
+  }
+
+  .graph-detected-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    border-radius: 8px;
+    color: white;
+    font-size: 20px;
+  }
+
+  .graph-detected-content strong {
+    display: block;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+
+  .graph-detected-content p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  /* Type Distribution */
+  .import-type-distribution {
+    margin-bottom: 16px;
+  }
+
+  .import-type-distribution h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .type-bars {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+  }
+
+  .type-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+  }
+
+  .type-bar-label {
+    width: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .type-bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .type-bar-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+
+  .type-bar-count {
+    width: 40px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* View Options */
+  .import-view-options {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+  }
+
+  .view-option {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+  }
+
+  .option-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: 24px;
+    margin-top: 0;
+  }
+
+  /* Edges Section */
+  .import-edges-section {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+  }
+
+  .import-edges-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .edges-info {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+
+  .edges-count {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .edges-types {
+    color: var(--text-muted);
+  }
+
+  .edge-option {
+    padding-top: 8px;
+    border-top: 1px solid var(--border-secondary);
+  }
+
+  /* Import Provenance Section */
+  .import-provenance-section {
+    margin-top: 20px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+  }
+
+  .import-provenance-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-primary);
+  }
+
+  .import-provenance-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .import-provenance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .import-provenance-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .import-provenance-field.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .import-provenance-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .import-provenance-input {
+    padding: 8px 10px;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .import-provenance-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  }
+
+  .import-provenance-input::placeholder {
+    color: var(--text-muted);
+  }
 `;
 document.head.appendChild(importStyles);
 
@@ -1591,6 +2455,8 @@ if (typeof module !== 'undefined' && module.exports) {
     CSVParser,
     SchemaInferrer,
     ImportOrchestrator,
+    ImportAnalyzer,
+    ExcelParser,
     showImportModal
   };
 }
@@ -1599,5 +2465,7 @@ if (typeof window !== 'undefined') {
   window.CSVParser = CSVParser;
   window.SchemaInferrer = SchemaInferrer;
   window.ImportOrchestrator = ImportOrchestrator;
+  window.ImportAnalyzer = ImportAnalyzer;
+  window.ExcelParser = ExcelParser;
   window.showImportModal = showImportModal;
 }

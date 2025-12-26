@@ -1520,6 +1520,11 @@ class EODataWorkbench {
         <i class="ph ph-arrow-line-right"></i>
         <span>Close Tabs to the Right</span>
       </div>
+      <div class="tab-context-separator"></div>
+      <div class="tab-context-item" data-action="toggle-provenance">
+        <i class="ph ${view.config.showProvenance ? 'ph-check-square' : 'ph-square'}"></i>
+        <span>Show Provenance</span>
+      </div>
     `;
 
     document.body.appendChild(menu);
@@ -1620,6 +1625,13 @@ class EODataWorkbench {
         this._renderViewsNav();
         this._renderView();
         this._saveData();
+        break;
+
+      case 'toggle-provenance':
+        view.config.showProvenance = !view.config.showProvenance;
+        this._renderView();
+        this._saveData();
+        this._showToast(view.config.showProvenance ? 'Provenance visible' : 'Provenance hidden', 'info');
         break;
     }
   }
@@ -1853,6 +1865,8 @@ class EODataWorkbench {
     const set = this.getCurrentSet();
     const records = this.getFilteredRecords();
     const fields = this._getVisibleFields();
+    const view = this.getCurrentView();
+    const showProvenance = view?.config.showProvenance || false;
 
     let html = `
       <div class="data-table-container">
@@ -1862,6 +1876,11 @@ class EODataWorkbench {
               <th class="col-row-number">
                 <input type="checkbox" class="row-checkbox" id="select-all">
               </th>
+              ${showProvenance ? `
+                <th class="col-provenance" title="Provenance status">
+                  <i class="ph ph-info"></i>
+                </th>
+              ` : ''}
               ${fields.map(field => `
                 <th style="width: ${field.width}px; position: relative;"
                     data-field-id="${field.id}">
@@ -1886,7 +1905,7 @@ class EODataWorkbench {
     if (records.length === 0) {
       html += `
         <tr>
-          <td colspan="${fields.length + 2}" class="add-row-cell" id="add-first-record">
+          <td colspan="${fields.length + (showProvenance ? 3 : 2)}" class="add-row-cell" id="add-first-record">
             <div class="add-row-content">
               <i class="ph ph-plus"></i>
               <span>Add your first record</span>
@@ -1897,6 +1916,7 @@ class EODataWorkbench {
     } else {
       records.forEach((record, index) => {
         const isSelected = this.selectedRecords.has(record.id);
+        const provStatus = showProvenance ? this._getRecordProvenanceStatus(record, set) : null;
         html += `
           <tr data-record-id="${record.id}" class="${isSelected ? 'selected' : ''}">
             <td class="col-row-number">
@@ -1904,6 +1924,13 @@ class EODataWorkbench {
                      data-record-id="${record.id}"
                      ${isSelected ? 'checked' : ''}>
             </td>
+            ${showProvenance ? `
+              <td class="col-provenance prov-${provStatus}"
+                  data-record-id="${record.id}"
+                  title="Click to view provenance">
+                ${this._getProvenanceIndicator(provStatus)}
+              </td>
+            ` : ''}
             ${fields.map(field => this._renderCell(record, field)).join('')}
             <td class="col-add"></td>
           </tr>
@@ -1916,7 +1943,7 @@ class EODataWorkbench {
           <td class="col-row-number add-row-cell" id="add-row-btn">
             <i class="ph ph-plus"></i>
           </td>
-          <td colspan="${fields.length + 1}" class="add-row-cell" id="add-row-cell">
+          <td colspan="${fields.length + (showProvenance ? 2 : 1)}" class="add-row-cell" id="add-row-cell">
             <div class="add-row-content">
               <span>Add record</span>
             </div>
@@ -4449,6 +4476,9 @@ class EODataWorkbench {
             <span>Delete</span>
           </button>
         </div>
+
+        ${this._renderProvenanceSection(record, set)}
+
         <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-primary);">
           <div style="font-size: 11px; color: var(--text-muted);">
             <i class="ph ph-clock"></i> Created: ${new Date(record.createdAt).toLocaleString()}<br>
@@ -4480,7 +4510,164 @@ class EODataWorkbench {
       }
     });
 
+    // Provenance field editing
+    body.querySelectorAll('.provenance-value.editable').forEach(el => {
+      el.addEventListener('click', () => {
+        this._startProvenanceEdit(el, recordId, set);
+      });
+    });
+
     panel.classList.add('open');
+  }
+
+  /**
+   * Start editing a provenance field
+   */
+  _startProvenanceEdit(el, recordId, set) {
+    const provKey = el.dataset.provKey;
+    const record = set.records.find(r => r.id === recordId);
+    if (!record) return;
+
+    // Get current value
+    const currentValue = record.provenance?.[provKey] || '';
+    const isRef = currentValue && typeof currentValue === 'object' && '$ref' in currentValue;
+
+    el.classList.add('editing');
+
+    // Create editor with toggle for text vs. reference
+    el.innerHTML = `
+      <div class="prov-editor" style="display: flex; flex-direction: column; gap: 6px;">
+        <div class="prov-editor-tabs" style="display: flex; gap: 4px; margin-bottom: 4px;">
+          <button class="prov-tab ${!isRef ? 'active' : ''}" data-mode="text"
+                  style="padding: 2px 8px; font-size: 10px; border-radius: 3px; border: 1px solid var(--border-primary); background: ${!isRef ? 'var(--primary-500)' : 'transparent'}; color: ${!isRef ? 'white' : 'var(--text-muted)'}; cursor: pointer;">
+            Text
+          </button>
+          <button class="prov-tab ${isRef ? 'active' : ''}" data-mode="ref"
+                  style="padding: 2px 8px; font-size: 10px; border-radius: 3px; border: 1px solid var(--border-primary); background: ${isRef ? 'var(--primary-500)' : 'transparent'}; color: ${isRef ? 'white' : 'var(--text-muted)'}; cursor: pointer;">
+            Link Record
+          </button>
+        </div>
+        <input type="text" class="prov-input"
+               placeholder="${isRef ? 'Search records...' : 'Enter value...'}"
+               value="${isRef ? '' : this._escapeHtml(String(currentValue))}"
+               style="padding: 4px 8px; font-size: 12px; border: 1px solid var(--border-primary); border-radius: 4px; width: 100%;">
+        <div class="prov-editor-actions" style="display: flex; gap: 4px; justify-content: flex-end;">
+          <button class="prov-cancel" style="padding: 2px 8px; font-size: 11px; border-radius: 3px; border: 1px solid var(--border-primary); background: transparent; cursor: pointer;">
+            Cancel
+          </button>
+          <button class="prov-save" style="padding: 2px 8px; font-size: 11px; border-radius: 3px; border: none; background: var(--primary-500); color: white; cursor: pointer;">
+            Save
+          </button>
+        </div>
+      </div>
+    `;
+
+    const input = el.querySelector('.prov-input');
+    let currentMode = isRef ? 'ref' : 'text';
+
+    input.focus();
+    input.select();
+
+    // Tab switching
+    el.querySelectorAll('.prov-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentMode = tab.dataset.mode;
+        el.querySelectorAll('.prov-tab').forEach(t => {
+          const isActive = t.dataset.mode === currentMode;
+          t.style.background = isActive ? 'var(--primary-500)' : 'transparent';
+          t.style.color = isActive ? 'white' : 'var(--text-muted)';
+          t.classList.toggle('active', isActive);
+        });
+        input.placeholder = currentMode === 'ref' ? 'Search records...' : 'Enter value...';
+        input.value = '';
+        input.focus();
+      });
+    });
+
+    // Save handler
+    const saveValue = () => {
+      const inputValue = input.value.trim();
+      let newValue = null;
+
+      if (inputValue) {
+        if (currentMode === 'ref') {
+          // Try to find a matching record
+          const matchedRecord = this._findRecordBySearch(inputValue);
+          if (matchedRecord) {
+            newValue = { $ref: matchedRecord.id };
+          } else {
+            this._showToast('No matching record found', 'error');
+            return;
+          }
+        } else {
+          newValue = inputValue;
+        }
+      }
+
+      // Update record provenance
+      if (!record.provenance) {
+        record.provenance = {};
+      }
+      record.provenance[provKey] = newValue;
+
+      record.updatedAt = new Date().toISOString();
+      this._saveData();
+      this._showRecordDetail(recordId);
+      this._renderView();
+    };
+
+    // Cancel handler
+    const cancelEdit = () => {
+      this._showRecordDetail(recordId);
+    };
+
+    el.querySelector('.prov-save')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveValue();
+    });
+
+    el.querySelector('.prov-cancel')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cancelEdit();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveValue();
+      }
+      if (e.key === 'Escape') {
+        cancelEdit();
+      }
+    });
+  }
+
+  /**
+   * Search for a record by text
+   */
+  _findRecordBySearch(query) {
+    const lowerQuery = query.toLowerCase();
+
+    for (const set of this.sets) {
+      for (const record of set.records) {
+        // Check primary field
+        const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
+        const primaryValue = record.values[primaryField?.id];
+        if (primaryValue && String(primaryValue).toLowerCase().includes(lowerQuery)) {
+          return record;
+        }
+
+        // Check all text values
+        for (const [fieldId, value] of Object.entries(record.values)) {
+          if (typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) {
+            return record;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   _renderDetailFieldValue(field, value) {
@@ -5655,6 +5842,149 @@ class EODataWorkbench {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+  }
+
+  // --------------------------------------------------------------------------
+  // Provenance Utilities
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get provenance status for a record
+   * @returns 'full' | 'partial' | 'none'
+   */
+  _getRecordProvenanceStatus(record, set) {
+    // Check if provenance functions are available
+    if (typeof getProvenanceStatus !== 'function') {
+      return 'none';
+    }
+
+    // Resolve provenance (record + dataset inheritance)
+    const datasetProv = set?.datasetProvenance?.provenance || null;
+    const recordProv = record?.provenance || null;
+
+    // Merge provenance (record takes precedence)
+    const resolved = typeof mergeProvenance === 'function'
+      ? mergeProvenance(datasetProv, recordProv)
+      : (recordProv || datasetProv || null);
+
+    return getProvenanceStatus(resolved);
+  }
+
+  /**
+   * Get provenance indicator symbol
+   */
+  _getProvenanceIndicator(status) {
+    switch (status) {
+      case 'full': return '◉';
+      case 'partial': return '◐';
+      default: return '○';
+    }
+  }
+
+  /**
+   * Render provenance section for detail panel
+   */
+  _renderProvenanceSection(record, set) {
+    // Get resolved provenance (merging dataset + record level)
+    const datasetProv = set?.datasetProvenance?.provenance || {};
+    const recordProv = record?.provenance || {};
+
+    const status = this._getRecordProvenanceStatus(record, set);
+    const indicator = this._getProvenanceIndicator(status);
+
+    // Provenance elements with their display info
+    const elements = [
+      { key: 'agent', label: 'Agent', icon: 'ph-user', hint: 'Who provided this?' },
+      { key: 'method', label: 'Method', icon: 'ph-flask', hint: 'How was it produced?' },
+      { key: 'source', label: 'Source', icon: 'ph-file-text', hint: 'Where was it published?' },
+      { key: 'term', label: 'Term', icon: 'ph-bookmark', hint: 'Key concept used' },
+      { key: 'definition', label: 'Definition', icon: 'ph-book-open', hint: 'What does that mean here?' },
+      { key: 'jurisdiction', label: 'Jurisdiction', icon: 'ph-map-pin', hint: 'Where does this apply?' },
+      { key: 'scale', label: 'Scale', icon: 'ph-arrows-out', hint: 'At what level?' },
+      { key: 'timeframe', label: 'Timeframe', icon: 'ph-calendar', hint: 'When was this observed?' },
+      { key: 'background', label: 'Background', icon: 'ph-info', hint: 'What context/conditions?' }
+    ];
+
+    return `
+      <div class="provenance-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-primary);">
+        <div class="provenance-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <span class="prov-indicator prov-${status}" style="font-size: 14px;">${indicator}</span>
+          <span style="font-weight: 500; font-size: 13px;">Provenance</span>
+          <span style="font-size: 11px; color: var(--text-muted);">
+            ${status === 'full' ? '(complete)' : status === 'partial' ? '(partial)' : '(none)'}
+          </span>
+        </div>
+        <div class="provenance-grid" style="display: grid; gap: 8px;">
+          ${elements.map(el => {
+            const value = recordProv[el.key] ?? datasetProv[el.key] ?? null;
+            const inherited = !recordProv[el.key] && datasetProv[el.key];
+            const isRef = value && typeof value === 'object' && '$ref' in value;
+            const displayValue = this._formatProvenanceValue(value);
+
+            return `
+              <div class="provenance-field" data-prov-key="${el.key}" data-record-id="${record.id}"
+                   style="display: flex; align-items: flex-start; gap: 8px; padding: 4px 0;">
+                <i class="ph ${el.icon}" style="color: var(--text-muted); margin-top: 2px; flex-shrink: 0;"></i>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">
+                    ${el.label}
+                    ${inherited ? '<span style="font-size: 10px; opacity: 0.7;">(inherited)</span>' : ''}
+                  </div>
+                  <div class="provenance-value editable ${isRef ? 'is-ref' : ''}"
+                       data-prov-key="${el.key}"
+                       data-record-id="${record.id}"
+                       title="${el.hint}"
+                       style="font-size: 12px; color: ${value ? 'var(--text-primary)' : 'var(--text-muted)'}; cursor: pointer;">
+                    ${displayValue || '<span style="opacity: 0.5;">Click to add</span>'}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Format provenance value for display
+   */
+  _formatProvenanceValue(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    // Record reference
+    if (typeof value === 'object' && '$ref' in value) {
+      const refId = value.$ref;
+      // Try to find the referenced record's name
+      const refRecord = this._findRecordById(refId);
+      const refName = refRecord ? this._getRecordPrimaryValue(refRecord) : refId.substring(0, 8);
+      return `<span class="prov-ref"><i class="ph ph-arrow-right"></i> ${this._escapeHtml(refName)}</span>`;
+    }
+
+    return this._escapeHtml(String(value));
+  }
+
+  /**
+   * Find a record by ID across all sets
+   */
+  _findRecordById(recordId) {
+    for (const set of this.sets) {
+      const record = set.records.find(r => r.id === recordId);
+      if (record) return record;
+    }
+    return null;
+  }
+
+  /**
+   * Get primary field value for a record
+   */
+  _getRecordPrimaryValue(record) {
+    const set = this.sets.find(s => s.id === record.setId);
+    if (!set) return record.id;
+    const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
+    return record.values[primaryField?.id] || record.id;
   }
 
   /**
