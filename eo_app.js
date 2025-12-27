@@ -14,7 +14,10 @@ const APP_CONFIG = {
   schemaVersion: '1.0',
   defaultWorkspace: 'default',
   autoSaveInterval: 30000,
-  complianceCheckInterval: 60000
+  complianceCheckInterval: 60000,
+  // Performance: Defer compliance checking until after initial load
+  complianceCheckDelay: 10000, // Wait 10 seconds before first check
+  deferComplianceChecking: true // Enable deferred compliance checking
 };
 
 /**
@@ -113,16 +116,24 @@ class EOApp {
 
   /**
    * Start periodic compliance checking
+   * Performance: Uses deferred start to avoid blocking initial load
    */
   _startComplianceChecking() {
-    // Run initial check
-    setTimeout(() => this.runComplianceCheck(), 1000);
+    // Use deferred delay for initial check (default 10s instead of 1s)
+    const initialDelay = APP_CONFIG.deferComplianceChecking
+      ? APP_CONFIG.complianceCheckDelay
+      : 1000;
 
-    // Schedule periodic checks
-    this._complianceInterval = setInterval(
-      () => this.runComplianceCheck(),
-      APP_CONFIG.complianceCheckInterval
-    );
+    // Run initial check after delay
+    this._complianceTimeout = setTimeout(() => {
+      this.runComplianceCheck();
+
+      // Schedule periodic checks only after first check completes
+      this._complianceInterval = setInterval(
+        () => this.runComplianceCheck(),
+        APP_CONFIG.complianceCheckInterval
+      );
+    }, initialDelay);
   }
 
   /**
@@ -459,6 +470,9 @@ class EOApp {
   async shutdown() {
     console.log('EOApp: Shutting down...');
 
+    if (this._complianceTimeout) {
+      clearTimeout(this._complianceTimeout);
+    }
     if (this._complianceInterval) {
       clearInterval(this._complianceInterval);
     }

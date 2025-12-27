@@ -187,11 +187,27 @@ class EOStateDerivation {
 
   /**
    * Handle new event for incremental updates
+   * Performance: Uses incremental update instead of full cache invalidation
    */
   _handleNewEvent(event) {
-    // Invalidate caches for affected horizons
-    // For now, clear all caches (could be optimized)
-    this._entityCaches.clear();
+    const action = event.payload?.action;
+
+    // If no action or no rules for this action, nothing to update
+    if (!action || !this._derivationRules.has(action)) {
+      return;
+    }
+
+    // Apply the event incrementally to all cached entity maps
+    for (const [horizonId, entities] of this._entityCaches) {
+      // Check if this event is visible in this horizon
+      // For simplicity, apply to all cached horizons (can be optimized with horizon checks)
+      for (const rule of this._derivationRules.get(action)) {
+        rule(event, entities, this._viewCaches.get(horizonId) || new Map());
+      }
+    }
+
+    // Only clear view caches (they depend on entity state which has been updated)
+    // Entity caches are kept since we updated them incrementally
     this._viewCaches.clear();
   }
 
