@@ -3770,7 +3770,7 @@ class EODataWorkbench {
       svgContent += `
         <g class="graph-node" data-record-id="${node.id}" transform="translate(${node.x}, ${node.y})">
           <circle r="${nodeRadius}" fill="var(--primary-500)" stroke="var(--primary-600)" stroke-width="2"/>
-          <text dy="4" text-anchor="middle" fill="white" font-size="11" font-weight="500">
+          <text class="node-label" dy="${nodeRadius + 14}" text-anchor="middle" fill="var(--text-secondary)" font-size="10" font-weight="500" style="pointer-events: none; opacity: 0;">
             ${this._escapeHtml(truncatedTitle)}
           </text>
         </g>
@@ -3786,11 +3786,24 @@ class EODataWorkbench {
       ${svgContent}
     `;
 
-    // Add click handlers
-    svg.querySelectorAll('.graph-node').forEach(node => {
-      node.style.cursor = 'pointer';
-      node.addEventListener('click', () => {
-        this._showRecordDetail(node.dataset.recordId);
+    // Add click and hover handlers
+    svg.querySelectorAll('.graph-node').forEach(nodeEl => {
+      nodeEl.style.cursor = 'pointer';
+      const label = nodeEl.querySelector('.node-label');
+
+      nodeEl.addEventListener('click', () => {
+        this._showRecordDetail(nodeEl.dataset.recordId);
+      });
+
+      // Show label on hover
+      nodeEl.addEventListener('mouseenter', () => {
+        if (label) label.style.opacity = '1';
+        nodeEl.querySelector('circle')?.setAttribute('stroke-width', '3');
+      });
+
+      nodeEl.addEventListener('mouseleave', () => {
+        if (label) label.style.opacity = '0';
+        nodeEl.querySelector('circle')?.setAttribute('stroke-width', '2');
       });
     });
 
