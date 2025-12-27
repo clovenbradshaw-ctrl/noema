@@ -29,7 +29,8 @@ const GraphEdgeType = Object.freeze({
   SUPERSEDES: 'supersedes',     // Meant -> Meant (revision)
   PARENT: 'parent',             // Event -> Event (causal order)
   ENTITY_SOURCE: 'entity_source', // Entity -> Event
-  HORIZON_CONTAINS: 'horizon_contains' // Horizon -> Event
+  HORIZON_CONTAINS: 'horizon_contains', // Horizon -> Event
+  GRAPH_DATA: 'graph_data'      // Graph edge from edge_create events
 });
 
 /**
@@ -116,6 +117,7 @@ class GraphEdge {
       case GraphEdgeType.SUPERSEDES: return '#f4212e';
       case GraphEdgeType.PARENT: return '#6e7a88';
       case GraphEdgeType.ENTITY_SOURCE: return '#1d9bf0';
+      case GraphEdgeType.GRAPH_DATA: return '#1d9bf0'; // Blue for graph data edges
       default: return '#38444d';
     }
   }
@@ -460,23 +462,87 @@ class EOGraph {
     const gate = this.app.getGate();
     const events = gate.getAvailable();
 
-    // Create nodes for events
+    // Separate graph data events from regular events
+    const nodeEvents = [];
+    const edgeEvents = [];
+    const regularEvents = [];
+
     for (const event of events) {
-      const type = event.type === 'given' ? GraphNodeType.GIVEN : GraphNodeType.MEANT;
-      const node = new GraphNode(event.id, type, event);
-
-      // Check visibility filters
-      if (type === GraphNodeType.GIVEN && !this.showGiven) {
-        node.visible = false;
+      const action = event.payload?.action;
+      if (action === 'node_create') {
+        nodeEvents.push(event);
+      } else if (action === 'edge_create') {
+        edgeEvents.push(event);
+      } else {
+        regularEvents.push(event);
       }
-      if (type === GraphNodeType.MEANT && !this.showMeant) {
-        node.visible = false;
-      }
-
-      this.nodes.set(event.id, node);
     }
 
-    // Create edges for relationships
+    // Check if we have graph data - if so, use graph data mode
+    const hasGraphData = nodeEvents.length > 0 || edgeEvents.length > 0;
+
+    if (hasGraphData) {
+      // Graph data mode: Create nodes from node_create events
+      // Map from graph node ID to event for lookups
+      const nodeIdToEvent = new Map();
+
+      for (const event of nodeEvents) {
+        const nodeData = event.payload?.node;
+        if (!nodeData?.id) continue;
+
+        const nodeId = nodeData.id;
+        nodeIdToEvent.set(nodeId, event);
+
+        const type = GraphNodeType.GIVEN; // Graph nodes are Given data
+        const node = new GraphNode(nodeId, type, event);
+
+        // Use node type/properties for label
+        node.label = nodeData.properties?.name || nodeData.properties?.label || nodeId;
+
+        // Check visibility filters
+        if (!this.showGiven) {
+          node.visible = false;
+        }
+
+        this.nodes.set(nodeId, node);
+      }
+
+      // Create edges from edge_create events
+      for (const event of edgeEvents) {
+        const edgeData = event.payload?.edge;
+        if (!edgeData?.from || !edgeData?.to) continue;
+
+        const fromId = edgeData.from;
+        const toId = edgeData.to;
+
+        // Only create edge if both nodes exist
+        if (this.nodes.has(fromId) && this.nodes.has(toId)) {
+          const edge = new GraphEdge(fromId, toId, GraphEdgeType.GRAPH_DATA);
+          // Store edge type for potential filtering/styling
+          edge.graphEdgeType = edgeData.type;
+          this.edges.push(edge);
+        }
+      }
+    } else {
+      // EO event mode: Create nodes for all events (original behavior)
+      for (const event of events) {
+        const type = event.type === 'given' ? GraphNodeType.GIVEN : GraphNodeType.MEANT;
+        const node = new GraphNode(event.id, type, event);
+
+        // Check visibility filters
+        if (type === GraphNodeType.GIVEN && !this.showGiven) {
+          node.visible = false;
+        }
+        if (type === GraphNodeType.MEANT && !this.showMeant) {
+          node.visible = false;
+        }
+
+        this.nodes.set(event.id, node);
+      }
+    }
+
+    // Create edges for EO relationships (provenance, supersession, parents)
+    // These apply to both modes
     for (const event of events) {
       // Provenance edges (Meant -> Given)
       if (event.provenance && this.showProvenance) {
@@ -504,8 +570,119 @@ class EOGraph {
       }
     }
 
+    // Also look for nodes and edges in data workbench sets
+    // These are created by the import module when graph data is imported
+    this._loadFromWorkbench();
+
     // Apply layout
     this.applyLayout();
+  }
+
+  /**
+   * Load nodes and edges from data workbench sets
+   * The import module stores graph data as records in sets
+   */
+  _loadFromWorkbench() {
+    // Get the data workbench if available
+    const workbench = typeof getDataWorkbench === 'function' ? getDataWorkbench() : null;
+    if (!workbench) return;
+
+    const sets = workbench.getSets ? workbench.getSets() : workbench.sets || [];
+
+    // First pass: Create nodes from non-relationship sets
+    for (const set of sets) {
+      // Skip relationship sets
+      const isRelationshipSet = set.name?.includes('Relationships') ||
+        set.name?.includes('Edges') ||
+        set.name?.includes('relationships');
+
+      // Check if set has from/to fields (indicates edge data)
+      const hasFromField = set.fields?.some(f =>
+        f.name?.toLowerCase() === 'from' ||
+        f.name?.toLowerCase() === 'source'
+      );
+      const hasToField = set.fields?.some(f =>
+        f.name?.toLowerCase() === 'to' ||
+        f.name?.toLowerCase() === 'target'
+      );
+
+      if (isRelationshipSet || (hasFromField && hasToField)) continue;
+
+      // This is a node dataset - find the ID field
+      const idField = set.fields?.find(f =>
+        f.name?.toLowerCase() === 'id' ||
+        f.name?.toLowerCase() === 'node_id' ||
+        f.name?.toLowerCase() === 'name'
+      ) || set.fields?.[0]; // Fall back to first field
+
+      if (!idField) continue;
+
+      // Find name/label field for display
+      const nameField = set.fields?.find(f =>
+        f.name?.toLowerCase() === 'name' ||
+        f.name?.toLowerCase() === 'label' ||
+        f.name?.toLowerCase() === 'title'
+      );
+
+      // Create nodes from records
+      for (const record of set.records || []) {
+        const nodeId = record.values?.[idField.id];
+        if (!nodeId || this.nodes.has(nodeId)) continue;
+
+        const type = GraphNodeType.GIVEN;
+        const node = new GraphNode(nodeId, type, record);
+
+        // Set label from name field or ID
+        node.label = (nameField ? record.values?.[nameField.id] : null) || nodeId;
+
+        // Check visibility filters
+        if (!this.showGiven) {
+          node.visible = false;
+        }
+
+        this.nodes.set(nodeId, node);
+      }
+    }
+
+    // Second pass: Create edges from relationship sets
+    for (const set of sets) {
+      // Check if this is a relationship set (by name or by having from/to fields)
+      const isRelationshipSet = set.name?.includes('Relationships') ||
+        set.name?.includes('Edges') ||
+        set.name?.includes('relationships');
+
+      // Also check if set has from/to fields (indicates edge data)
+      const fromField = set.fields?.find(f =>
+        f.name?.toLowerCase() === 'from' ||
+        f.name?.toLowerCase() === 'source'
+      );
+      const toField = set.fields?.find(f =>
+        f.name?.toLowerCase() === 'to' ||
+        f.name?.toLowerCase() === 'target'
+      );
+
+      if (!isRelationshipSet && (!fromField || !toField)) continue;
+      if (!fromField || !toField) continue;
+
+      // This looks like an edge dataset - extract edges
+      for (const record of set.records || []) {
+        const fromId = record.values?.[fromField.id];
+        const toId = record.values?.[toField.id];
+
+        if (!fromId || !toId) continue;
+
+        // Only create edge if both nodes exist
+        if (this.nodes.has(fromId) && this.nodes.has(toId)) {
+          const edge = new GraphEdge(fromId, toId, GraphEdgeType.GRAPH_DATA);
+          // Get edge type if available
+          const typeField = set.fields?.find(f => f.name?.toLowerCase() === 'type');
+          if (typeField) {
+            edge.graphEdgeType = record.values?.[typeField.id];
+          }
+          this.edges.push(edge);
+        }
+      }
+    }
   }
 
   /**
