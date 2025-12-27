@@ -329,6 +329,7 @@ class ICSParser {
 
 /**
  * Parse CSV with intelligent delimiter detection
+ * Enhanced with parsing decision tracking for provenance
  */
 class CSVParser {
   constructor() {
@@ -339,30 +340,62 @@ class CSVParser {
    * Parse CSV text into records
    * @param {string} text - Raw CSV text
    * @param {Object} options - { delimiter, hasHeaders }
-   * @returns {{ headers: string[], rows: object[], delimiter: string, hasHeaders: boolean }}
+   * @returns {{ headers: string[], rows: object[], delimiter: string, hasHeaders: boolean, parsingDecisions: object }}
    */
   parse(text, options = {}) {
+    const startTime = performance.now();
+
+    // Track parsing decisions for provenance
+    const parsingDecisions = {
+      delimiterDetected: null,
+      delimiterConfidence: null,
+      delimiterCandidates: [],
+      headerDetected: null,
+      headerConfidence: null,
+      lineEndingNormalized: false,
+      quotedFieldsFound: 0,
+      sanitizedHeaders: []
+    };
+
     // Normalize line endings
+    const originalLineEndings = text.includes('\r\n') ? 'CRLF' : (text.includes('\r') ? 'CR' : 'LF');
     text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    parsingDecisions.lineEndingNormalized = originalLineEndings !== 'LF';
+    parsingDecisions.originalLineEnding = originalLineEndings;
 
     // Detect delimiter if not specified
-    const delimiter = options.delimiter || this._detectDelimiter(text);
+    const delimiterResult = this._detectDelimiterWithConfidence(text);
+    const delimiter = options.delimiter || delimiterResult.delimiter;
+    parsingDecisions.delimiterDetected = delimiter;
+    parsingDecisions.delimiterConfidence = delimiterResult.confidence;
+    parsingDecisions.delimiterCandidates = delimiterResult.candidates;
 
     // Parse into lines (handling quoted fields with newlines)
-    const lines = this._parseLines(text, delimiter);
+    const parseResult = this._parseLinesWithStats(text, delimiter);
+    const lines = parseResult.lines;
+    parsingDecisions.quotedFieldsFound = parseResult.quotedFieldCount;
 
     if (lines.length === 0) {
-      return { headers: [], rows: [], delimiter, hasHeaders: false };
+      return { headers: [], rows: [], delimiter, hasHeaders: false, parsingDecisions };
     }
 
     // Detect if first row is headers
+    const headerResult = this._detectHeadersWithConfidence(lines);
     const hasHeaders = options.hasHeaders !== undefined
       ? options.hasHeaders
-      : this._detectHeaders(lines);
+      : headerResult.isHeaders;
+    parsingDecisions.headerDetected = hasHeaders;
+    parsingDecisions.headerConfidence = headerResult.confidence;
 
     // Extract headers
     const headers = hasHeaders
-      ? lines[0].map((h, i) => this._sanitizeHeader(h) || `Column ${i + 1}`)
+      ? lines[0].map((h, i) => {
+          const sanitized = this._sanitizeHeader(h) || `Column ${i + 1}`;
+          if (sanitized !== h) {
+            parsingDecisions.sanitizedHeaders.push({ original: h, sanitized, index: i });
+          }
+          return sanitized;
+        })
       : lines[0].map((_, i) => `Column ${i + 1}`);
 
     // Convert to row objects
@@ -376,12 +409,60 @@ class CSVParser {
       return row;
     });
 
+    parsingDecisions.processingTimeMs = Math.round(performance.now() - startTime);
+
     return {
       headers,
       rows,
       delimiter,
       hasHeaders,
-      totalRows: rows.length
+      totalRows: rows.length,
+      parsingDecisions
+    };
+  }
+
+  /**
+   * Detect delimiter with confidence score
+   */
+  _detectDelimiterWithConfidence(text) {
+    const firstLines = text.split('\n').slice(0, 10).join('\n');
+
+    const candidates = this.delimiters.map(d => {
+      const regex = new RegExp(d === '|' ? '\\|' : d, 'g');
+      const matches = firstLines.match(regex) || [];
+      return {
+        delimiter: d,
+        count: matches.length,
+        perLine: matches.length / Math.min(10, text.split('\n').length)
+      };
+    });
+
+    // Sort by count, prefer comma for ties
+    candidates.sort((a, b) => {
+      if (b.count === a.count) {
+        return a.delimiter === ',' ? -1 : 1;
+      }
+      return b.count - a.count;
+    });
+
+    const winner = candidates[0];
+    const runnerUp = candidates[1];
+
+    // Calculate confidence based on how much better winner is
+    let confidence = 0.5;
+    if (winner.count > 0) {
+      if (runnerUp.count === 0) {
+        confidence = 0.95;
+      } else {
+        const ratio = winner.count / runnerUp.count;
+        confidence = Math.min(0.95, 0.5 + (ratio - 1) * 0.15);
+      }
+    }
+
+    return {
+      delimiter: winner.count > 0 ? winner.delimiter : ',',
+      confidence,
+      candidates: candidates.slice(0, 3)
     };
   }
 
@@ -408,14 +489,15 @@ class CSVParser {
   }
 
   /**
-   * Parse CSV lines handling quoted fields
+   * Parse CSV lines handling quoted fields (with stats tracking)
    */
-  _parseLines(text, delimiter) {
+  _parseLinesWithStats(text, delimiter) {
     const lines = [];
     let currentLine = [];
     let currentField = '';
     let inQuotes = false;
     let i = 0;
+    let quotedFieldCount = 0;
 
     while (i < text.length) {
       const char = text[i];
@@ -430,6 +512,7 @@ class CSVParser {
           } else {
             // End of quoted field
             inQuotes = false;
+            quotedFieldCount++;
             i++;
           }
         } else {
@@ -467,35 +550,83 @@ class CSVParser {
       }
     }
 
-    return lines;
+    return { lines, quotedFieldCount };
   }
 
   /**
-   * Detect if first row is headers (heuristic)
+   * Parse CSV lines handling quoted fields (legacy, calls new method)
    */
-  _detectHeaders(lines) {
-    if (lines.length < 2) return true;
+  _parseLines(text, delimiter) {
+    return this._parseLinesWithStats(text, delimiter).lines;
+  }
+
+  /**
+   * Detect if first row is headers with confidence score
+   */
+  _detectHeadersWithConfidence(lines) {
+    if (lines.length < 2) {
+      return { isHeaders: true, confidence: 0.6 };
+    }
 
     const firstRow = lines[0];
     const secondRow = lines[1];
 
-    // Check if first row looks like headers:
-    // - All strings, no numbers
-    // - Different types from second row
+    let score = 0;
+    const factors = [];
+
+    // Factor 1: First row has fewer numbers than second row
     const firstRowNumeric = firstRow.filter(v => !isNaN(parseFloat(v)) && v.trim() !== '').length;
     const secondRowNumeric = secondRow.filter(v => !isNaN(parseFloat(v)) && v.trim() !== '').length;
 
-    // If first row has fewer numbers than second, likely headers
-    if (firstRowNumeric < secondRowNumeric) return true;
+    if (firstRowNumeric < secondRowNumeric) {
+      score += 0.3;
+      factors.push('fewer_numbers');
+    }
 
-    // If first row values look like column names (short, no spaces at start)
+    // Factor 2: First row values look like column names (short, no pure numbers, no dates)
     const looksLikeHeaders = firstRow.every(v =>
       v.length < 50 &&
       !/^\d+$/.test(v) &&
       !/^\d{4}-\d{2}-\d{2}/.test(v)
     );
 
-    return looksLikeHeaders;
+    if (looksLikeHeaders) {
+      score += 0.3;
+      factors.push('looks_like_headers');
+    }
+
+    // Factor 3: First row has unique values (no duplicates)
+    const uniqueFirst = new Set(firstRow.map(v => v.toLowerCase()));
+    if (uniqueFirst.size === firstRow.length) {
+      score += 0.2;
+      factors.push('unique_values');
+    }
+
+    // Factor 4: No empty values in first row
+    if (firstRow.every(v => v.trim() !== '')) {
+      score += 0.1;
+      factors.push('no_empty');
+    }
+
+    // Factor 5: Contains common header words
+    const headerWords = /^(id|name|type|date|time|value|count|total|status|email|phone|address|description|title|category|price|amount|url|link)$/i;
+    const headerWordCount = firstRow.filter(v => headerWords.test(v.trim())).length;
+    if (headerWordCount > 0) {
+      score += 0.1 * Math.min(headerWordCount / firstRow.length, 1);
+      factors.push('header_words');
+    }
+
+    const confidence = Math.min(0.95, 0.4 + score);
+    const isHeaders = confidence >= 0.5;
+
+    return { isHeaders, confidence, factors };
+  }
+
+  /**
+   * Detect if first row is headers (legacy, calls new method)
+   */
+  _detectHeaders(lines) {
+    return this._detectHeadersWithConfidence(lines).isHeaders;
   }
 
   /**
@@ -517,6 +648,7 @@ class CSVParser {
 
 /**
  * Infer field types from data
+ * Enhanced with inference decision tracking for provenance
  */
 class SchemaInferrer {
   constructor() {
@@ -536,12 +668,58 @@ class SchemaInferrer {
    * Infer schema from parsed data
    * @param {string[]} headers - Column headers
    * @param {object[]} rows - Data rows
-   * @returns {{ fields: object[] }}
+   * @returns {{ fields: object[], inferenceDecisions: object }}
    */
   inferSchema(headers, rows) {
+    const startTime = performance.now();
+
+    // Track inference decisions for provenance
+    const inferenceDecisions = {
+      fieldInferences: {},  // { fieldName: { type, confidence, candidates, sampleSize } }
+      ambiguities: [],      // Fields where type was unclear
+      dateFormatsDetected: [],
+      nullRates: {},        // { fieldName: rate }
+      processingTimeMs: null
+    };
+
     const fields = headers.map((header, index) => {
-      const values = rows.map(row => row[header]).filter(v => v !== '' && v !== null && v !== undefined);
-      const typeInfo = this._inferType(values, header);
+      const allValues = rows.map(row => row[header]);
+      const values = allValues.filter(v => v !== '' && v !== null && v !== undefined);
+      const typeInfo = this._inferTypeWithDecisions(values, header);
+
+      // Track null rate
+      const nullRate = 1 - (values.length / Math.max(allValues.length, 1));
+      inferenceDecisions.nullRates[header] = Math.round(nullRate * 100) / 100;
+
+      // Track inference decision
+      inferenceDecisions.fieldInferences[header] = {
+        type: typeInfo.type,
+        confidence: typeInfo.confidence,
+        candidates: typeInfo.candidates || [],
+        sampleSize: values.length,
+        uniqueCount: typeInfo.uniqueCount
+      };
+
+      // Track ambiguities
+      if (typeInfo.candidates && typeInfo.candidates.length > 1) {
+        const topTwo = typeInfo.candidates.slice(0, 2);
+        if (topTwo.length === 2 && topTwo[1].ratio > 0.3) {
+          inferenceDecisions.ambiguities.push({
+            field: header,
+            chosen: typeInfo.type,
+            alternative: topTwo[1].type,
+            alternativeRatio: topTwo[1].ratio
+          });
+        }
+      }
+
+      // Track date formats
+      if (typeInfo.type === 'date' && typeInfo.dateFormat) {
+        inferenceDecisions.dateFormatsDetected.push({
+          field: header,
+          format: typeInfo.dateFormat
+        });
+      }
 
       return {
         name: header,
@@ -553,15 +731,17 @@ class SchemaInferrer {
       };
     });
 
-    return { fields };
+    inferenceDecisions.processingTimeMs = Math.round(performance.now() - startTime);
+
+    return { fields, inferenceDecisions };
   }
 
   /**
-   * Infer type from values
+   * Infer type with detailed decision tracking
    */
-  _inferType(values, fieldName) {
+  _inferTypeWithDecisions(values, fieldName) {
     if (values.length === 0) {
-      return { type: 'text', confidence: 0.5 };
+      return { type: 'text', confidence: 0.5, candidates: [] };
     }
 
     const typeCounts = {
@@ -571,12 +751,12 @@ class SchemaInferrer {
       date: 0,
       number: 0,
       checkbox: 0,
-      select: 0,
       longText: 0,
       text: 0
     };
 
     const uniqueValues = new Set();
+    let dateFormat = null;
 
     for (const value of values) {
       const strValue = String(value).trim();
@@ -588,8 +768,12 @@ class SchemaInferrer {
         typeCounts.url++;
       } else if (this.patterns.phone.test(strValue)) {
         typeCounts.phone++;
-      } else if (this.patterns.date.test(strValue) || this.patterns.dateAlt.test(strValue)) {
+      } else if (this.patterns.date.test(strValue)) {
         typeCounts.date++;
+        dateFormat = 'ISO';
+      } else if (this.patterns.dateAlt.test(strValue)) {
+        typeCounts.date++;
+        dateFormat = strValue.includes('/') ? 'MM/DD/YYYY' : 'DD-MM-YYYY';
       } else if (this.patterns.number.test(strValue)) {
         typeCounts.number++;
       } else if (this.patterns.boolean.test(strValue)) {
@@ -601,12 +785,18 @@ class SchemaInferrer {
       }
     }
 
-    // Calculate best type
     const total = values.length;
-    const threshold = 0.7; // 70% of values should match type
+    const uniqueCount = uniqueValues.size;
+
+    // Build candidates list sorted by ratio
+    const candidates = Object.entries(typeCounts)
+      .map(([type, count]) => ({ type, count, ratio: count / total }))
+      .filter(c => c.count > 0)
+      .sort((a, b) => b.ratio - a.ratio);
+
+    const threshold = 0.7;
 
     // Check for SELECT (low cardinality)
-    const uniqueCount = uniqueValues.size;
     if (uniqueCount <= 20 && uniqueCount < total * 0.5 && total > 5) {
       const choices = Array.from(uniqueValues).map((name, i) => ({
         id: 'choice_' + Math.random().toString(36).substr(2, 9),
@@ -616,35 +806,49 @@ class SchemaInferrer {
       return {
         type: 'select',
         confidence: 0.85,
-        options: { choices }
+        options: { choices },
+        candidates,
+        uniqueCount
       };
     }
 
     // Check other types by ratio
     if (typeCounts.email / total > threshold) {
-      return { type: 'email', confidence: typeCounts.email / total };
+      return { type: 'email', confidence: typeCounts.email / total, candidates, uniqueCount };
     }
     if (typeCounts.url / total > threshold) {
-      return { type: 'url', confidence: typeCounts.url / total };
+      return { type: 'url', confidence: typeCounts.url / total, candidates, uniqueCount };
     }
     if (typeCounts.date / total > threshold) {
-      return { type: 'date', confidence: typeCounts.date / total };
+      return { type: 'date', confidence: typeCounts.date / total, candidates, uniqueCount, dateFormat };
     }
     if (typeCounts.number / total > threshold) {
-      return { type: 'number', confidence: typeCounts.number / total };
+      return { type: 'number', confidence: typeCounts.number / total, candidates, uniqueCount };
     }
     if (typeCounts.checkbox / total > threshold) {
-      return { type: 'checkbox', confidence: typeCounts.checkbox / total };
+      return { type: 'checkbox', confidence: typeCounts.checkbox / total, candidates, uniqueCount };
     }
     if (typeCounts.phone / total > threshold) {
-      return { type: 'phone', confidence: typeCounts.phone / total };
+      return { type: 'phone', confidence: typeCounts.phone / total, candidates, uniqueCount };
     }
     if (typeCounts.longText / total > 0.3) {
-      return { type: 'longText', confidence: typeCounts.longText / total };
+      return { type: 'longText', confidence: typeCounts.longText / total, candidates, uniqueCount };
     }
 
     // Default to text
-    return { type: 'text', confidence: 0.8 };
+    return { type: 'text', confidence: 0.8, candidates, uniqueCount };
+  }
+
+  /**
+   * Legacy method - calls new method and returns just type info
+   */
+  _inferType(values, fieldName) {
+    const result = this._inferTypeWithDecisions(values, fieldName);
+    return {
+      type: result.type,
+      confidence: result.confidence,
+      options: result.options
+    };
   }
 }
 
@@ -673,6 +877,7 @@ class ImportOrchestrator {
    */
   async import(file, options = {}) {
     const startTime = Date.now();
+    const uploadInitiatedAt = new Date().toISOString();
 
     this._emitProgress('started', {
       fileName: file.name,
@@ -689,12 +894,19 @@ class ImportOrchestrator {
         percentage: 10
       });
 
+      // Capture parse start time
+      const parseStartedAt = new Date().toISOString();
+
       // Determine file type and parse
       const fileName = file.name.toLowerCase();
       const isICS = fileName.endsWith('.ics') || file.type === 'text/calendar';
       const isCSV = fileName.endsWith('.csv') ||
                     file.type === 'text/csv' ||
                     (!isICS && !this._isJSON(text));
+
+      // Determine MIME type
+      const mimeType = file.type || (isICS ? 'text/calendar' :
+                       isCSV ? 'text/csv' : 'application/json');
 
       let parseResult;
       if (isICS) {
@@ -704,6 +916,8 @@ class ImportOrchestrator {
       } else {
         parseResult = this._parseJSON(text);
       }
+
+      const parseCompletedAt = new Date().toISOString();
 
       this._emitProgress('progress', {
         phase: 'inferring',
@@ -723,8 +937,23 @@ class ImportOrchestrator {
       // Create set name from filename
       const setName = options.setName || file.name.replace(/\.(csv|json)$/i, '');
 
+      // Enhance options with timing and file metadata
+      const enhancedOptions = {
+        ...options,
+        // File metadata
+        originalFileSize: file.size,
+        originalFileType: mimeType,
+        mimeType: mimeType,
+        // Timing data
+        uploadInitiatedAt,
+        parseStartedAt,
+        parseCompletedAt,
+        // File timestamps (if available from File API)
+        fileModifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null
+      };
+
       // Create the set and import records
-      const result = await this._createSetWithRecords(setName, schema, parseResult, options);
+      const result = await this._createSetWithRecords(setName, schema, parseResult, enhancedOptions);
 
       this._emitProgress('completed', {
         fileName: file.name,
@@ -1038,29 +1267,191 @@ class ImportOrchestrator {
   }
 
   /**
-   * Create set with records in batches (Enhanced with provenance and view creation)
+   * Create set with records in batches (Enhanced with nested provenance)
    */
   async _createSetWithRecords(setName, schema, parseResult, options = {}) {
     const BATCH_SIZE = 100;
     const { headers, rows } = parseResult;
     const viewsCreated = [];
+    const now = new Date().toISOString();
 
     // Create the set
     const set = createSet(setName);
 
-    // Store dataset-level provenance
-    if (options.provenance || options.originalSource) {
-      set.datasetProvenance = {
-        importedAt: new Date().toISOString(),
-        originalFilename: options.setName || setName,
-        originalSource: options.originalSource || null,
-        provenance: options.provenance || {
-          agent: null, method: null, source: null,
-          term: null, definition: null, jurisdiction: null,
-          scale: null, timeframe: null, background: null
-        }
-      };
+    // Build comprehensive nested provenance structure
+    const userProvenance = options.provenance || {};
+
+    // Collect transformation log steps
+    const transformationLog = [];
+
+    // Step 1: Parse step (from parser decisions)
+    if (parseResult.parsingDecisions) {
+      transformationLog.push({
+        step: 1,
+        operation: 'PARSE',
+        processor: parseResult.fileType === 'ics' ? 'ICSParser' :
+                   parseResult.delimiter ? 'CSVParser' : 'JSONParser',
+        decisions: parseResult.parsingDecisions,
+        timestamp: options.parseStartedAt || now
+      });
     }
+
+    // Step 2: Schema inference step
+    if (schema.inferenceDecisions) {
+      transformationLog.push({
+        step: 2,
+        operation: 'INFER_SCHEMA',
+        processor: 'SchemaInferrer',
+        decisions: schema.inferenceDecisions,
+        timestamp: now
+      });
+    }
+
+    // Step 3: View creation step (populated below if views are created)
+    // Will be added after view creation
+
+    // Build quality audit from inference decisions
+    const qualityAudit = schema.inferenceDecisions ? {
+      validation: {
+        schemaConformance: null,  // Calculated during import
+        nullRates: schema.inferenceDecisions.nullRates || {},
+        typeCoercionCount: 0,
+        truncatedValues: 0
+      },
+      warnings: schema.inferenceDecisions.ambiguities?.map(a => ({
+        code: 'AMBIGUOUS_TYPE',
+        field: a.field,
+        message: `Type "${a.chosen}" chosen over "${a.alternative}" (${Math.round(a.alternativeRatio * 100)}% match)`,
+        affectedRecords: []
+      })) || [],
+      errors: [],
+      completeness: {
+        expectedRecords: rows.length,
+        importedRecords: 0,  // Updated during import
+        skippedRecords: 0,
+        skippedReason: null
+      }
+    } : null;
+
+    // Build file identity from options
+    const fileIdentity = {
+      contentHash: options.contentHash || null,
+      rawSize: options.originalFileSize || (options.originalSource?.length) || null,
+      encoding: options.encoding || 'utf-8',
+      mimeType: options.mimeType || null
+    };
+
+    // Build schema mapping from inference
+    const schemaMapping = schema.inferenceDecisions ? {
+      inferredTypes: schema.inferenceDecisions.fieldInferences || {},
+      fieldSemantics: {},  // Could be enhanced with semantic detection
+      ontologyLinks: []
+    } : null;
+
+    // Build parser interpretation
+    const parserInterpretation = parseResult.parsingDecisions ? {
+      delimiter: parseResult.parsingDecisions.delimiterDetected || parseResult.delimiter || null,
+      quoteChar: '"',
+      escapeChar: '\\',
+      nullRepresentation: ['', 'null', 'NULL', 'N/A', 'n/a'],
+      dateFormats: schema.inferenceDecisions?.dateFormatsDetected || [],
+      numberFormats: {}
+    } : null;
+
+    // Build import scope
+    const importScope = {
+      recordCount: rows.length,
+      fieldCount: headers.length,
+      fileCount: 1,
+      sheetCount: options.sheetCount || null,
+      totalBytes: options.originalFileSize || null
+    };
+
+    // Build temporal chain
+    const temporalChain = {
+      fileCreatedAt: options.fileCreatedAt || null,
+      fileModifiedAt: options.fileModifiedAt || null,
+      uploadInitiatedAt: options.uploadInitiatedAt || now,
+      parseStartedAt: options.parseStartedAt || null,
+      parseCompletedAt: options.parseCompletedAt || now,
+      commitCompletedAt: null  // Set after commit
+    };
+
+    // Build import context
+    const importContext = {
+      previousVersionHash: options.previousVersionHash || null,
+      supersedes: options.supersedes || null,
+      retryCount: options.retryCount || 0,
+      importMode: options.importMode || 'create',
+      triggeredBy: options.triggeredBy || 'user'
+    };
+
+    // Build upload context
+    const uploadContext = {
+      userId: options.userId || null,
+      sessionId: options.sessionId || null,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      ipAddress: null  // Not captured client-side
+    };
+
+    // Construct the full nested provenance structure
+    set.datasetProvenance = {
+      // Top-level metadata (backwards compatible)
+      importedAt: now,
+      importedBy: options.importedBy || null,
+      originalFilename: options.setName || setName,
+      originalFileSize: options.originalFileSize || null,
+      originalFileType: options.originalFileType || null,
+      originalSource: options.originalSource || null,
+
+      // EO 9-element provenance with nested upload metadata
+      provenance: {
+        // EPISTEMIC TRIAD
+        agent: {
+          value: userProvenance.agent || null,
+          uploadContext: uploadContext
+        },
+        method: {
+          value: userProvenance.method || null,
+          transformationLog: transformationLog,
+          qualityAudit: qualityAudit
+        },
+        source: {
+          value: userProvenance.source || null,
+          fileIdentity: fileIdentity,
+          originVerification: options.originVerification || null,
+          mergeManifest: options.mergeManifest || null
+        },
+
+        // SEMANTIC TRIAD
+        term: {
+          value: userProvenance.term || null,
+          schemaMapping: schemaMapping
+        },
+        definition: {
+          value: userProvenance.definition || null,
+          parserInterpretation: parserInterpretation
+        },
+        jurisdiction: {
+          value: userProvenance.jurisdiction || null,
+          domainAuthority: options.domainAuthority || null
+        },
+
+        // SITUATIONAL TRIAD
+        scale: {
+          value: userProvenance.scale || null,
+          importScope: importScope
+        },
+        timeframe: {
+          value: userProvenance.timeframe || null,
+          temporalChain: temporalChain
+        },
+        background: {
+          value: userProvenance.background || null,
+          importContext: importContext
+        }
+      }
+    };
 
     // Replace default fields with inferred ones
     set.fields = schema.fields.map((field, index) => {
@@ -1130,6 +1521,42 @@ class ImportOrchestrator {
         set.views.push(view);
         viewsCreated.push(viewName);
       }
+
+      // Add view creation step to transformation log
+      if (set.datasetProvenance?.provenance?.method?.transformationLog) {
+        set.datasetProvenance.provenance.method.transformationLog.push({
+          step: 3,
+          operation: 'CREATE_VIEWS',
+          processor: 'ImportOrchestrator',
+          decisions: {
+            splitField: typeFieldName,
+            viewsCreated: viewsCreated,
+            viewCount: viewsCreated.length
+          },
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    // Finalize provenance with completion data
+    const commitTime = new Date().toISOString();
+
+    if (set.datasetProvenance?.provenance) {
+      // Update temporal chain with commit time
+      if (set.datasetProvenance.provenance.timeframe?.temporalChain) {
+        set.datasetProvenance.provenance.timeframe.temporalChain.commitCompletedAt = commitTime;
+      }
+
+      // Update quality audit completeness
+      if (set.datasetProvenance.provenance.method?.qualityAudit?.completeness) {
+        set.datasetProvenance.provenance.method.qualityAudit.completeness.importedRecords = set.records.length;
+      }
+
+      // Update import scope with final counts
+      if (set.datasetProvenance.provenance.scale?.importScope) {
+        set.datasetProvenance.provenance.scale.importScope.recordCount = set.records.length;
+        set.datasetProvenance.provenance.scale.importScope.fieldCount = set.fields.length;
+      }
     }
 
     // Add to workbench
@@ -1150,7 +1577,8 @@ class ImportOrchestrator {
           setName: set.name,
           recordCount: set.records.length,
           fieldCount: set.fields.length,
-          hasProvenance: !!options.provenance,
+          hasProvenance: true,  // We always have provenance now
+          provenanceComplete: !!userProvenance.agent,  // True if user provided agent
           viewsCreated: viewsCreated.length
         }, { action: 'import_data' });
       } catch (e) {

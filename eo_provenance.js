@@ -107,6 +107,177 @@ const ProvenanceLabels = Object.freeze({
 });
 
 // ============================================================================
+// Upload Metadata Structures (Nested within 9 elements)
+// ============================================================================
+
+/**
+ * Upload context nested under 'agent' - who/what initiated the upload
+ */
+function createUploadContext(options = {}) {
+  return {
+    userId: options.userId || null,
+    sessionId: options.sessionId || null,
+    userAgent: options.userAgent || null,
+    ipAddress: options.ipAddress || null  // For audit, not stored client-side
+  };
+}
+
+/**
+ * Transformation log nested under 'method' - how data was processed
+ * Each step records parser decisions and data transformations
+ */
+function createTransformationStep(options = {}) {
+  return {
+    step: options.step || 0,
+    operation: options.operation || null,  // PARSE, INFER_SCHEMA, SPLIT_VIEWS, etc.
+    processor: options.processor || null,  // CSVParser, JSONParser, SchemaInferrer, etc.
+    decisions: options.decisions || {},    // Parser-specific decisions made
+    inputHash: options.inputHash || null,  // SHA-256 of input (optional)
+    outputHash: options.outputHash || null, // SHA-256 of output (optional)
+    timestamp: options.timestamp || new Date().toISOString(),
+    duration: options.duration || null     // Processing time in ms
+  };
+}
+
+/**
+ * Quality audit nested under 'method' - validation results
+ */
+function createQualityAudit(options = {}) {
+  return {
+    validation: {
+      schemaConformance: options.schemaConformance ?? null, // % of records matching schema
+      nullRates: options.nullRates || {},                   // { fieldName: rate }
+      typeCoercionCount: options.typeCoercionCount ?? 0,    // Fields that needed conversion
+      truncatedValues: options.truncatedValues ?? 0
+    },
+    warnings: options.warnings || [],  // { code, field, message, affectedRecords[] }
+    errors: options.errors || [],      // { code, row, message, resolution }
+    completeness: {
+      expectedRecords: options.expectedRecords ?? null,
+      importedRecords: options.importedRecords ?? null,
+      skippedRecords: options.skippedRecords ?? 0,
+      skippedReason: options.skippedReason || null
+    }
+  };
+}
+
+/**
+ * File identity nested under 'source' - cryptographic file identification
+ */
+function createFileIdentity(options = {}) {
+  return {
+    contentHash: options.contentHash || null,  // SHA-256 of raw file content
+    rawSize: options.rawSize || null,          // Bytes before parsing
+    encoding: options.encoding || null,        // Detected encoding (utf-8, etc.)
+    mimeType: options.mimeType || null         // Actual MIME type
+  };
+}
+
+/**
+ * Origin verification nested under 'source' - external source validation
+ */
+function createOriginVerification(options = {}) {
+  return {
+    sourceUrl: options.sourceUrl || null,
+    fetchedAt: options.fetchedAt || null,
+    httpStatus: options.httpStatus || null,
+    contentTypeHeader: options.contentTypeHeader || null,
+    etagHeader: options.etagHeader || null,
+    lastModifiedHeader: options.lastModifiedHeader || null
+  };
+}
+
+/**
+ * Merge manifest nested under 'source' - multi-file import tracking
+ */
+function createMergeManifest(options = {}) {
+  return {
+    type: options.type || 'SINGLE_SOURCE',  // SINGLE_SOURCE, MULTI_FILE, MULTI_SHEET
+    sources: options.sources || [],          // { filename, contentHash, recordsContributed, fieldsContributed[] }
+    mergeStrategy: options.mergeStrategy || null,     // UNION, INTERSECTION, GRAPH_UNION
+    conflictResolution: options.conflictResolution || null  // FIRST_WINS, LAST_WINS, ERROR
+  };
+}
+
+/**
+ * Schema mapping nested under 'term' - semantic field interpretation
+ */
+function createSchemaMapping(options = {}) {
+  return {
+    inferredTypes: options.inferredTypes || {},   // { fieldName: { type, confidence } }
+    fieldSemantics: options.fieldSemantics || {}, // { fieldName: semanticType } (e.g., 'email', 'currency')
+    ontologyLinks: options.ontologyLinks || []    // Links to external ontologies
+  };
+}
+
+/**
+ * Parser interpretation nested under 'definition' - how raw data was interpreted
+ */
+function createParserInterpretation(options = {}) {
+  return {
+    delimiter: options.delimiter || null,
+    quoteChar: options.quoteChar || null,
+    escapeChar: options.escapeChar || null,
+    nullRepresentation: options.nullRepresentation || [],  // ['', 'NULL', 'N/A', etc.]
+    dateFormats: options.dateFormats || [],                // Detected date formats
+    numberFormats: options.numberFormats || {}             // { fieldName: format }
+  };
+}
+
+/**
+ * Domain authority nested under 'jurisdiction' - source trust signals
+ */
+function createDomainAuthority(options = {}) {
+  return {
+    domain: options.domain || null,
+    domainOwner: options.domainOwner || null,
+    dataLicense: options.dataLicense || null,
+    certIssuer: options.certIssuer || null,
+    certExpiry: options.certExpiry || null
+  };
+}
+
+/**
+ * Import scope nested under 'scale' - size/extent of import
+ */
+function createImportScope(options = {}) {
+  return {
+    recordCount: options.recordCount ?? null,
+    fieldCount: options.fieldCount ?? null,
+    fileCount: options.fileCount ?? 1,
+    sheetCount: options.sheetCount ?? null,  // For Excel files
+    totalBytes: options.totalBytes ?? null
+  };
+}
+
+/**
+ * Temporal chain nested under 'timeframe' - multi-stage timing
+ */
+function createTemporalChain(options = {}) {
+  return {
+    fileCreatedAt: options.fileCreatedAt || null,      // From file metadata if available
+    fileModifiedAt: options.fileModifiedAt || null,    // Last modification
+    uploadInitiatedAt: options.uploadInitiatedAt || null,
+    parseStartedAt: options.parseStartedAt || null,
+    parseCompletedAt: options.parseCompletedAt || null,
+    commitCompletedAt: options.commitCompletedAt || null
+  };
+}
+
+/**
+ * Import context nested under 'background' - enabling conditions
+ */
+function createImportContext(options = {}) {
+  return {
+    previousVersionHash: options.previousVersionHash || null,  // If re-importing
+    supersedes: options.supersedes || null,                    // Links to prior import
+    retryCount: options.retryCount ?? 0,
+    importMode: options.importMode || 'create',                // create, append, replace
+    triggeredBy: options.triggeredBy || 'user'                 // user, scheduled, api
+  };
+}
+
+// ============================================================================
 // Provenance Value Types
 // ============================================================================
 
@@ -150,14 +321,30 @@ function createEmptyProvenance() {
 
 /**
  * Merge provenance objects (child overrides parent for non-null values)
+ * Handles both flat and nested formats
  */
 function mergeProvenance(parent, child) {
   const result = { ...createEmptyProvenance() };
 
   Object.keys(ProvenanceElements).forEach(key => {
     const element = ProvenanceElements[key];
-    // Child takes precedence, then parent
-    result[element] = child?.[element] ?? parent?.[element] ?? null;
+    const parentVal = getProvenanceValue(parent?.[element]);
+    const childVal = getProvenanceValue(child?.[element]);
+
+    // Child value takes precedence, then parent value
+    const mergedValue = childVal ?? parentVal ?? null;
+
+    // If either has nested metadata, preserve it
+    const parentNested = typeof parent?.[element] === 'object' ? parent[element] : {};
+    const childNested = typeof child?.[element] === 'object' ? child[element] : {};
+
+    // Merge nested metadata (child overrides parent)
+    result[element] = {
+      value: mergedValue,
+      ...parentNested,
+      ...childNested,
+      value: mergedValue  // Ensure value is set correctly after spread
+    };
   });
 
   return result;
@@ -165,10 +352,14 @@ function mergeProvenance(parent, child) {
 
 /**
  * Count filled provenance elements
+ * Handles both flat and nested formats
  */
 function countFilledProvenance(provenance) {
   if (!provenance) return 0;
-  return Object.values(ProvenanceElements).filter(key => provenance[key] != null).length;
+  return Object.values(ProvenanceElements).filter(key => {
+    const val = getProvenanceValue(provenance[key]);
+    return val != null;
+  }).length;
 }
 
 /**
@@ -198,33 +389,151 @@ function getProvenanceIndicator(status) {
 // ============================================================================
 
 /**
- * Create dataset provenance (import-level)
+ * Create dataset provenance (import-level) with nested upload metadata
+ *
+ * Each of the 9 EO elements can have:
+ * - value: The user-provided or inferred string value
+ * - Nested metadata objects specific to that element
+ *
+ * Structure:
+ * - agent.value + agent.uploadContext
+ * - method.value + method.transformationLog[] + method.qualityAudit
+ * - source.value + source.fileIdentity + source.originVerification + source.mergeManifest
+ * - term.value + term.schemaMapping
+ * - definition.value + definition.parserInterpretation
+ * - jurisdiction.value + jurisdiction.domainAuthority
+ * - scale.value + scale.importScope
+ * - timeframe.value + timeframe.temporalChain
+ * - background.value + background.importContext
  */
 function createDatasetProvenance(options = {}) {
+  const now = new Date().toISOString();
+
   return {
-    // Import metadata
-    importedAt: new Date().toISOString(),
+    // Top-level import metadata (backwards compatible)
+    importedAt: now,
     importedBy: options.importedBy || null,
     originalFilename: options.originalFilename || null,
     originalFileSize: options.originalFileSize || null,
     originalFileType: options.originalFileType || null,
+    originalSource: options.originalSource || null,
 
-    // Original source preserved
-    originalSource: options.originalSource || null, // The raw file content
-
-    // EO 9-element provenance
+    // EO 9-element provenance with nested upload metadata
     provenance: {
-      agent: options.agent || null,
-      method: options.method || null,
-      source: options.source || null,
-      term: options.term || null,
-      definition: options.definition || null,
-      jurisdiction: options.jurisdiction || null,
-      scale: options.scale || null,
-      timeframe: options.timeframe || null,
-      background: options.background || null
+      // EPISTEMIC TRIAD
+      agent: {
+        value: options.agent || null,
+        uploadContext: options.uploadContext || createUploadContext()
+      },
+      method: {
+        value: options.method || null,
+        transformationLog: options.transformationLog || [],
+        qualityAudit: options.qualityAudit || null
+      },
+      source: {
+        value: options.source || null,
+        fileIdentity: options.fileIdentity || createFileIdentity(),
+        originVerification: options.originVerification || null,
+        mergeManifest: options.mergeManifest || null
+      },
+
+      // SEMANTIC TRIAD
+      term: {
+        value: options.term || null,
+        schemaMapping: options.schemaMapping || null
+      },
+      definition: {
+        value: options.definition || null,
+        parserInterpretation: options.parserInterpretation || null
+      },
+      jurisdiction: {
+        value: options.jurisdiction || null,
+        domainAuthority: options.domainAuthority || null
+      },
+
+      // SITUATIONAL TRIAD
+      scale: {
+        value: options.scale || null,
+        importScope: options.importScope || createImportScope()
+      },
+      timeframe: {
+        value: options.timeframe || null,
+        temporalChain: options.temporalChain || createTemporalChain({ uploadInitiatedAt: now })
+      },
+      background: {
+        value: options.background || null,
+        importContext: options.importContext || createImportContext()
+      }
     }
   };
+}
+
+/**
+ * Helper to get the simple value from a provenance element
+ * Handles both old flat format and new nested format
+ */
+function getProvenanceValue(element) {
+  if (element === null || element === undefined) return null;
+  if (typeof element === 'object' && 'value' in element) return element.value;
+  return element; // Old format: direct value
+}
+
+/**
+ * Helper to set provenance value preserving nested metadata
+ */
+function setProvenanceValue(provenance, elementKey, value) {
+  if (!provenance || !provenance[elementKey]) return;
+
+  if (typeof provenance[elementKey] === 'object' && 'value' in provenance[elementKey]) {
+    provenance[elementKey].value = value;
+  } else {
+    provenance[elementKey] = value;
+  }
+}
+
+/**
+ * Normalize provenance to new nested format
+ * Converts old flat format { agent: "value" } to new { agent: { value: "value" } }
+ */
+function normalizeProvenance(provenance) {
+  if (!provenance) return createEmptyProvenance();
+
+  const normalized = {};
+
+  for (const key of Object.values(ProvenanceElements)) {
+    const element = provenance[key];
+
+    if (element === null || element === undefined) {
+      normalized[key] = { value: null };
+    } else if (typeof element === 'object' && 'value' in element) {
+      // Already in new format
+      normalized[key] = element;
+    } else if (isRecordRef(element)) {
+      // Record reference - wrap in new format
+      normalized[key] = { value: element };
+    } else {
+      // Old format: string value
+      normalized[key] = { value: element };
+    }
+  }
+
+  return normalized;
+}
+
+/**
+ * Flatten provenance to old format for display/comparison
+ * Converts { agent: { value: "x" } } to { agent: "x" }
+ */
+function flattenProvenance(provenance) {
+  if (!provenance) return createEmptyProvenance();
+
+  const flat = {};
+
+  for (const key of Object.values(ProvenanceElements)) {
+    flat[key] = getProvenanceValue(provenance[key]);
+  }
+
+  return flat;
 }
 
 // ============================================================================
@@ -749,50 +1058,116 @@ if (typeof document !== 'undefined') {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    // Schema
     ProvenanceElements,
     ProvenanceTriads,
     ProvenanceLabels,
+
+    // Value types
     isRecordRef,
     createRecordRef,
     getRefId,
+
+    // Core provenance
     createEmptyProvenance,
     mergeProvenance,
     countFilledProvenance,
     getProvenanceStatus,
     getProvenanceIndicator,
+
+    // Nested value helpers
+    getProvenanceValue,
+    setProvenanceValue,
+    normalizeProvenance,
+    flattenProvenance,
+
+    // Upload metadata factories
+    createUploadContext,
+    createTransformationStep,
+    createQualityAudit,
+    createFileIdentity,
+    createOriginVerification,
+    createMergeManifest,
+    createSchemaMapping,
+    createParserInterpretation,
+    createDomainAuthority,
+    createImportScope,
+    createTemporalChain,
+    createImportContext,
+
+    // Dataset/Record provenance
     createDatasetProvenance,
     createRecordProvenance,
     resolveRecordProvenance,
     resolveFieldProvenance,
     getProvenanceInheritance,
+
+    // Display
     formatProvenanceValue,
     renderProvenanceIndicator,
+
+    // Backlinks
     findProvenanceCitations,
+
+    // Import mapping
     mapEmbeddedProvenance
   };
 }
 
 if (typeof window !== 'undefined') {
   window.EOProvenance = {
+    // Schema
     ProvenanceElements,
     ProvenanceTriads,
     ProvenanceLabels,
+
+    // Value types
     isRecordRef,
     createRecordRef,
     getRefId,
+
+    // Core provenance
     createEmptyProvenance,
     mergeProvenance,
     countFilledProvenance,
     getProvenanceStatus,
     getProvenanceIndicator,
+
+    // Nested value helpers
+    getProvenanceValue,
+    setProvenanceValue,
+    normalizeProvenance,
+    flattenProvenance,
+
+    // Upload metadata factories
+    createUploadContext,
+    createTransformationStep,
+    createQualityAudit,
+    createFileIdentity,
+    createOriginVerification,
+    createMergeManifest,
+    createSchemaMapping,
+    createParserInterpretation,
+    createDomainAuthority,
+    createImportScope,
+    createTemporalChain,
+    createImportContext,
+
+    // Dataset/Record provenance
     createDatasetProvenance,
     createRecordProvenance,
     resolveRecordProvenance,
     resolveFieldProvenance,
     getProvenanceInheritance,
+
+    // Display
     formatProvenanceValue,
     renderProvenanceIndicator,
+
+    // Backlinks
     findProvenanceCitations,
+
+    // Import mapping
     mapEmbeddedProvenance
   };
 }
