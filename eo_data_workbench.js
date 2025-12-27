@@ -234,10 +234,15 @@ class EODataWorkbench {
     // Event handlers
     this._handlers = {};
 
-    // Chunked loading state
+    // Chunked loading state - Performance optimized
     this.displayedRecordCount = 0;
-    this.recordBatchSize = 100; // Number of records to load per batch
-    this.loadingThreshold = 50; // Show loading indicator when records exceed this
+    this.initialBatchSize = 25; // Smaller initial batch for fast first paint
+    this.recordBatchSize = 50; // Number of records to load per subsequent batch
+    this.loadingThreshold = 20; // Show loading indicator when records exceed this
+
+    // Lazy loading - defer loading records for non-current sets
+    this._useLazyLoading = true;
+    this._fullSetData = null;
   }
 
   // --------------------------------------------------------------------------
@@ -646,20 +651,71 @@ class EODataWorkbench {
       const data = localStorage.getItem('eo_lake_data');
       if (data) {
         const parsed = JSON.parse(data);
-        this.sets = parsed.sets || [];
+
+        // Performance: Use lazy loading for set records
+        // Only load metadata initially, defer record loading
+        if (this._useLazyLoading && parsed.sets?.length > 1) {
+          this.sets = parsed.sets.map(set => ({
+            ...set,
+            records: [], // Defer loading records
+            _recordsLoaded: false,
+            _recordCount: set.records?.length || 0
+          }));
+          this._fullSetData = parsed.sets; // Store full data for lazy loading
+        } else {
+          this.sets = parsed.sets || [];
+        }
+
         this.currentSetId = parsed.currentSetId;
         this.currentViewId = parsed.currentViewId;
         this.lastViewPerSet = parsed.lastViewPerSet || {};
+
+        // Load records for current set immediately if using lazy loading
+        if (this._useLazyLoading && this.currentSetId) {
+          this._loadSetRecords(this.currentSetId);
+        }
       }
     } catch (e) {
       console.error('Failed to load data:', e);
     }
   }
 
+  /**
+   * Lazy load records for a specific set
+   * Performance: Defers record loading until set is accessed
+   */
+  _loadSetRecords(setId) {
+    if (!this._fullSetData) return;
+
+    const set = this.sets.find(s => s.id === setId);
+    const fullSet = this._fullSetData.find(s => s.id === setId);
+
+    if (set && fullSet && !set._recordsLoaded) {
+      set.records = fullSet.records || [];
+      set._recordsLoaded = true;
+    }
+  }
+
   _saveData() {
     try {
+      // When using lazy loading, merge loaded records back into full set data
+      let setsToSave = this.sets;
+      if (this._useLazyLoading && this._fullSetData) {
+        setsToSave = this._fullSetData.map(fullSet => {
+          const loadedSet = this.sets.find(s => s.id === fullSet.id);
+          if (loadedSet && loadedSet._recordsLoaded) {
+            // Use loaded set data (may have been modified)
+            const { _recordsLoaded, _recordCount, ...cleanSet } = loadedSet;
+            return cleanSet;
+          }
+          return fullSet;
+        });
+        // Also update the full set data cache
+        this._fullSetData = setsToSave;
+      }
+
       localStorage.setItem('eo_lake_data', JSON.stringify({
-        sets: this.sets,
+        sets: setsToSave,
         currentSetId: this.currentSetId,
         currentViewId: this.currentViewId,
         lastViewPerSet: this.lastViewPerSet
@@ -2440,6 +2496,12 @@ class EODataWorkbench {
 
   _selectSet(setId) {
     this.currentSetId = setId;
+
+    // Lazy load records for this set if needed
+    if (this._useLazyLoading) {
+      this._loadSetRecords(setId);
+    }
+
     const set = this.getCurrentSet();
 
     // Use remembered view for this set, or fall back to first view
@@ -2821,7 +2883,8 @@ class EODataWorkbench {
     }
 
     // Reset displayed record count when switching views
-    this.displayedRecordCount = this.recordBatchSize;
+    // Use smaller initial batch for faster first paint
+    this.displayedRecordCount = this.initialBatchSize;
 
     // Check if we need to show loading for large datasets
     const records = this.getFilteredRecords();
