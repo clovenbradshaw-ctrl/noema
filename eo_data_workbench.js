@@ -739,11 +739,45 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderSidebar() {
+    // Render GIVEN/MEANT partition headers
+    this._renderGivenMeantPartition();
     this._renderSourcesNav();
     this._renderWorkspacesNav();
     this._renderSetsNav();
     this._renderViewsNav();
     this._renderFocusesNav();
+  }
+
+  /**
+   * Render GIVEN/MEANT partition headers (Rule 1: Distinction)
+   * This visually separates immutable sources from interpretive views
+   */
+  _renderGivenMeantPartition() {
+    // Add GIVEN header above sources if not present
+    const sourcesSection = document.querySelector('.sidebar-section:has(#sources-nav)');
+    if (sourcesSection && !sourcesSection.querySelector('.eo-partition-header')) {
+      const givenHeader = document.createElement('div');
+      givenHeader.className = 'eo-partition-header eo-given';
+      givenHeader.innerHTML = `
+        <span class="partition-icon">◉</span>
+        <span class="partition-label">GIVEN</span>
+        <span class="partition-hint" title="Rule 1: Immutable data from external sources">Immutable Origins</span>
+      `;
+      sourcesSection.insertBefore(givenHeader, sourcesSection.firstChild);
+    }
+
+    // Add MEANT header above workspaces if not present
+    const workspacesSection = document.querySelector('.sidebar-section:has(#workspaces-nav)');
+    if (workspacesSection && !workspacesSection.querySelector('.eo-partition-header')) {
+      const meantHeader = document.createElement('div');
+      meantHeader.className = 'eo-partition-header eo-meant';
+      meantHeader.innerHTML = `
+        <span class="partition-icon">◐</span>
+        <span class="partition-label">MEANT</span>
+        <span class="partition-hint" title="Rule 1: Interpretations derived from GIVEN">Your Interpretations</span>
+      `;
+      workspacesSection.insertBefore(meantHeader, workspacesSection.firstChild);
+    }
   }
 
   /**
@@ -804,6 +838,7 @@ class EODataWorkbench {
       const isExpanded = this.expandedSources?.has(source.name) ?? true;
       const sourceIcon = this._getSourceIcon(source.name);
       const provenanceInfo = this._formatSourceProvenance(source);
+      const importDate = source.importedAt ? new Date(source.importedAt).toLocaleDateString() : '';
 
       html += `
         <div class="source-group ${isExpanded ? 'expanded' : ''}" data-source="${this._escapeHtml(source.name)}">
@@ -811,18 +846,28 @@ class EODataWorkbench {
             <i class="ph ph-caret-right source-toggle"></i>
             <i class="ph ${sourceIcon} source-icon"></i>
             <span class="source-name">${this._escapeHtml(this._truncateSourceName(source.name))}</span>
+            <span class="source-provenance-badge" title="GIVEN: Immutable import">◉</span>
             <span class="source-count">${source.sets.length}</span>
           </div>
+          <div class="source-meta">
+            <span class="source-import-date" title="Import date">${importDate}</span>
+            ${source.provenance?.method ? `<span class="source-method">${source.provenance.method}</span>` : ''}
+          </div>
           <div class="source-children">
-            ${source.sets.map(set => `
+            ${source.sets.map(set => {
+              const totalRecords = set.records?.length || 0;
+              const provenanceIcon = this._getProvenanceStatusIcon(set);
+              return `
               <div class="nav-item source-set-item ${set.id === this.currentSetId ? 'active' : ''}"
-                   data-set-id="${set.id}">
+                   data-set-id="${set.id}"
+                   title="Provenance: ${this._getProvenanceTooltip(set)}">
                 <i class="ph ph-arrow-elbow-down-right tree-line"></i>
+                <span class="set-provenance-icon">${provenanceIcon}</span>
                 <i class="${set.icon || 'ph ph-table'}"></i>
                 <span>${this._escapeHtml(set.name)}</span>
-                <span class="nav-item-count">${set.records.length}</span>
+                <span class="nav-item-count">${totalRecords}</span>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         </div>
       `;
@@ -986,21 +1031,33 @@ class EODataWorkbench {
       return;
     }
 
+    // Calculate restriction ratios for each focus (Rule 5 visibility)
+    const set = this.getCurrentSet();
+    const totalRecords = set?.records?.length || 0;
+
     container.innerHTML = `
       <div class="nav-section-header">
         <span class="nav-section-title">Focuses</span>
+        <span class="nav-section-hint" title="Rule 5: Focuses can only restrict, never expand">↓ Restrict</span>
         <button class="nav-section-action" id="btn-new-focus" title="Add Focus (Rule 5: Restrict only)">
           <i class="ph ph-funnel"></i>
         </button>
       </div>
-      ${focuses.map(focus => `
+      ${focuses.map(focus => {
+        const focusRecords = this._getFilteredRecordCountForFocus(focus, set);
+        const restrictionPercent = totalRecords > 0 ? Math.round((focusRecords / totalRecords) * 100) : 100;
+        return `
         <div class="nav-item focus-item ${focus.id === this.currentFocusId ? 'active' : ''}"
-             data-focus-id="${focus.id}">
+             data-focus-id="${focus.id}"
+             title="Rule 5: Restricts to ${focusRecords} of ${totalRecords} (${restrictionPercent}%)">
           <i class="ph ph-funnel"></i>
           <span>${this._escapeHtml(focus.name)}</span>
-          <span class="nav-item-badge rule-badge" title="Rule 5: Can only restrict">R5</span>
+          <span class="focus-restriction-ratio">(${focusRecords}/${totalRecords})</span>
+          <div class="focus-restriction-bar">
+            <div class="focus-restriction-fill" style="width: ${restrictionPercent}%"></div>
+          </div>
         </div>
-      `).join('')}
+      `;}).join('')}
     `;
 
     // Attach click handlers
@@ -2144,29 +2201,51 @@ class EODataWorkbench {
     const view = this.getCurrentView();
     const focus = this.viewRegistry?.getFocus?.(this.currentFocusId);
 
-    // Workspace breadcrumb
+    // Calculate restriction ratio for EO Rule 5 visibility
+    const totalRecords = set?.records?.length || 0;
+    const visibleRecords = focus ? this._getFilteredRecordCount(focus) : totalRecords;
+    const restrictionRatio = totalRecords > 0 ? `${visibleRecords} of ${totalRecords}` : '';
+
+    // Workspace breadcrumb - CLICKABLE (ascend hierarchy)
     const workspaceBreadcrumb = document.getElementById('current-workspace-name');
     if (workspaceBreadcrumb) {
       workspaceBreadcrumb.innerHTML = `
         <i class="ph ${workspace?.icon || 'ph-folder-simple'}"></i>
         ${this._escapeHtml(workspace?.name || 'Workspace')}
+        <i class="ph ph-caret-down breadcrumb-dropdown-icon"></i>
       `;
+      workspaceBreadcrumb.classList.add('breadcrumb-clickable');
+      workspaceBreadcrumb.onclick = () => this._showWorkspaceBreadcrumbMenu(workspaceBreadcrumb);
+      // Log navigation activity with EO operator
+      this._logNavigationActivity('DES', 'workspace', workspace?.id);
     }
 
-    // Set breadcrumb
+    // Set breadcrumb - CLICKABLE (shows sibling sets)
     if (this.elements.currentSetName) {
-      this.elements.currentSetName.textContent = set?.name || 'No Set';
+      const provenanceIcon = this._getProvenanceStatusIcon(set);
+      this.elements.currentSetName.innerHTML = `
+        <span class="breadcrumb-provenance-icon" title="Provenance: ${this._getProvenanceTooltip(set)}">${provenanceIcon}</span>
+        ${this._escapeHtml(set?.name || 'No Set')}
+        <i class="ph ph-caret-down breadcrumb-dropdown-icon"></i>
+      `;
+      this.elements.currentSetName.classList.add('breadcrumb-clickable');
+      this.elements.currentSetName.onclick = () => this._showSetBreadcrumbMenu(this.elements.currentSetName);
     }
 
-    // View/Lens breadcrumb
+    // View/Lens breadcrumb - CLICKABLE (shows sibling lenses)
     if (this.elements.currentViewName) {
+      const epistemicBadge = this._getEpistemicStatusBadge(view);
       this.elements.currentViewName.innerHTML = `
         <i class="ph ${this._getLensIcon(view?.type)}"></i>
         ${this._escapeHtml(view?.name || 'No Lens')}
+        ${epistemicBadge}
+        <i class="ph ph-caret-down breadcrumb-dropdown-icon"></i>
       `;
+      this.elements.currentViewName.classList.add('breadcrumb-clickable');
+      this.elements.currentViewName.onclick = () => this._showLensBreadcrumbMenu(this.elements.currentViewName);
     }
 
-    // Focus breadcrumb (only show if a focus is active)
+    // Focus breadcrumb (only show if a focus is active) - shows RESTRICTION RATIO (Rule 5)
     const focusBreadcrumb = document.getElementById('current-focus-name');
     if (focusBreadcrumb) {
       if (focus) {
@@ -2174,7 +2253,8 @@ class EODataWorkbench {
           <i class="ph ph-caret-right"></i>
           <i class="ph ph-funnel"></i>
           ${this._escapeHtml(focus.name)}
-          <button class="breadcrumb-clear" title="Clear focus" onclick="getDataWorkbench()?._clearFocus()">
+          <span class="breadcrumb-restriction-ratio" title="Rule 5: Focus restricts to ${restrictionRatio}">(${restrictionRatio})</span>
+          <button class="breadcrumb-clear" title="Clear focus (expand horizon)" onclick="getDataWorkbench()?._clearFocus()">
             <i class="ph ph-x"></i>
           </button>
         `;
@@ -2182,6 +2262,227 @@ class EODataWorkbench {
       } else {
         focusBreadcrumb.style.display = 'none';
       }
+    }
+
+    // Update horizon transparency panel
+    this._updateHorizonPanel(workspace, set, view, focus, totalRecords, visibleRecords);
+  }
+
+  /**
+   * Get filtered record count for a focus (Rule 5 restriction calculation)
+   */
+  _getFilteredRecordCount(focus) {
+    const set = this.getCurrentSet();
+    return this._getFilteredRecordCountForFocus(focus, set);
+  }
+
+  /**
+   * Get filtered record count for a focus with explicit set (Rule 5)
+   */
+  _getFilteredRecordCountForFocus(focus, set) {
+    if (!set || !focus?.restrictions?.filters) return set?.records?.length || 0;
+
+    let records = set.records || [];
+    for (const filter of focus.restrictions.filters) {
+      records = records.filter(r => this._matchesFilter(r, filter));
+    }
+    return records.length;
+  }
+
+  /**
+   * Get provenance status icon (◉ full, ◐ partial, ○ none)
+   */
+  _getProvenanceStatusIcon(set) {
+    if (!set) return '○';
+    const prov = set.datasetProvenance;
+    if (!prov) return '○';
+
+    // Count filled provenance elements
+    let filled = 0;
+    if (prov.originalFilename) filled++;
+    if (prov.importedAt) filled++;
+    if (prov.provenance?.agent) filled++;
+    if (prov.provenance?.method) filled++;
+    if (prov.provenance?.source) filled++;
+
+    if (filled >= 4) return '◉'; // Full provenance
+    if (filled >= 1) return '◐'; // Partial provenance
+    return '○'; // No provenance
+  }
+
+  /**
+   * Get provenance tooltip text
+   */
+  _getProvenanceTooltip(set) {
+    if (!set?.datasetProvenance) return 'No provenance (MEANT without GIVEN chain)';
+    const prov = set.datasetProvenance;
+    const parts = [];
+    if (prov.originalFilename) parts.push(`Source: ${prov.originalFilename}`);
+    if (prov.importedAt) parts.push(`Imported: ${new Date(prov.importedAt).toLocaleDateString()}`);
+    if (prov.provenance?.method) parts.push(`Method: ${prov.provenance.method}`);
+    if (prov.provenance?.agent) parts.push(`Agent: ${prov.provenance.agent}`);
+    return parts.join(' | ') || 'Partial provenance';
+  }
+
+  /**
+   * Get epistemic status badge for view (Rule 8)
+   */
+  _getEpistemicStatusBadge(view) {
+    const status = view?.epistemicStatus || 'preliminary';
+    const badges = {
+      'preliminary': '<span class="epistemic-badge preliminary" title="Preliminary interpretation">○</span>',
+      'reviewed': '<span class="epistemic-badge reviewed" title="Reviewed interpretation">✓</span>',
+      'contested': '<span class="epistemic-badge contested" title="Contested interpretation">⚠</span>',
+      'superseded': '<span class="epistemic-badge superseded" title="Superseded (see newer version)">⊘</span>'
+    };
+    return badges[status] || badges['preliminary'];
+  }
+
+  /**
+   * Show workspace breadcrumb dropdown menu (sibling workspaces)
+   */
+  _showWorkspaceBreadcrumbMenu(element) {
+    const workspaces = this.viewRegistry?.getAllWorkspaces?.() || [];
+    this._showBreadcrumbDropdown(element, workspaces.map(ws => ({
+      id: ws.id,
+      name: ws.name,
+      icon: ws.icon || 'ph-folder-simple',
+      active: ws.id === this.currentWorkspaceId,
+      onClick: () => this._selectWorkspace(ws.id)
+    })), 'Workspaces (Horizons)');
+  }
+
+  /**
+   * Show set breadcrumb dropdown menu (sibling sets)
+   */
+  _showSetBreadcrumbMenu(element) {
+    const sets = this.sets || [];
+    this._showBreadcrumbDropdown(element, sets.map(s => ({
+      id: s.id,
+      name: s.name,
+      icon: s.icon || 'ph-table',
+      badge: this._getProvenanceStatusIcon(s),
+      active: s.id === this.currentSetId,
+      onClick: () => this._selectSet(s.id)
+    })), 'Sets (Data Collections)');
+  }
+
+  /**
+   * Show lens breadcrumb dropdown menu (sibling lenses)
+   */
+  _showLensBreadcrumbMenu(element) {
+    const set = this.getCurrentSet();
+    const views = set?.views || [];
+    this._showBreadcrumbDropdown(element, views.map(v => ({
+      id: v.id,
+      name: v.name,
+      icon: this._getLensIcon(v.type),
+      badge: this._getEpistemicStatusBadge(v),
+      active: v.id === this.currentViewId,
+      onClick: () => this._selectView(v.id)
+    })), 'Lenses (Interpretations)');
+  }
+
+  /**
+   * Show breadcrumb dropdown menu
+   */
+  _showBreadcrumbDropdown(anchor, items, title) {
+    // Remove existing dropdown
+    document.querySelector('.breadcrumb-dropdown')?.remove();
+
+    const rect = anchor.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'breadcrumb-dropdown';
+    dropdown.innerHTML = `
+      <div class="breadcrumb-dropdown-header">${title}</div>
+      ${items.map(item => `
+        <div class="breadcrumb-dropdown-item ${item.active ? 'active' : ''}" data-id="${item.id}">
+          <i class="ph ${item.icon}"></i>
+          <span>${this._escapeHtml(item.name)}</span>
+          ${item.badge ? `<span class="breadcrumb-dropdown-badge">${item.badge}</span>` : ''}
+        </div>
+      `).join('')}
+    `;
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.left = `${rect.left}px`;
+    document.body.appendChild(dropdown);
+
+    // Attach click handlers
+    items.forEach((item, idx) => {
+      dropdown.querySelectorAll('.breadcrumb-dropdown-item')[idx]?.addEventListener('click', () => {
+        item.onClick();
+        dropdown.remove();
+      });
+    });
+
+    // Close on outside click
+    const closeHandler = (e) => {
+      if (!dropdown.contains(e.target) && !anchor.contains(e.target)) {
+        dropdown.remove();
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+  }
+
+  /**
+   * Update horizon transparency panel (Rule 4: Perspectivality)
+   */
+  _updateHorizonPanel(workspace, set, view, focus, totalRecords, visibleRecords) {
+    let panel = document.getElementById('horizon-transparency-panel');
+    if (!panel) {
+      // Create panel if it doesn't exist
+      panel = document.createElement('div');
+      panel.id = 'horizon-transparency-panel';
+      panel.className = 'horizon-panel';
+      document.querySelector('.header-left')?.appendChild(panel);
+    }
+
+    const horizonType = focus ? 'FOCUS' : (view ? 'LENS' : (set ? 'SET' : 'WORKSPACE'));
+    const restrictionPercent = totalRecords > 0 ? Math.round((visibleRecords / totalRecords) * 100) : 100;
+
+    panel.innerHTML = `
+      <div class="horizon-indicator" title="Current Horizon (Rule 4: No view from nowhere)">
+        <i class="ph ph-eye"></i>
+        <span class="horizon-level">${horizonType}</span>
+        <span class="horizon-scope">${visibleRecords}/${totalRecords}</span>
+        <div class="horizon-bar">
+          <div class="horizon-bar-fill" style="width: ${restrictionPercent}%"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Log navigation activity with EO operator (Rule 6, 7)
+   */
+  _logNavigationActivity(operator, targetType, targetId) {
+    if (!this.navigationLog) this.navigationLog = [];
+
+    const operators = {
+      'SEG': '｜', // Segment: restrict scope
+      'ALT': '∿', // Alternate: switch interpretation
+      'DES': '⊡', // Designate: reveal/name
+      'NUL': '∅'  // Recognition: search
+    };
+
+    this.navigationLog.push({
+      timestamp: new Date().toISOString(),
+      operator: operator,
+      operatorSymbol: operators[operator] || operator,
+      targetType: targetType,
+      targetId: targetId,
+      context: {
+        workspaceId: this.currentWorkspaceId,
+        setId: this.currentSetId,
+        viewId: this.currentViewId,
+        focusId: this.currentFocusId
+      }
+    });
+
+    // Keep last 50 navigation actions
+    if (this.navigationLog.length > 50) {
+      this.navigationLog = this.navigationLog.slice(-50);
     }
   }
 
