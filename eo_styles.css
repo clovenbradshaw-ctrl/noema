@@ -470,6 +470,373 @@ html, body {
   padding: 1px 4px;
 }
 
+/* ===== Three-Panel Sidebar Navigation ===== */
+.nav-panel {
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.nav-panel:last-child {
+  border-bottom: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.nav-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px 12px;
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 1;
+}
+
+.nav-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nav-panel-title > i {
+  font-size: 14px;
+}
+
+.nav-panel-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+}
+
+.nav-panel-badge.given-badge {
+  background: var(--given-bg);
+  color: var(--given-color);
+}
+
+.nav-panel-badge.schema-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary-500);
+}
+
+.nav-panel-badge.meant-badge {
+  background: var(--meant-bg);
+  color: var(--meant-color);
+}
+
+.nav-panel-action {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: var(--transition-fast);
+}
+
+.nav-panel:hover .nav-panel-action {
+  opacity: 1;
+}
+
+.nav-panel-action:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nav-panel-content {
+  padding: 0 8px 8px 8px;
+  overflow-y: auto;
+}
+
+.views-panel .nav-panel-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Workspace in Views panel */
+.workspace-group {
+  margin-bottom: 4px;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: var(--transition-fast);
+}
+
+.workspace-header:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-header.active {
+  background: var(--meant-bg);
+  color: var(--meant-color);
+}
+
+.workspace-toggle {
+  font-size: 10px;
+  transition: transform 0.15s ease;
+  color: var(--text-muted);
+}
+
+.workspace-group.expanded .workspace-toggle {
+  transform: rotate(90deg);
+}
+
+.workspace-icon {
+  font-size: 14px;
+}
+
+.workspace-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-children {
+  display: none;
+  padding-left: 12px;
+}
+
+.workspace-group.expanded .workspace-children {
+  display: block;
+}
+
+/* Lens items in workspace */
+.lens-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  transition: var(--transition-fast);
+}
+
+.lens-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.lens-item.active {
+  background: var(--primary-500);
+  color: white;
+}
+
+.lens-item i {
+  font-size: 13px;
+  width: 16px;
+}
+
+/* Focus items nested under lens */
+.focus-children {
+  padding-left: 16px;
+  margin-top: 2px;
+}
+
+.focus-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: var(--transition-fast);
+}
+
+.focus-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.focus-item.active {
+  background: rgba(139, 92, 246, 0.2);
+  color: var(--meant-color);
+}
+
+.focus-item i {
+  font-size: 11px;
+}
+
+.focus-restriction {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* ===== Prefix-Based Search ===== */
+.search-prefix-hint {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+  display: none;
+}
+
+.search-prefix-hint.active {
+  display: inline-block;
+}
+
+.search-prefix-hint[data-prefix="@"] {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary-500);
+}
+
+.search-prefix-hint[data-prefix="#"] {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--meant-color);
+}
+
+.search-prefix-hint[data-prefix="/"] {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+.search-prefix-hint[data-prefix="?"] {
+  background: var(--given-bg);
+  color: var(--given-color);
+}
+
+.search-prefix-hint[data-prefix=">"] {
+  background: rgba(236, 72, 153, 0.15);
+  color: #ec4899;
+}
+
+.search-prefix-hint[data-prefix="!"] {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+}
+
+.search-prefix-legend {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 0 0 0;
+  font-size: 10px;
+}
+
+.sidebar-search:focus-within .search-prefix-legend {
+  display: flex;
+}
+
+.prefix-item {
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: var(--transition-fast);
+}
+
+.prefix-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.prefix-item.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* Search results grouped by type */
+.search-results-group {
+  margin-bottom: 8px;
+}
+
+.search-results-group-header {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 12px 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-results-group-header i {
+  font-size: 12px;
+}
+
+.search-result-path {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Provenance column styles */
+.provenance-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.provenance-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.provenance-icon.given {
+  background: var(--given-bg);
+  color: var(--given-color);
+}
+
+.provenance-icon.derived {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+.provenance-icon.api {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary-500);
+}
+
+.provenance-source-name {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provenance-source-name:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .sidebar-footer {
   padding: 8px;
   border-top: 1px solid var(--border-primary);
@@ -889,6 +1256,67 @@ html, body {
   height: 16px;
   cursor: pointer;
   accent-color: var(--primary-500);
+}
+
+/* Source/Provenance Column */
+.col-source {
+  width: 120px;
+  min-width: 100px;
+  max-width: 150px;
+}
+
+.col-source .th-content {
+  gap: 6px;
+}
+
+.col-source .provenance-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.col-source .provenance-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.col-source .provenance-icon.given {
+  color: var(--given-color);
+}
+
+.col-source .provenance-icon.derived {
+  color: #f97316;
+}
+
+.col-source .provenance-icon.manual {
+  color: var(--text-muted);
+}
+
+.col-source .provenance-source-name {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.col-source .provenance-source-name:hover {
+  color: var(--primary-500);
+  text-decoration: underline;
+}
+
+/* Search result kbd style */
+.search-result-kbd {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-left: auto;
 }
 
 /* Add Column Button */

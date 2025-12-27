@@ -32,84 +32,73 @@
         </button>
       </div>
 
-      <!-- Search -->
+      <!-- Universal Search with Prefix Support -->
       <div class="sidebar-search">
         <div class="search-input-wrapper">
           <i class="ph ph-magnifying-glass"></i>
-          <input type="text" placeholder="Search records, sets... (Ctrl+/)" id="global-search">
+          <input type="text" placeholder="Search... (@ # > / ? !)" id="global-search" autocomplete="off">
+          <span class="search-prefix-hint" id="search-prefix-hint"></span>
+        </div>
+        <div class="search-prefix-legend" id="search-prefix-legend">
+          <span class="prefix-item" data-prefix="">records</span>
+          <span class="prefix-item" data-prefix="@">@fields</span>
+          <span class="prefix-item" data-prefix="#">#sets</span>
+          <span class="prefix-item" data-prefix="/">/views</span>
+          <span class="prefix-item" data-prefix="?">?sources</span>
+          <span class="prefix-item" data-prefix=">">&gt;commands</span>
         </div>
       </div>
 
-      <!-- View Hierarchy Navigation (Nine Rules-Compliant) -->
-      <nav class="sidebar-nav">
-        <!-- Level 0: Sources (Import Origins - GIVEN) -->
-        <div class="nav-section sources-section">
-          <div class="nav-section-header">
-            <span class="nav-section-title">
-              <i class="ph ph-file-arrow-down" title="Rule 7: GIVEN - Data Sources"></i>
-              Sources
-            </span>
-            <button class="nav-section-action" id="btn-import-data" title="Import new data source (CSV, JSON)">
-              <i class="ph ph-file-plus"></i>
+      <!-- Three-Panel Navigation: Sources (GIVEN) / Sets (Schema) / Views (MEANT) -->
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Panel 1: SOURCES (Given - Physical Origins) -->
+        <div class="nav-panel sources-panel" data-panel="sources">
+          <div class="nav-panel-header">
+            <div class="nav-panel-title">
+              <i class="ph ph-download-simple"></i>
+              <span>Sources</span>
+              <span class="nav-panel-badge given-badge">GIVEN</span>
+            </div>
+            <button class="nav-panel-action" id="btn-import-data" title="Import data (CSV, JSON, ICS)">
+              <i class="ph ph-plus"></i>
             </button>
           </div>
-          <div class="nav-items sources-tree" id="sources-nav">
+          <div class="nav-panel-content" id="sources-nav">
             <!-- Sources tree rendered dynamically -->
           </div>
         </div>
 
-        <!-- Level 1: Workspaces (Horizon Boundaries) -->
-        <div class="nav-section">
-          <div class="nav-section-header">
-            <span class="nav-section-title">
-              <i class="ph ph-eye" title="Rule 4: Perspectival Access"></i>
-              Workspaces
-            </span>
-            <button class="nav-section-action" id="btn-new-workspace" title="Create new workspace">
-              <i class="ph ph-folder-plus"></i>
+        <!-- Panel 2: SETS (Schema - Entity Types) -->
+        <div class="nav-panel sets-panel" data-panel="sets">
+          <div class="nav-panel-header">
+            <div class="nav-panel-title">
+              <i class="ph ph-database"></i>
+              <span>Sets</span>
+              <span class="nav-panel-badge schema-badge">SCHEMA</span>
+            </div>
+            <button class="nav-panel-action" id="btn-new-set" title="Create new set">
+              <i class="ph ph-plus"></i>
             </button>
           </div>
-          <div class="nav-items" id="workspaces-nav">
-            <!-- Workspaces rendered dynamically -->
+          <div class="nav-panel-content" id="sets-nav">
+            <!-- Sets rendered dynamically (flat list) -->
           </div>
         </div>
 
-        <!-- Level 2: Sets (Typed Data Collections) -->
-        <div class="nav-section">
-          <div class="nav-section-header">
-            <span class="nav-section-title">
-              <i class="ph ph-database" title="Rule 7: Schema as Interpretation"></i>
-              Sets
-            </span>
-            <button class="nav-section-action" id="btn-new-set" title="Create new data set/table">
-              <i class="ph ph-table-plus"></i>
+        <!-- Panel 3: VIEWS (Meant - Interpretations) -->
+        <div class="nav-panel views-panel" data-panel="views">
+          <div class="nav-panel-header">
+            <div class="nav-panel-title">
+              <i class="ph ph-eye"></i>
+              <span>Views</span>
+              <span class="nav-panel-badge meant-badge">MEANT</span>
+            </div>
+            <button class="nav-panel-action" id="btn-new-workspace" title="Create new workspace">
+              <i class="ph ph-plus"></i>
             </button>
           </div>
-          <div class="nav-items" id="sets-nav">
-            <!-- Sets rendered dynamically -->
-          </div>
-        </div>
-
-        <!-- Level 3: Lenses (View Types) -->
-        <div class="nav-section">
-          <div class="nav-section-header">
-            <span class="nav-section-title">
-              <i class="ph ph-eye-slash" title="Rule 1: MEANT Event"></i>
-              Lenses
-            </span>
-            <button class="nav-section-action" id="btn-new-view" title="Create new lens/view">
-              <i class="ph ph-layout"></i>
-            </button>
-          </div>
-          <div class="nav-items" id="views-nav">
-            <!-- Lenses rendered dynamically -->
-          </div>
-        </div>
-
-        <!-- Level 4: Focuses (Filtered Views) -->
-        <div class="nav-section focuses-section">
-          <div class="nav-items" id="focuses-nav">
-            <!-- Focuses rendered dynamically (Rule 5: Restrict only) -->
+          <div class="nav-panel-content" id="views-nav">
+            <!-- Workspaces > Lenses > Focuses rendered dynamically -->
           </div>
         </div>
       </nav>

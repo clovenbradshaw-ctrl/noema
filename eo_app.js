@@ -554,11 +554,60 @@ function setupGlobalHandlers() {
 }
 
 // ============================================================================
-// Global Search
+// Global Search with Prefix Support
 // ============================================================================
 
+const SEARCH_PREFIXES = {
+  '@': { name: 'fields', icon: 'ph-text-aa', description: 'Search field values' },
+  '#': { name: 'sets', icon: 'ph-database', description: 'Search sets by name' },
+  '/': { name: 'views', icon: 'ph-eye', description: 'Search views/lenses' },
+  '?': { name: 'sources', icon: 'ph-download-simple', description: 'Search data sources' },
+  '>': { name: 'commands', icon: 'ph-terminal', description: 'Run commands' },
+  '!': { name: 'provenance', icon: 'ph-git-branch', description: 'Search by provenance' }
+};
+
+function parseSearchQuery(query) {
+  const firstChar = query.charAt(0);
+  if (SEARCH_PREFIXES[firstChar]) {
+    return { prefix: firstChar, term: query.slice(1).trim() };
+  }
+  return { prefix: '', term: query.trim() };
+}
+
+function updateSearchPrefixHint(prefix) {
+  const hint = document.getElementById('search-prefix-hint');
+  const legend = document.getElementById('search-prefix-legend');
+
+  if (!hint) return;
+
+  if (prefix && SEARCH_PREFIXES[prefix]) {
+    hint.textContent = SEARCH_PREFIXES[prefix].name;
+    hint.dataset.prefix = prefix;
+    hint.classList.add('active');
+  } else {
+    hint.classList.remove('active');
+    hint.textContent = '';
+  }
+
+  // Update legend active state
+  if (legend) {
+    legend.querySelectorAll('.prefix-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.prefix === prefix);
+    });
+  }
+}
+
 function handleGlobalSearch(query) {
-  if (!query || query.length < 2) {
+  if (!query || query.length < 1) {
+    hideSearchResults();
+    updateSearchPrefixHint('');
+    return;
+  }
+
+  const { prefix, term } = parseSearchQuery(query);
+  updateSearchPrefixHint(prefix);
+
+  if (term.length < 1 && prefix !== '>') {
     hideSearchResults();
     return;
   }
@@ -566,27 +615,215 @@ function handleGlobalSearch(query) {
   const workbench = getDataWorkbench();
   if (!workbench) return;
 
+  let results = [];
+  const termLower = term.toLowerCase();
+
+  switch (prefix) {
+    case '@': // Search field values across all sets
+      results = searchFieldValues(workbench, termLower);
+      break;
+    case '#': // Search sets by name
+      results = searchSets(workbench, termLower);
+      break;
+    case '/': // Search views/lenses
+      results = searchViews(workbench, termLower);
+      break;
+    case '?': // Search sources
+      results = searchSources(workbench, termLower);
+      break;
+    case '>': // Commands
+      results = searchCommands(termLower);
+      break;
+    case '!': // Search by provenance
+      results = searchByProvenance(workbench, termLower);
+      break;
+    default: // Search records by primary field
+      results = searchRecordsPrimary(workbench, termLower);
+  }
+
+  showSearchResults(results.slice(0, 15), prefix);
+}
+
+function searchRecordsPrimary(workbench, query) {
   const results = [];
-  const queryLower = query.toLowerCase();
-
   workbench.getSets().forEach(set => {
-    if (set.name.toLowerCase().includes(queryLower)) {
-      results.push({ type: 'set', id: set.id, title: set.name, subtitle: `${set.records.length} records` });
-    }
-
     const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
     set.records.forEach(record => {
       const primaryValue = record.values[primaryField?.id] || '';
-      if (String(primaryValue).toLowerCase().includes(queryLower)) {
-        results.push({ type: 'record', id: record.id, setId: set.id, title: String(primaryValue), subtitle: set.name });
+      if (String(primaryValue).toLowerCase().includes(query)) {
+        results.push({
+          type: 'record',
+          id: record.id,
+          setId: set.id,
+          title: String(primaryValue),
+          subtitle: set.name,
+          icon: 'ph-file'
+        });
       }
     });
   });
-
-  showSearchResults(results.slice(0, 10));
+  return results;
 }
 
-function showSearchResults(results) {
+function searchFieldValues(workbench, query) {
+  const results = [];
+  // Parse field:value format if present
+  const [fieldPart, valuePart] = query.includes(':') ? query.split(':') : ['', query];
+
+  workbench.getSets().forEach(set => {
+    set.records.forEach(record => {
+      set.fields.forEach(field => {
+        if (fieldPart && !field.name.toLowerCase().includes(fieldPart)) return;
+
+        const value = record.values[field.id];
+        if (value && String(value).toLowerCase().includes(valuePart || query)) {
+          const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
+          const primaryValue = record.values[primaryField?.id] || record.id;
+          results.push({
+            type: 'field_match',
+            id: record.id,
+            setId: set.id,
+            title: `${field.name}: ${String(value).slice(0, 50)}`,
+            subtitle: `${primaryValue} · ${set.name}`,
+            icon: 'ph-text-aa'
+          });
+        }
+      });
+    });
+  });
+  return results;
+}
+
+function searchSets(workbench, query) {
+  return workbench.getSets()
+    .filter(set => set.name.toLowerCase().includes(query))
+    .map(set => ({
+      type: 'set',
+      id: set.id,
+      title: set.name,
+      subtitle: `${set.records.length} records · ${set.fields.length} fields`,
+      icon: set.icon || 'ph-table'
+    }));
+}
+
+function searchViews(workbench, query) {
+  const results = [];
+  workbench.getSets().forEach(set => {
+    (set.views || []).forEach(view => {
+      if (view.name.toLowerCase().includes(query)) {
+        results.push({
+          type: 'view',
+          id: view.id,
+          setId: set.id,
+          title: view.name,
+          subtitle: `${view.type} · ${set.name}`,
+          icon: getViewIcon(view.type)
+        });
+      }
+    });
+  });
+  return results;
+}
+
+function searchSources(workbench, query) {
+  const results = [];
+  const sourceMap = new Map();
+
+  workbench.getSets().forEach(set => {
+    const prov = set.datasetProvenance;
+    if (prov && prov.originalFilename) {
+      const sourceName = prov.originalFilename;
+      if (sourceName.toLowerCase().includes(query)) {
+        if (!sourceMap.has(sourceName)) {
+          sourceMap.set(sourceName, { sets: [], importedAt: prov.importedAt });
+        }
+        sourceMap.get(sourceName).sets.push(set);
+      }
+    }
+  });
+
+  sourceMap.forEach((data, sourceName) => {
+    results.push({
+      type: 'source',
+      id: sourceName,
+      title: sourceName,
+      subtitle: `${data.sets.length} sets · Imported ${new Date(data.importedAt).toLocaleDateString()}`,
+      icon: getSourceIcon(sourceName),
+      sets: data.sets
+    });
+  });
+
+  return results;
+}
+
+function searchCommands(query) {
+  const commands = [
+    { id: 'new_record', name: 'New Record', desc: 'Create a new record', icon: 'ph-plus', action: 'newRecord' },
+    { id: 'new_set', name: 'New Set', desc: 'Create a new data set', icon: 'ph-table-plus', action: 'newSet' },
+    { id: 'import', name: 'Import Data', desc: 'Import CSV or JSON file', icon: 'ph-upload', action: 'import' },
+    { id: 'export', name: 'Export Data', desc: 'Export current set', icon: 'ph-export', action: 'export' },
+    { id: 'filter', name: 'Add Filter', desc: 'Create a focus/filter', icon: 'ph-funnel', action: 'filter' },
+    { id: 'snapshot', name: 'Create Snapshot', desc: 'Capture immutable snapshot', icon: 'ph-camera', action: 'snapshot' },
+    { id: 'settings', name: 'Settings', desc: 'Open settings', icon: 'ph-gear', action: 'settings' }
+  ];
+
+  return commands
+    .filter(cmd => cmd.name.toLowerCase().includes(query) || cmd.desc.toLowerCase().includes(query))
+    .map(cmd => ({
+      type: 'command',
+      id: cmd.id,
+      title: cmd.name,
+      subtitle: cmd.desc,
+      icon: cmd.icon,
+      action: cmd.action
+    }));
+}
+
+function searchByProvenance(workbench, query) {
+  const results = [];
+  workbench.getSets().forEach(set => {
+    const prov = set.datasetProvenance;
+    if (prov) {
+      const provenanceStr = JSON.stringify(prov).toLowerCase();
+      if (provenanceStr.includes(query)) {
+        results.push({
+          type: 'set',
+          id: set.id,
+          title: set.name,
+          subtitle: `Source: ${prov.originalFilename || 'Manual'}`,
+          icon: 'ph-git-branch'
+        });
+      }
+    }
+  });
+  return results;
+}
+
+function getViewIcon(type) {
+  const icons = {
+    table: 'ph-table',
+    cards: 'ph-cards',
+    kanban: 'ph-kanban',
+    calendar: 'ph-calendar-blank',
+    graph: 'ph-graph',
+    filesystem: 'ph-folder-open'
+  };
+  return icons[type] || 'ph-table';
+}
+
+function getSourceIcon(filename) {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const icons = {
+    csv: 'ph-file-csv',
+    json: 'ph-file-code',
+    xlsx: 'ph-file-xls',
+    xls: 'ph-file-xls',
+    ics: 'ph-calendar-blank'
+  };
+  return icons[ext] || 'ph-file';
+}
+
+function showSearchResults(results, prefix = '') {
   let dropdown = document.getElementById('search-results');
   if (!dropdown) {
     dropdown = document.createElement('div');
@@ -596,31 +833,94 @@ function showSearchResults(results) {
   }
 
   if (results.length === 0) {
-    dropdown.innerHTML = '<div class="search-no-results"><i class="ph ph-magnifying-glass"></i><span>No results found</span></div>';
+    const prefixInfo = SEARCH_PREFIXES[prefix];
+    const hint = prefixInfo ? `No ${prefixInfo.name} found` : 'No results found';
+    dropdown.innerHTML = `<div class="search-no-results"><i class="ph ph-magnifying-glass"></i><span>${hint}</span></div>`;
   } else {
     dropdown.innerHTML = results.map(r => `
-      <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-set-id="${r.setId || ''}">
-        <i class="ph ${r.type === 'set' ? 'ph-table' : 'ph-file'}"></i>
+      <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-set-id="${r.setId || ''}" data-action="${r.action || ''}">
+        <i class="ph ${r.icon || 'ph-file'}"></i>
         <div class="search-result-content">
           <div class="search-result-title">${escapeHtmlApp(r.title)}</div>
           <div class="search-result-subtitle">${escapeHtmlApp(r.subtitle)}</div>
         </div>
+        ${r.type === 'command' ? '<kbd class="search-result-kbd">↵</kbd>' : ''}
       </div>
     `).join('');
 
     dropdown.querySelectorAll('.search-result-item').forEach(item => {
       item.addEventListener('click', () => {
-        if (item.dataset.type === 'set') _dataWorkbench?._selectSet(item.dataset.id);
-        else if (item.dataset.setId) {
-          _dataWorkbench?._selectSet(item.dataset.setId);
-          setTimeout(() => _dataWorkbench?._showRecordDetail(item.dataset.id), 100);
-        }
-        hideSearchResults();
-        document.getElementById('global-search').value = '';
+        handleSearchResultClick(item);
       });
     });
   }
   dropdown.style.display = 'block';
+}
+
+function handleSearchResultClick(item) {
+  const type = item.dataset.type;
+  const id = item.dataset.id;
+  const setId = item.dataset.setId;
+  const action = item.dataset.action;
+
+  switch (type) {
+    case 'set':
+      _dataWorkbench?._selectSet(id);
+      break;
+    case 'record':
+    case 'field_match':
+      if (setId) {
+        _dataWorkbench?._selectSet(setId);
+        setTimeout(() => _dataWorkbench?._showRecordDetail(id), 100);
+      }
+      break;
+    case 'view':
+      if (setId) {
+        _dataWorkbench?._selectSet(setId);
+        setTimeout(() => _dataWorkbench?._selectView(id), 100);
+      }
+      break;
+    case 'source':
+      // Expand source in sidebar and scroll to it
+      const sourceGroup = document.querySelector(`.source-group[data-source="${id}"]`);
+      if (sourceGroup) {
+        sourceGroup.classList.add('expanded');
+        sourceGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      break;
+    case 'command':
+      executeCommand(action);
+      break;
+  }
+
+  hideSearchResults();
+  document.getElementById('global-search').value = '';
+}
+
+function executeCommand(action) {
+  switch (action) {
+    case 'newRecord':
+      _dataWorkbench?._addRecord();
+      break;
+    case 'newSet':
+      _dataWorkbench?._showNewSetModal?.() || document.getElementById('btn-new-set')?.click();
+      break;
+    case 'import':
+      showImportModal?.() || document.getElementById('btn-import')?.click();
+      break;
+    case 'export':
+      exportAllData();
+      break;
+    case 'filter':
+      document.getElementById('btn-filter')?.click();
+      break;
+    case 'snapshot':
+      document.getElementById('btn-snapshot')?.click();
+      break;
+    case 'settings':
+      showSettingsModal();
+      break;
+  }
 }
 
 function hideSearchResults() {

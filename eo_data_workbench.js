@@ -739,45 +739,293 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderSidebar() {
-    // Render GIVEN/MEANT partition headers
-    this._renderGivenMeantPartition();
+    // Three-panel navigation: Sources (GIVEN) / Sets (Schema) / Views (MEANT)
     this._renderSourcesNav();
-    this._renderWorkspacesNav();
-    this._renderSetsNav();
-    this._renderViewsNav();
-    this._renderFocusesNav();
+    this._renderSetsNavFlat();
+    this._renderViewsHierarchy();
   }
 
   /**
-   * Render GIVEN/MEANT partition headers (Rule 1: Distinction)
-   * This visually separates immutable sources from interpretive views
+   * Render Sets as a flat list (Panel 2: Schema)
+   * Sets are entity types, not containers - shown as flat list
    */
-  _renderGivenMeantPartition() {
-    // Add GIVEN header above sources if not present
-    const sourcesSection = document.querySelector('.sidebar-section:has(#sources-nav)');
-    if (sourcesSection && !sourcesSection.querySelector('.eo-partition-header')) {
-      const givenHeader = document.createElement('div');
-      givenHeader.className = 'eo-partition-header eo-given';
-      givenHeader.innerHTML = `
-        <span class="partition-icon">◉</span>
-        <span class="partition-label">GIVEN</span>
-        <span class="partition-hint" title="Rule 1: Immutable data from external sources">Immutable Origins</span>
+  _renderSetsNavFlat() {
+    const container = document.getElementById('sets-nav');
+    if (!container) return;
+
+    if (this.sets.length === 0) {
+      container.innerHTML = `
+        <div class="nav-item empty-hint" id="create-first-set">
+          <i class="ph ph-plus-circle"></i>
+          <span>Create first set</span>
+        </div>
       `;
-      sourcesSection.insertBefore(givenHeader, sourcesSection.firstChild);
+      container.querySelector('#create-first-set')?.addEventListener('click', () => {
+        this._showNewSetModal?.() || this._addSet?.();
+      });
+      return;
     }
 
-    // Add MEANT header above workspaces if not present
-    const workspacesSection = document.querySelector('.sidebar-section:has(#workspaces-nav)');
-    if (workspacesSection && !workspacesSection.querySelector('.eo-partition-header')) {
-      const meantHeader = document.createElement('div');
-      meantHeader.className = 'eo-partition-header eo-meant';
-      meantHeader.innerHTML = `
-        <span class="partition-icon">◐</span>
-        <span class="partition-label">MEANT</span>
-        <span class="partition-hint" title="Rule 1: Interpretations derived from GIVEN">Your Interpretations</span>
+    container.innerHTML = this.sets.map(set => {
+      const recordCount = set.records?.length || 0;
+      const fieldCount = set.fields?.length || 0;
+      const provenanceIcon = this._getProvenanceStatusIcon(set);
+
+      return `
+        <div class="nav-item ${set.id === this.currentSetId ? 'active' : ''}"
+             data-set-id="${set.id}"
+             title="${fieldCount} fields · ${recordCount} records">
+          <span class="set-provenance-icon">${provenanceIcon}</span>
+          <i class="${set.icon || 'ph ph-table'}"></i>
+          <span>${this._escapeHtml(set.name)}</span>
+          <span class="nav-item-count">${recordCount}</span>
+        </div>
       `;
-      workspacesSection.insertBefore(meantHeader, workspacesSection.firstChild);
+    }).join('');
+
+    // Attach click handlers
+    container.querySelectorAll('.nav-item[data-set-id]').forEach(item => {
+      item.addEventListener('click', () => {
+        this._selectSet(item.dataset.setId);
+      });
+
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this._showSetContextMenu(e, item.dataset.setId);
+      });
+    });
+  }
+
+  /**
+   * Render Views hierarchy (Panel 3: MEANT)
+   * Shows Workspaces > Lenses > Focuses nested structure
+   */
+  _renderViewsHierarchy() {
+    const container = document.getElementById('views-nav');
+    if (!container) return;
+
+    const workspaces = this.viewRegistry?.getAllWorkspaces?.() || [];
+    const set = this.getCurrentSet();
+
+    // Build view hierarchy HTML
+    let html = '';
+
+    // If we have workspaces from the registry, use them
+    if (workspaces.length > 0) {
+      html = workspaces.map(workspace => {
+        const isExpanded = this.expandedWorkspaces?.has(workspace.id) ??
+                          (workspace.id === this.currentWorkspaceId);
+        const isActive = workspace.id === this.currentWorkspaceId;
+
+        // Get lenses for this workspace's sets
+        const workspaceLenses = this._getLensesForWorkspace(workspace.id);
+
+        return `
+          <div class="workspace-group ${isExpanded ? 'expanded' : ''}" data-workspace-id="${workspace.id}">
+            <div class="workspace-header ${isActive ? 'active' : ''}" title="${workspace.description || ''}">
+              <i class="ph ph-caret-right workspace-toggle"></i>
+              <i class="ph ${workspace.icon || 'ph-folder-simple'} workspace-icon"></i>
+              <span class="workspace-name">${this._escapeHtml(workspace.name)}</span>
+            </div>
+            <div class="workspace-children">
+              ${workspaceLenses.map(lens => this._renderLensItem(lens)).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else if (set && set.views && set.views.length > 0) {
+      // Fallback: show current set's views directly
+      html = `
+        <div class="workspace-group expanded" data-workspace-id="default">
+          <div class="workspace-header active">
+            <i class="ph ph-caret-right workspace-toggle"></i>
+            <i class="ph ph-folder-simple workspace-icon"></i>
+            <span class="workspace-name">${this._escapeHtml(set.name)} Views</span>
+          </div>
+          <div class="workspace-children">
+            ${set.views.map(view => this._renderLensItemFromView(view, set)).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      html = `
+        <div class="nav-item empty-hint" id="create-first-view">
+          <i class="ph ph-plus-circle"></i>
+          <span>Add a view</span>
+        </div>
+      `;
     }
+
+    container.innerHTML = html;
+
+    // Attach event handlers
+    this._attachViewsHierarchyHandlers(container);
+  }
+
+  /**
+   * Get lenses for a workspace
+   */
+  _getLensesForWorkspace(workspaceId) {
+    // Get sets for this workspace
+    const sets = this.viewRegistry?.getSetsForWorkspace?.(workspaceId) || this.sets;
+    const lenses = [];
+
+    for (const set of sets) {
+      const registrySet = this.viewRegistry?.sets?.get(set.id);
+      if (registrySet) {
+        const setLenses = this.viewRegistry?.getLensesForSet?.(set.id) || [];
+        for (const lens of setLenses) {
+          lenses.push({ ...lens, setName: set.name, setId: set.id });
+        }
+      } else if (set.views) {
+        // Fallback to legacy views
+        for (const view of set.views) {
+          lenses.push({
+            id: view.id,
+            name: view.name,
+            lensType: view.type,
+            setName: set.name,
+            setId: set.id
+          });
+        }
+      }
+    }
+
+    return lenses;
+  }
+
+  /**
+   * Render a lens item with nested focuses
+   */
+  _renderLensItem(lens) {
+    const isActive = lens.id === this.currentLensId || lens.id === this.currentViewId;
+    const viewIcons = {
+      grid: 'ph-table', table: 'ph-table',
+      cards: 'ph-cards',
+      kanban: 'ph-kanban',
+      calendar: 'ph-calendar-blank',
+      graph: 'ph-graph',
+      timeline: 'ph-clock-countdown',
+      filesystem: 'ph-folder-open'
+    };
+    const icon = viewIcons[lens.lensType] || 'ph-table';
+
+    // Get focuses for this lens
+    const focuses = this.viewRegistry?.getFocusesForLens?.(lens.id) || [];
+    const set = this.sets.find(s => s.id === lens.setId);
+    const totalRecords = set?.records?.length || 0;
+
+    let focusHtml = '';
+    if (focuses.length > 0) {
+      focusHtml = `
+        <div class="focus-children">
+          ${focuses.map(focus => {
+            const focusRecords = this._getFilteredRecordCountForFocus(focus, set);
+            return `
+              <div class="focus-item ${focus.id === this.currentFocusId ? 'active' : ''}"
+                   data-focus-id="${focus.id}">
+                <i class="ph ph-funnel"></i>
+                <span>${this._escapeHtml(focus.name)}</span>
+                <span class="focus-restriction">${focusRecords}/${totalRecords}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="lens-group">
+        <div class="lens-item ${isActive ? 'active' : ''}"
+             data-lens-id="${lens.id}"
+             data-set-id="${lens.setId}">
+          <i class="ph ${icon}"></i>
+          <span>${this._escapeHtml(lens.name)}</span>
+          <span class="lens-set-name">${lens.setName ? `· ${this._escapeHtml(lens.setName)}` : ''}</span>
+        </div>
+        ${focusHtml}
+      </div>
+    `;
+  }
+
+  /**
+   * Render a lens item from legacy view object
+   */
+  _renderLensItemFromView(view, set) {
+    const isActive = view.id === this.currentViewId;
+    const viewIcons = {
+      table: 'ph-table',
+      cards: 'ph-cards',
+      kanban: 'ph-kanban',
+      calendar: 'ph-calendar-blank',
+      graph: 'ph-graph',
+      filesystem: 'ph-folder-open'
+    };
+    const icon = viewIcons[view.type] || 'ph-table';
+
+    return `
+      <div class="lens-item ${isActive ? 'active' : ''}"
+           data-view-id="${view.id}"
+           data-set-id="${set.id}">
+        <i class="ph ${icon}"></i>
+        <span>${this._escapeHtml(view.name)}</span>
+      </div>
+    `;
+  }
+
+  /**
+   * Attach event handlers for views hierarchy
+   */
+  _attachViewsHierarchyHandlers(container) {
+    // Workspace toggle
+    container.querySelectorAll('.workspace-header').forEach(header => {
+      header.addEventListener('click', (e) => {
+        const group = header.closest('.workspace-group');
+        const workspaceId = group.dataset.workspaceId;
+        group.classList.toggle('expanded');
+
+        if (!this.expandedWorkspaces) this.expandedWorkspaces = new Set();
+        if (group.classList.contains('expanded')) {
+          this.expandedWorkspaces.add(workspaceId);
+        } else {
+          this.expandedWorkspaces.delete(workspaceId);
+        }
+      });
+    });
+
+    // Lens click
+    container.querySelectorAll('.lens-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const lensId = item.dataset.lensId || item.dataset.viewId;
+        const setId = item.dataset.setId;
+
+        if (setId && setId !== this.currentSetId) {
+          this._selectSet(setId);
+        }
+        if (lensId) {
+          this._selectView(lensId);
+        }
+      });
+
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this._showViewContextMenu(e, item.dataset.lensId || item.dataset.viewId);
+      });
+    });
+
+    // Focus click
+    container.querySelectorAll('.focus-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._selectFocus(item.dataset.focusId);
+      });
+    });
+
+    // Empty hint click
+    container.querySelector('#create-first-view')?.addEventListener('click', () => {
+      this._showNewViewTypeMenu?.();
+    });
   }
 
   /**
@@ -2786,7 +3034,9 @@ class EODataWorkbench {
     const records = this.getFilteredRecords();
     const fields = this._getVisibleFields();
     const view = this.getCurrentView();
-    const showProvenance = view?.config.showProvenance || false;
+    // Always show provenance column for data with sources
+    const hasProvenance = set?.datasetProvenance?.originalFilename || records.some(r => r.provenance);
+    const showProvenance = view?.config.showProvenance !== false && hasProvenance;
 
     let html = `
       <div class="data-table-container">
@@ -2797,8 +3047,11 @@ class EODataWorkbench {
                 <input type="checkbox" class="row-checkbox" id="select-all">
               </th>
               ${showProvenance ? `
-                <th class="col-provenance" title="Provenance status">
-                  <i class="ph ph-info"></i>
+                <th class="col-provenance col-source" title="Data source and provenance">
+                  <div class="th-content">
+                    <i class="ph ph-git-branch"></i>
+                    <span class="field-name">Source</span>
+                  </div>
                 </th>
               ` : ''}
               ${fields.map(field => `
@@ -2839,7 +3092,7 @@ class EODataWorkbench {
     } else {
       records.forEach((record, index) => {
         const isSelected = this.selectedRecords.has(record.id);
-        const provStatus = showProvenance ? this._getRecordProvenanceStatus(record, set) : null;
+        const sourceInfo = showProvenance ? this._getRecordSourceInfo(record, set) : null;
         html += `
           <tr data-record-id="${record.id}" class="${isSelected ? 'selected' : ''}">
             <td class="col-row-number">
@@ -2848,10 +3101,13 @@ class EODataWorkbench {
                      ${isSelected ? 'checked' : ''}>
             </td>
             ${showProvenance ? `
-              <td class="col-provenance prov-${provStatus}"
+              <td class="col-provenance col-source"
                   data-record-id="${record.id}"
-                  title="Click to view provenance">
-                ${this._getProvenanceIndicator(provStatus)}
+                  title="${this._escapeHtml(sourceInfo.tooltip)}">
+                <div class="provenance-cell">
+                  <span class="provenance-icon ${sourceInfo.type}">${sourceInfo.icon}</span>
+                  <span class="provenance-source-name" data-source="${this._escapeHtml(sourceInfo.source)}">${this._escapeHtml(sourceInfo.shortName)}</span>
+                </div>
               </td>
             ` : ''}
             ${fields.map(field => this._renderCell(record, field)).join('')}
@@ -2880,6 +3136,88 @@ class EODataWorkbench {
 
     this.elements.contentArea.innerHTML = html;
     this._attachTableEventListeners();
+    this._attachProvenanceClickHandlers();
+  }
+
+  /**
+   * Get source info for a record (for provenance column)
+   */
+  _getRecordSourceInfo(record, set) {
+    const datasetProv = set?.datasetProvenance;
+    const recordProv = record?.provenance;
+
+    // Determine source type and info
+    let type = 'given';
+    let icon = '◉';
+    let source = '';
+    let shortName = '';
+    let tooltip = '';
+
+    if (datasetProv?.originalFilename) {
+      source = datasetProv.originalFilename;
+      shortName = this._truncateSourceName(source, 15);
+      tooltip = `Source: ${source}`;
+
+      if (datasetProv.importedAt) {
+        tooltip += `\nImported: ${new Date(datasetProv.importedAt).toLocaleDateString()}`;
+      }
+      if (datasetProv.provenance?.method) {
+        tooltip += `\nMethod: ${datasetProv.provenance.method}`;
+      }
+
+      // Get file type icon
+      const ext = source.split('.').pop()?.toLowerCase();
+      if (ext === 'csv') icon = '📄';
+      else if (ext === 'json') icon = '{ }';
+      else if (ext === 'ics') icon = '📅';
+      else icon = '◉';
+    } else if (recordProv) {
+      type = 'derived';
+      icon = '⚙️';
+      source = recordProv.source || recordProv.method || 'Derived';
+      shortName = this._truncateSourceName(source, 15);
+      tooltip = `Derived record\nMethod: ${recordProv.method || 'unknown'}`;
+    } else {
+      type = 'manual';
+      icon = '✏️';
+      source = 'Manual';
+      shortName = 'Manual';
+      tooltip = 'Manually created record';
+    }
+
+    return { type, icon, source, shortName, tooltip };
+  }
+
+  /**
+   * Truncate source name for column display
+   */
+  _truncateSourceName(name, maxLen = 15) {
+    if (!name) return '';
+    if (name.length <= maxLen) return name;
+    return name.slice(0, maxLen - 3) + '...';
+  }
+
+  /**
+   * Attach click handlers for provenance column
+   */
+  _attachProvenanceClickHandlers() {
+    this.container.querySelectorAll('.provenance-source-name').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const source = el.dataset.source;
+        if (source && source !== 'Manual' && source !== 'Derived') {
+          // Navigate to source in sidebar
+          const sourceGroup = document.querySelector(`.source-group[data-source="${source}"]`);
+          if (sourceGroup) {
+            sourceGroup.classList.add('expanded');
+            sourceGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Highlight briefly
+            sourceGroup.style.outline = '2px solid var(--primary-500)';
+            setTimeout(() => sourceGroup.style.outline = '', 2000);
+          }
+        }
+      });
+    });
   }
 
   _getVisibleFields() {
