@@ -4229,6 +4229,28 @@ html, body {
   background: var(--warning-500);
 }
 
+/* Selected state (keyboard/click selection, different from active/open) */
+.fs-node.selected > .fs-node-header {
+  background: var(--bg-tertiary);
+  outline: 2px solid var(--primary-400);
+  outline-offset: -2px;
+}
+
+.fs-node.selected.active > .fs-node-header {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: -2px;
+}
+
+/* Focus visible for keyboard navigation */
+.fs-tree:focus {
+  outline: none;
+}
+
+.fs-tree:focus-visible .fs-node.selected > .fs-node-header {
+  outline: 2px solid var(--primary-500);
+  outline-offset: -2px;
+}
+
 /* More indicator */
 .fs-more-indicator {
   display: flex;

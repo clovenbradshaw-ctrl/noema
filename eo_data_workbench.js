@@ -4637,7 +4637,87 @@ class EODataWorkbench {
     if (!this.expandedFsNodes) this.expandedFsNodes = new Set();
     if (!this.fsViewMode) this.fsViewMode = 'tree';
 
-    // Toggle nodes
+    const tree = container.querySelector('.fs-tree');
+
+    // Restore selection from previous render
+    if (this.selectedFsNodeId) {
+      const selectedNode = container.querySelector(`.fs-node[data-node-id="${this.selectedFsNodeId}"]`);
+      if (selectedNode) {
+        selectedNode.classList.add('selected');
+      }
+    }
+    if (tree) {
+      tree.setAttribute('tabindex', '0');
+    }
+
+    // Helper to select a node visually (without opening)
+    const selectNode = (nodeId) => {
+      // Remove previous selection
+      container.querySelectorAll('.fs-node.selected').forEach(n => {
+        n.classList.remove('selected');
+      });
+      this.selectedFsNodeId = nodeId;
+      if (nodeId) {
+        const node = container.querySelector(`.fs-node[data-node-id="${nodeId}"]`);
+        if (node) {
+          node.classList.add('selected');
+          // Scroll into view if needed
+          node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      }
+    };
+
+    // Helper to open/navigate to a node
+    const openNode = (node) => {
+      if (!node) return;
+
+      if (node.classList.contains('set-node')) {
+        const setId = node.querySelector('.fs-node-header')?.dataset.setId;
+        if (setId) this._selectSet(setId);
+      } else if (node.classList.contains('view-node')) {
+        const setId = node.dataset.setId;
+        const viewId = node.dataset.viewId;
+        if (setId && viewId) {
+          if (this.currentSetId !== setId) this._selectSet(setId);
+          this._selectView(viewId);
+        }
+      } else if (node.classList.contains('record-node')) {
+        const recordId = node.dataset.recordId;
+        const setId = node.dataset.setId;
+        if (recordId && setId) {
+          if (this.currentSetId !== setId) this._selectSet(setId);
+          this._showRecordDetail(recordId);
+        }
+      } else if (node.classList.contains('source-node') || node.classList.contains('records-node')) {
+        // Toggle expand/collapse for container nodes
+        node.classList.toggle('expanded');
+        const nodeId = node.dataset.nodeId;
+        if (node.classList.contains('expanded')) {
+          this.expandedFsNodes.add(nodeId);
+        } else {
+          this.expandedFsNodes.delete(nodeId);
+        }
+      }
+    };
+
+    // Get all navigable nodes in order
+    const getNavigableNodes = () => {
+      const nodes = [];
+      const collectNodes = (parentEl) => {
+        parentEl.querySelectorAll(':scope > .fs-node, :scope > .fs-section > .fs-node').forEach(node => {
+          nodes.push(node);
+          // If expanded, also collect children
+          if (node.classList.contains('expanded')) {
+            const children = node.querySelector('.fs-node-children');
+            if (children) collectNodes(children);
+          }
+        });
+      };
+      collectNodes(tree);
+      return nodes;
+    };
+
+    // Toggle nodes via chevron click
     container.querySelectorAll('.fs-toggle').forEach(toggle => {
       toggle.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -4652,43 +4732,98 @@ class EODataWorkbench {
       });
     });
 
-    // Click on set to select it
-    container.querySelectorAll('.set-node > .fs-node-header').forEach(header => {
+    // Single-click on any node header = select only
+    container.querySelectorAll('.fs-node-header').forEach(header => {
       header.addEventListener('click', (e) => {
         if (e.target.closest('.fs-toggle')) return;
-        const setId = header.dataset.setId;
-        if (setId) {
-          this._selectSet(setId);
+        const node = header.closest('.fs-node');
+        const nodeId = node?.dataset.nodeId;
+        if (nodeId) {
+          selectNode(nodeId);
+          tree?.focus();
         }
       });
     });
 
-    // Click on view to select it
-    container.querySelectorAll('.view-node').forEach(node => {
-      node.addEventListener('click', () => {
-        const setId = node.dataset.setId;
-        const viewId = node.dataset.viewId;
-        if (setId && viewId) {
-          if (this.currentSetId !== setId) {
-            this._selectSet(setId);
-          }
-          this._selectView(viewId);
-        }
+    // Double-click on any node header = open/navigate
+    container.querySelectorAll('.fs-node-header').forEach(header => {
+      header.addEventListener('dblclick', (e) => {
+        if (e.target.closest('.fs-toggle')) return;
+        const node = header.closest('.fs-node');
+        openNode(node);
       });
     });
 
-    // Click on record to show detail
-    container.querySelectorAll('.record-node').forEach(node => {
-      node.addEventListener('click', () => {
-        const recordId = node.dataset.recordId;
-        const setId = node.dataset.setId;
-        if (recordId && setId) {
-          if (this.currentSetId !== setId) {
-            this._selectSet(setId);
+    // Keyboard navigation
+    tree?.addEventListener('keydown', (e) => {
+      const nodes = getNavigableNodes();
+      const currentIndex = nodes.findIndex(n => n.dataset.nodeId === this.selectedFsNodeId);
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          if (currentIndex < nodes.length - 1) {
+            selectNode(nodes[currentIndex + 1].dataset.nodeId);
+          } else if (currentIndex === -1 && nodes.length > 0) {
+            selectNode(nodes[0].dataset.nodeId);
           }
-          this._showRecordDetail(recordId);
-        }
-      });
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          if (currentIndex > 0) {
+            selectNode(nodes[currentIndex - 1].dataset.nodeId);
+          } else if (currentIndex === -1 && nodes.length > 0) {
+            selectNode(nodes[nodes.length - 1].dataset.nodeId);
+          }
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (currentIndex >= 0) {
+            const node = nodes[currentIndex];
+            if (!node.classList.contains('expanded') && node.querySelector('.fs-node-children')) {
+              node.classList.add('expanded');
+              this.expandedFsNodes.add(node.dataset.nodeId);
+            }
+          }
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (currentIndex >= 0) {
+            const node = nodes[currentIndex];
+            if (node.classList.contains('expanded')) {
+              node.classList.remove('expanded');
+              this.expandedFsNodes.delete(node.dataset.nodeId);
+            } else {
+              // Navigate to parent
+              const parent = node.parentElement?.closest('.fs-node');
+              if (parent?.dataset.nodeId) {
+                selectNode(parent.dataset.nodeId);
+              }
+            }
+          }
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (currentIndex >= 0) {
+            openNode(nodes[currentIndex]);
+          }
+          break;
+        case ' ':
+          e.preventDefault();
+          if (currentIndex >= 0) {
+            const node = nodes[currentIndex];
+            // Space toggles expand/collapse
+            if (node.querySelector('.fs-node-children')) {
+              node.classList.toggle('expanded');
+              if (node.classList.contains('expanded')) {
+                this.expandedFsNodes.add(node.dataset.nodeId);
+              } else {
+                this.expandedFsNodes.delete(node.dataset.nodeId);
+              }
+            }
+          }
+          break;
+      }
     });
 
     // View mode toggle
