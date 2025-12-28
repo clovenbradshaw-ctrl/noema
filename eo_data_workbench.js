@@ -1498,6 +1498,7 @@ class EODataWorkbench {
    */
   _showOperatorFirstCreationModal() {
     const intents = [
+      { id: 'SQL', icon: 'ph-terminal', label: 'Query with SQL', operator: 'SQL', description: 'Write SQL to select, filter, and transform data' },
       { id: 'FILTER', icon: 'ph-funnel', label: 'Filter existing data', operator: 'SEG', description: 'Create a subset by filtering records' },
       { id: 'RELATE', icon: 'ph-link', label: 'Relate things', operator: 'CON', description: 'Join records from multiple sets' },
       { id: 'SLICE', icon: 'ph-clock', label: 'Slice by time', operator: 'ALT', description: 'Create time-based partitions' },
@@ -1541,6 +1542,9 @@ class EODataWorkbench {
    */
   _handleCreationIntent(intent) {
     switch (intent) {
+      case 'SQL':
+        this._showSQLQueryModal();
+        break;
       case 'FILTER':
         this._showFilterSetCreationFlow();
         break;
@@ -1737,6 +1741,360 @@ class EODataWorkbench {
    */
   _showCombineViewFlow() {
     this._showToast('Perspective combination coming soon', 'info');
+  }
+
+  /**
+   * Show SQL Query modal for creating sets from SQL
+   * EO-IR: Records the SQL query as derivation with full provenance
+   */
+  _showSQLQueryModal() {
+    // Get available sources/sets for querying
+    const sources = this.sets.map(set => ({
+      id: set.id,
+      name: set.name,
+      recordCount: set.records?.length || 0,
+      fields: set.fields?.map(f => f.name) || []
+    }));
+
+    if (sources.length === 0) {
+      this._showToast('No data to query. Import data first.', 'warning');
+      return;
+    }
+
+    const sourceList = sources.map(s =>
+      `<code>${s.name}</code> (${s.recordCount} rows): ${s.fields.slice(0, 5).join(', ')}${s.fields.length > 5 ? '...' : ''}`
+    ).join('<br>');
+
+    const exampleQueries = [
+      `SELECT * FROM ${sources[0].name}`,
+      `SELECT * FROM ${sources[0].name} WHERE ${sources[0].fields[0] || 'field'} = 'value'`,
+      `SELECT ${sources[0].fields.slice(0, 3).join(', ') || '*'} FROM ${sources[0].name} ORDER BY ${sources[0].fields[0] || 'field'} DESC LIMIT 100`,
+      sources.length > 1 ? `SELECT * FROM ${sources[0].name} JOIN ${sources[1].name} ON ${sources[0].name}.id = ${sources[1].name}.id` : null
+    ].filter(Boolean);
+
+    const html = `
+      <div class="sql-query-modal">
+        <div class="form-group">
+          <label class="form-label">Available Tables</label>
+          <div class="sql-sources-list">
+            ${sourceList}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">SQL Query</label>
+          <textarea id="sql-query-input" class="form-textarea sql-editor" rows="6" placeholder="SELECT * FROM table WHERE condition...">${exampleQueries[0]}</textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Quick Examples</label>
+          <div class="sql-examples">
+            ${exampleQueries.map((q, i) => `
+              <button type="button" class="sql-example-btn" data-query="${this._escapeHtml(q)}">
+                Example ${i + 1}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="form-group">
+          <button type="button" id="sql-preview-btn" class="btn btn-secondary">
+            <i class="ph ph-play"></i> Preview Results
+          </button>
+        </div>
+
+        <div id="sql-preview-results" class="sql-preview-results" style="display: none;">
+          <div class="sql-preview-header">
+            <span id="sql-preview-count">0 rows</span>
+            <span id="sql-preview-time">0ms</span>
+          </div>
+          <div class="sql-preview-table-wrap">
+            <table id="sql-preview-table">
+              <thead id="sql-preview-thead"></thead>
+              <tbody id="sql-preview-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="sql-pipeline-view" class="sql-pipeline-view" style="display: none;">
+          <label class="form-label">EO-IR Pipeline (Provenance)</label>
+          <div id="sql-pipeline-steps" class="pipeline-steps"></div>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label">New Set Name</label>
+          <input type="text" id="sql-set-name" class="form-input" placeholder="SQL: Query Results">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Frame (Optional)</label>
+          <input type="text" id="sql-frame-purpose" class="form-input" placeholder="Purpose of this query...">
+          <textarea id="sql-frame-caveats" class="form-textarea" rows="2" placeholder="Known limitations or caveats..."></textarea>
+        </div>
+      </div>
+    `;
+
+    this._showModal('Create Set from SQL Query', html, () => {
+      this._executeSQLAndCreateSet();
+    });
+
+    // Setup event handlers after modal is shown
+    setTimeout(() => {
+      // Example buttons
+      document.querySelectorAll('.sql-example-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const query = btn.dataset.query;
+          document.getElementById('sql-query-input').value = query;
+        });
+      });
+
+      // Preview button
+      document.getElementById('sql-preview-btn')?.addEventListener('click', () => {
+        this._previewSQLQuery();
+      });
+
+      // Focus the editor
+      document.getElementById('sql-query-input')?.focus();
+    }, 100);
+  }
+
+  /**
+   * Preview SQL query results
+   */
+  _previewSQLQuery() {
+    const sql = document.getElementById('sql-query-input')?.value?.trim();
+    if (!sql) {
+      this._showToast('Enter a SQL query', 'warning');
+      return;
+    }
+
+    // Create data provider that maps set names to data
+    const dataProvider = this._createSQLDataProvider();
+
+    // Parse and execute
+    const parser = new EOSQLParser();
+    const parsed = parser.parse(sql);
+
+    if (!parsed.success) {
+      this._showToast(`SQL Error: ${parsed.error}`, 'error');
+      return;
+    }
+
+    const executor = new EOSQLExecutor(dataProvider);
+    const result = executor.execute(parsed.pipeline);
+
+    // Show results
+    const previewDiv = document.getElementById('sql-preview-results');
+    const pipelineDiv = document.getElementById('sql-pipeline-view');
+    previewDiv.style.display = 'block';
+    pipelineDiv.style.display = 'block';
+
+    document.getElementById('sql-preview-count').textContent = `${result.rows.length} rows`;
+    document.getElementById('sql-preview-time').textContent = `${result.stats.executionTime}ms`;
+
+    // Render preview table (first 50 rows)
+    const thead = document.getElementById('sql-preview-thead');
+    const tbody = document.getElementById('sql-preview-tbody');
+
+    thead.innerHTML = `<tr>${result.columns.map(c => `<th>${this._escapeHtml(c)}</th>`).join('')}</tr>`;
+    tbody.innerHTML = result.rows.slice(0, 50).map(row =>
+      `<tr>${result.columns.map(c => `<td>${this._escapeHtml(String(row[c] ?? ''))}</td>`).join('')}</tr>`
+    ).join('');
+
+    if (result.rows.length > 50) {
+      tbody.innerHTML += `<tr><td colspan="${result.columns.length}" style="text-align:center;color:var(--text-muted);">Showing 50 of ${result.rows.length} rows</td></tr>`;
+    }
+
+    // Render pipeline visualization
+    this._renderSQLPipeline(parsed.pipeline, result.stats);
+  }
+
+  /**
+   * Render EO-IR pipeline visualization
+   */
+  _renderSQLPipeline(pipeline, stats) {
+    const stepsDiv = document.getElementById('sql-pipeline-steps');
+    const operatorSymbols = {
+      'SOURCE': '◉',
+      'FILTER': '⊃',
+      'SORT': '↕',
+      'LIMIT': '⊤',
+      'SELECT': '⊏',
+      'GROUP': '⊞',
+      'AGGREGATE': '∑',
+      'JOIN': '⋈',
+      'UNION': '∪'
+    };
+
+    const operatorColors = {
+      'SOURCE': 'green',
+      'FILTER': 'orange',
+      'SORT': 'blue',
+      'LIMIT': 'orange',
+      'SELECT': 'purple',
+      'GROUP': 'purple',
+      'AGGREGATE': 'purple',
+      'JOIN': 'blue',
+      'UNION': 'blue'
+    };
+
+    stepsDiv.innerHTML = pipeline.map((step, i) => {
+      const symbol = operatorSymbols[step.op] || '○';
+      const color = operatorColors[step.op] || 'gray';
+      const params = Object.entries(step.params || {})
+        .map(([k, v]) => `<span class="param-key">${k}:</span> <span class="param-value">${JSON.stringify(v)}</span>`)
+        .join(', ');
+
+      const statInfo = stats.operationsExecuted?.[i];
+      const reduction = statInfo ? ` (${statInfo.inputRows} → ${statInfo.outputRows})` : '';
+
+      return `
+        <div class="pipeline-step">
+          <span class="pipeline-symbol" style="color: var(--${color}-500, #888)">${symbol}</span>
+          <span class="pipeline-op">${step.op}</span>
+          <span class="pipeline-params">${params}</span>
+          <span class="pipeline-reduction">${reduction}</span>
+        </div>
+      `;
+    }).join('<div class="pipeline-arrow">↓</div>');
+  }
+
+  /**
+   * Create data provider for SQL executor
+   */
+  _createSQLDataProvider() {
+    const sets = this.sets;
+    return {
+      getSourceData(sourceId) {
+        // Find by ID or name
+        const set = sets.find(s => s.id === sourceId || s.name === sourceId);
+        if (!set) {
+          console.warn(`Source not found: ${sourceId}`);
+          return [];
+        }
+        // Convert records to plain objects with field names
+        return (set.records || []).map(record => {
+          const row = {};
+          for (const field of set.fields || []) {
+            row[field.name] = record.values?.[field.id] ?? record[field.name] ?? record[field.id];
+          }
+          return row;
+        });
+      },
+      getSourceSchema(sourceId) {
+        const set = sets.find(s => s.id === sourceId || s.name === sourceId);
+        return set?.fields?.map(f => f.name) || [];
+      }
+    };
+  }
+
+  /**
+   * Execute SQL and create a new Set with EO-IR provenance
+   */
+  _executeSQLAndCreateSet() {
+    const sql = document.getElementById('sql-query-input')?.value?.trim();
+    const setName = document.getElementById('sql-set-name')?.value?.trim() || 'SQL: Query Results';
+    const purpose = document.getElementById('sql-frame-purpose')?.value?.trim();
+    const caveatsText = document.getElementById('sql-frame-caveats')?.value?.trim();
+    const caveats = caveatsText ? caveatsText.split('\n').filter(c => c.trim()) : [];
+
+    if (!sql) {
+      this._showToast('Enter a SQL query', 'warning');
+      return;
+    }
+
+    const dataProvider = this._createSQLDataProvider();
+    const parser = new EOSQLParser();
+    const parsed = parser.parse(sql);
+
+    if (!parsed.success) {
+      this._showToast(`SQL Error: ${parsed.error}`, 'error');
+      return;
+    }
+
+    const executor = new EOSQLExecutor(dataProvider);
+    const result = executor.execute(parsed.pipeline);
+
+    // Create the new set
+    const setId = generateId();
+    const fields = result.columns.map((name, i) => ({
+      id: generateId(),
+      name,
+      type: this._inferFieldTypeFromValues(result.rows.map(r => r[name]))
+    }));
+
+    const records = result.rows.map((row, i) => {
+      const values = {};
+      fields.forEach(field => {
+        values[field.id] = row[field.name];
+      });
+      return {
+        id: generateId(),
+        values,
+        _sourceRow: i
+      };
+    });
+
+    const newSet = {
+      id: setId,
+      name: setName,
+      fields,
+      records,
+      views: [{
+        id: generateId(),
+        name: 'All Records',
+        type: 'table',
+        filters: [],
+        sorts: [],
+        hiddenFields: []
+      }],
+      // EO-IR Derivation with full provenance
+      derivation: {
+        strategy: 'sql',
+        sql: sql,
+        pipeline: parsed.pipeline,
+        sourceRefs: parsed.sourceRefs,
+        frame: {
+          purpose: purpose || `Created from SQL: ${sql.substring(0, 50)}...`,
+          epistemicStatus: 'preliminary',
+          methodology: 'SQL query execution',
+          caveats
+        },
+        derivedAt: new Date().toISOString(),
+        stats: {
+          inputSources: parsed.sourceRefs.length,
+          outputRows: result.rows.length,
+          executionMs: result.stats.executionTime
+        }
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    this.sets.push(newSet);
+    this._saveData();
+    this._renderSidebar();
+    this._selectSet(setId);
+    this._showToast(`Set "${setName}" created with ${result.rows.length} records`, 'success');
+  }
+
+  /**
+   * Infer field type from sample values
+   */
+  _inferFieldTypeFromValues(values) {
+    const sample = values.filter(v => v != null).slice(0, 100);
+    if (sample.length === 0) return 'text';
+
+    if (sample.every(v => !isNaN(parseFloat(v)) && isFinite(v))) {
+      return sample.every(v => Number.isInteger(parseFloat(v))) ? 'number' : 'number';
+    }
+
+    const datePattern = /^\d{4}-\d{2}-\d{2}/;
+    if (sample.every(v => datePattern.test(String(v)))) return 'date';
+
+    const boolValues = ['true', 'false', 'yes', 'no', '1', '0'];
+    if (sample.every(v => boolValues.includes(String(v).toLowerCase()))) return 'checkbox';
+
+    return 'text';
   }
 
   /**

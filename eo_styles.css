@@ -9592,3 +9592,189 @@ body.has-picked-up .browser-tab:hover {
   padding: 8px 12px;
   text-align: center;
 }
+
+/* ===== SQL Query Modal ===== */
+.sql-query-modal {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.sql-sources-list {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.sql-sources-list code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+  color: var(--primary-500);
+}
+
+.sql-editor {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.sql-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sql-example-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sql-example-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+}
+
+.sql-preview-results {
+  margin-top: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sql-preview-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sql-preview-table-wrap {
+  max-height: 200px;
+  overflow: auto;
+}
+
+.sql-preview-results table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sql-preview-results th {
+  background: var(--bg-tertiary);
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+}
+
+.sql-preview-results td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sql-preview-results tr:hover td {
+  background: var(--bg-secondary);
+}
+
+/* SQL Pipeline Visualization */
+.sql-pipeline-view {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.pipeline-symbol {
+  font-size: 16px;
+  font-weight: bold;
+  width: 24px;
+  text-align: center;
+}
+
+.pipeline-op {
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 80px;
+}
+
+.pipeline-params {
+  flex: 1;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.pipeline-params .param-key {
+  color: var(--text-muted);
+}
+
+.pipeline-params .param-value {
+  color: var(--success-500);
+}
+
+.pipeline-reduction {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.pipeline-arrow {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 2px 0;
+}
+
+/* SQL Operator badge */
+.intent-operator[title="SQL"] {
+  background: var(--purple-100);
+  color: var(--purple-700);
+}
+
+:root.dark-theme .intent-operator[title="SQL"],
+.dark-theme .intent-operator[title="SQL"] {
+  background: var(--purple-900);
+  color: var(--purple-300);
+}
