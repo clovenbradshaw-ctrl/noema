@@ -1164,23 +1164,43 @@ class ImportOrchestrator {
   }
 
   /**
-   * Get or create the SourceStore instance
+   * Get the SourceStore instance - MUST use workbench's sourceStore
+   *
+   * CRITICAL: This must always return the workbench's sourceStore to ensure
+   * imported data is visible in the UI. Never create a new store here.
    */
   _getSourceStore() {
-    // Check if workbench already has a source store
+    // MUST use workbench's sourceStore for consistency
     if (this.workbench?.sourceStore) {
       return this.workbench.sourceStore;
     }
 
-    // Check for global SourceStore
-    if (typeof SourceStore !== 'undefined') {
-      const eventStore = this.workbench?.eoApp?.eventStore || null;
-      return new SourceStore(eventStore);
+    // If workbench doesn't have sourceStore yet, create and attach it
+    if (this.workbench) {
+      if (typeof SourceStore !== 'undefined') {
+        const eventStore = this.workbench.eoApp?.eventStore || null;
+        this.workbench.sourceStore = new SourceStore(eventStore);
+      } else if (typeof createSimpleSourceStore === 'function') {
+        this.workbench.sourceStore = createSimpleSourceStore();
+      } else {
+        // Last resort fallback - but attach to workbench
+        this.workbench.sourceStore = this._createFallbackStore();
+      }
+      return this.workbench.sourceStore;
     }
 
-    // Fallback: simple in-memory store
+    // No workbench - this shouldn't happen in normal usage
+    console.warn('ImportOrchestrator: No workbench available, import may not be visible');
+    return this._createFallbackStore();
+  }
+
+  /**
+   * Create a fallback store (last resort)
+   */
+  _createFallbackStore() {
+    const sources = new Map();
     return {
-      sources: new Map(),
+      sources: sources,
       createSource(config) {
         const id = 'src_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 8);
         const source = {
@@ -1195,11 +1215,11 @@ class ImportOrchestrator {
           derivedSetIds: [],
           status: 'active'
         };
-        this.sources.set(id, source);
+        sources.set(id, source);
         return source;
       },
-      get(id) { return this.sources.get(id); },
-      getAll() { return Array.from(this.sources.values()); },
+      get(id) { return sources.get(id); },
+      getAll() { return Array.from(sources.values()); },
       getByStatus(status) { return this.getAll().filter(s => s.status === status); }
     };
   }
@@ -2567,9 +2587,21 @@ function initImportHandlers() {
   let importMode = 'source'; // 'source' or 'auto'
   const analyzer = new ImportAnalyzer();
 
-  // Get workbench reference
+  // Get workbench reference and ensure sourceStore is initialized
   const workbench = typeof getDataWorkbench === 'function' ? getDataWorkbench() : null;
   if (workbench) {
+    // CRITICAL: Initialize the sourceStore on the workbench BEFORE creating orchestrator
+    // This ensures the import uses the same sourceStore as the workbench display
+    if (!workbench.sourceStore) {
+      // Initialize sourceStore if it doesn't exist
+      if (typeof SourceStore !== 'undefined') {
+        const eventStore = workbench.eoApp?.eventStore || null;
+        workbench.sourceStore = new SourceStore(eventStore);
+      } else {
+        // Fallback: create simple in-memory store
+        workbench.sourceStore = createSimpleSourceStore();
+      }
+    }
     orchestrator = new ImportOrchestrator(workbench);
   }
 
@@ -3617,6 +3649,58 @@ importStyles.textContent = `
   }
 `;
 document.head.appendChild(importStyles);
+
+
+// ============================================================================
+// Simple SourceStore (fallback when SourceStore class not available)
+// ============================================================================
+
+/**
+ * Creates a simple in-memory source store as a fallback
+ * This is used when the SourceStore class isn't available
+ */
+function createSimpleSourceStore() {
+  const sources = new Map();
+
+  return {
+    sources: sources,
+
+    createSource(config) {
+      const id = 'src_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 8);
+      const source = {
+        id,
+        name: config.name,
+        records: Object.freeze([...config.records]),
+        recordCount: config.records.length,
+        schema: config.schema,
+        provenance: config.provenance,
+        fileIdentity: config.fileMetadata,
+        importedAt: new Date().toISOString(),
+        derivedSetIds: [],
+        status: 'active'
+      };
+      sources.set(id, source);
+      return source;
+    },
+
+    get(id) {
+      return sources.get(id);
+    },
+
+    getAll() {
+      return Array.from(sources.values());
+    },
+
+    getByStatus(status) {
+      return this.getAll().filter(s => s.status === status);
+    }
+  };
+}
+
+// Export the helper
+if (typeof window !== 'undefined') {
+  window.createSimpleSourceStore = createSimpleSourceStore;
+}
 
 
 // ============================================================================
