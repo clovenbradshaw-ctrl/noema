@@ -1275,36 +1275,64 @@ class ImportOrchestrator {
     const viewsCreated = [];
     const now = new Date().toISOString();
 
+    // Get MetadataParser from EOProvenance (browser) or require (Node)
+    const MetadataParser = (typeof window !== 'undefined' && window.EOProvenance?.MetadataParser) ||
+                          (typeof require === 'function' && require('./eo_provenance.js')?.MetadataParser) ||
+                          null;
+
     // Create the set
     const set = createSet(setName);
 
     // Build comprehensive nested provenance structure
     const userProvenance = options.provenance || {};
 
-    // Auto-fill provenance fields with available metadata when user doesn't provide values
-    const autoFilledProvenance = { ...userProvenance };
+    // Use MetadataParser to generate enriched provenance from import metadata (if available)
+    let autoFilledProvenance;
 
-    // Auto-fill source with original filename if not provided
-    if (!autoFilledProvenance.source) {
-      autoFilledProvenance.source = setName || options.setName || null;
-    }
+    if (MetadataParser) {
+      const importContext = MetadataParser.extractImportContext(parseResult, {
+        setName: setName || options.setName,
+        originalFilename: options.originalFilename || setName,
+        originalFileSize: options.originalFileSize,
+        mimeType: options.mimeType || options.originalFileType,
+        contentHash: options.contentHash,
+        schemaInference: schema.inferenceDecisions ? { fieldInferences: schema.inferenceDecisions.fieldInferences } : null,
+        sheetCount: options.sheetCount,
+        sourceUrl: options.sourceUrl,
+        fileModifiedAt: options.fileModifiedAt,
+        importMode: options.importMode,
+        triggeredBy: options.triggeredBy,
+        previousVersionHash: options.previousVersionHash
+      });
 
-    // Auto-fill method based on file type/parser used
-    if (!autoFilledProvenance.method) {
-      const parserType = parseResult.fileType === 'ics' ? 'ICS calendar' :
-                        parseResult.fileType === 'xlsx' || parseResult.fileType === 'xls' ? 'Excel spreadsheet' :
-                        parseResult.delimiter ? 'CSV' : 'JSON';
-      autoFilledProvenance.method = `${parserType} import`;
-    }
+      // Parse import metadata to get enriched provenance values
+      const enrichedProvenance = MetadataParser.parseImportMetadata(importContext);
 
-    // Auto-fill timeframe with import date if not provided
-    if (!autoFilledProvenance.timeframe) {
-      const importDate = new Date();
-      autoFilledProvenance.timeframe = `Imported ${importDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })}`;
+      // Merge user-provided provenance (takes precedence) with enriched values
+      autoFilledProvenance = MetadataParser.mergeWithUserProvenance(enrichedProvenance, userProvenance);
+    } else {
+      // Fallback: simple auto-fill when MetadataParser not available
+      autoFilledProvenance = { ...userProvenance };
+
+      if (!autoFilledProvenance.source) {
+        autoFilledProvenance.source = setName || options.setName || null;
+      }
+
+      if (!autoFilledProvenance.method) {
+        const parserType = parseResult.fileType === 'ics' ? 'ICS calendar' :
+                          parseResult.fileType === 'xlsx' || parseResult.fileType === 'xls' ? 'Excel spreadsheet' :
+                          parseResult.delimiter ? 'CSV' : 'JSON';
+        autoFilledProvenance.method = `${parserType} import`;
+      }
+
+      if (!autoFilledProvenance.timeframe) {
+        const importDate = new Date();
+        autoFilledProvenance.timeframe = `Imported ${importDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })}`;
+      }
     }
 
     // Collect transformation log steps
