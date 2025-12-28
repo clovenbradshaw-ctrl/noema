@@ -7941,3 +7941,806 @@ body.has-picked-up .browser-tab:hover {
   padding: 8px 12px;
   text-align: center;
 }
+
+/* ============================================================================
+   LINEAGE EXPLORER STYLES
+   ============================================================================ */
+
+/* Entity Detail Panel */
+.entity-detail-panel {
+  padding: 16px;
+}
+
+.entity-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.entity-detail-header .entity-detail-icon {
+  font-size: 24px;
+  color: var(--primary-500);
+}
+
+.entity-detail-header h3 {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meant-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--meant-bg);
+  color: var(--meant-color);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Entity Detail Tabs */
+.entity-detail-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 4px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.entity-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.entity-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.entity-tab.active {
+  background: var(--bg-primary);
+  color: var(--primary-500);
+  box-shadow: var(--shadow-sm);
+}
+
+.entity-tab i {
+  font-size: 14px;
+}
+
+/* Entity Detail Content */
+.entity-detail-content {
+  min-height: 200px;
+}
+
+/* Lineage Section */
+.lineage-section {
+  margin-bottom: 20px;
+}
+
+.lineage-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.lineage-section h4 i {
+  font-size: 14px;
+}
+
+.lineage-origin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 8px;
+  border-left: 3px solid var(--given-color);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.lineage-origin i {
+  color: var(--given-color);
+  font-size: 16px;
+}
+
+.lineage-origin strong {
+  color: var(--given-color);
+}
+
+.lineage-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+/* Lineage Chain (Upstream) */
+.lineage-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.lineage-chain-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lineage-chain-node:hover:not(.current) {
+  background: var(--bg-tertiary);
+  transform: translateX(4px);
+}
+
+.lineage-chain-node.current {
+  background: var(--primary-500);
+  color: white;
+}
+
+.lineage-chain-node.current .lineage-op-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.lineage-chain-node.current .lineage-node-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.lineage-chain-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  gap: 4px;
+}
+
+.lineage-chain-arrow i {
+  font-size: 14px;
+}
+
+/* Lineage Tree (Downstream) */
+.lineage-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lineage-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 13px;
+}
+
+.lineage-tree-node:hover {
+  background: var(--bg-tertiary);
+}
+
+.lineage-tree-connector {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lineage-node-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineage-node-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.lineage-current-marker {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--warning-500);
+  background: rgba(245, 158, 11, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Lineage Groups */
+.lineage-group {
+  margin-bottom: 12px;
+}
+
+.lineage-group-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Lineage View Items */
+.lineage-view {
+  background: var(--bg-tertiary);
+  border-left: 2px solid var(--primary-400);
+}
+
+.lineage-view-type {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+/* Operator Badges */
+.lineage-op-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.op-purple, .op-SEG {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
+.op-blue, .op-CON {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.op-green, .op-ALT {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.op-orange, .op-SYN {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.op-gray, .op-INS, .op-DIRECT {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.op-given, .op-emerald, .op-GIVEN {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+/* Lineage Actions */
+.lineage-actions {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.btn-lineage-graph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-lineage-graph:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+}
+
+.btn-lineage-graph i {
+  font-size: 16px;
+}
+
+/* Provenance Sections */
+.provenance-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.provenance-section h4 i {
+  font-size: 14px;
+}
+
+.provenance-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.provenance-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.provenance-field i {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.provenance-field .provenance-label {
+  color: var(--text-muted);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.provenance-field .provenance-value {
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.provenance-field .provenance-value.hash {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.provenance-field .provenance-value.clickable {
+  color: var(--primary-500);
+  cursor: pointer;
+}
+
+.provenance-field .provenance-value.clickable:hover {
+  text-decoration: underline;
+}
+
+.provenance-field .provenance-value.status-readonly {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--given-color);
+}
+
+.provenance-field .provenance-value .op-badge {
+  margin-right: 6px;
+}
+
+.provenance-immutability {
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* Epistemic Status */
+.status-preliminary {
+  color: var(--text-muted);
+}
+
+.status-reviewed {
+  color: var(--success-500);
+}
+
+.status-contested {
+  color: var(--warning-500);
+}
+
+.status-superseded {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Activity Section */
+.activity-section {
+  min-height: 150px;
+}
+
+.activity-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.activity-loading i {
+  font-size: 16px;
+}
+
+.activity-empty,
+.activity-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.activity-empty i,
+.activity-error i {
+  font-size: 24px;
+  opacity: 0.5;
+}
+
+.activity-error {
+  color: var(--danger-500);
+}
+
+/* Activity Timeline */
+.activity-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.activity-icon i {
+  font-size: 14px;
+}
+
+.activity-icon.activity-create {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.activity-icon.activity-update {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.activity-icon.activity-delete {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.activity-icon.activity-filter {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
+.activity-icon.activity-link {
+  background: rgba(236, 72, 153, 0.2);
+  color: #ec4899;
+}
+
+.activity-icon.activity-transform {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.activity-icon.activity-merge {
+  background: rgba(249, 115, 22, 0.2);
+  color: #f97316;
+}
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.activity-operator {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.activity-description {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.activity-actor {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.activity-actor i {
+  font-size: 12px;
+}
+
+/* ============================================================================
+   LINEAGE GRAPH MODAL
+   ============================================================================ */
+
+.lineage-graph-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lineage-graph-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.lineage-graph-content {
+  position: relative;
+  width: 90vw;
+  max-width: 1200px;
+  height: 80vh;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lineage-graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.lineage-graph-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.lineage-graph-header h3 i {
+  font-size: 20px;
+  color: var(--primary-500);
+}
+
+.lineage-graph-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.lineage-graph-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.lineage-graph-close i {
+  font-size: 20px;
+}
+
+.lineage-graph-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.legend-node {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.legend-node.source {
+  background: #10b981;
+  border-radius: 50%;
+  transform: rotate(45deg);
+}
+
+.legend-node.set {
+  background: #8b5cf6;
+}
+
+.legend-node.view {
+  background: #3b82f6;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+}
+
+.legend-edge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.legend-edge.seg {
+  color: #8b5cf6;
+}
+
+.legend-edge.con {
+  color: #3b82f6;
+}
+
+.lineage-graph-container {
+  flex: 1;
+  background: var(--bg-secondary);
+}
+
+.lineage-graph-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.lineage-graph-controls button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.lineage-graph-controls button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--primary-500);
+}
+
+.lineage-graph-controls button i {
+  font-size: 16px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .entity-detail-tabs {
+    flex-direction: column;
+  }
+
+  .entity-tab {
+    justify-content: flex-start;
+  }
+
+  .lineage-graph-content {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    border-radius: 0;
+  }
+
+  .lineage-graph-legend {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .legend-item {
+    font-size: 10px;
+  }
+}

@@ -255,6 +255,9 @@ class EODataWorkbench {
     // Initialize View Hierarchy Registry
     this._initViewHierarchy();
 
+    // Initialize Lineage Explorer
+    this._initLineageExplorer();
+
     // Load persisted data
     this._loadData();
 
@@ -324,6 +327,32 @@ class EODataWorkbench {
     this.viewRegistry.subscribe?.((eventType, data) => {
       this._handleRegistryEvent(eventType, data);
     });
+  }
+
+  /**
+   * Initialize the Lineage Explorer
+   * Provides upstream/downstream tracing, provenance display, and activity history
+   */
+  _initLineageExplorer() {
+    // Initialize LineageExplorer if available
+    if (typeof window !== 'undefined' && window.EOLineage) {
+      this.lineageExplorer = new window.EOLineage.LineageExplorer(this);
+      this.entityDetailPanel = new window.EOLineage.EntityDetailPanel(this, this.lineageExplorer);
+      this.lineageGraphModal = new window.EOLineage.LineageGraphModal(this);
+
+      // Listen for lineage graph modal requests
+      document.addEventListener('showLineageGraph', (e) => {
+        const { entityId, entityType, graphData } = e.detail;
+        this.lineageGraphModal.show(graphData);
+      });
+
+      console.log('Lineage Explorer initialized');
+    } else {
+      // Fallback - use existing simple detail panel
+      this.lineageExplorer = null;
+      this.entityDetailPanel = null;
+      this.lineageGraphModal = null;
+    }
   }
 
   /**
@@ -1562,10 +1591,16 @@ class EODataWorkbench {
 
   /**
    * Show source detail panel
-   * Displays provenance information and derived sets
+   * Displays lineage, provenance, and activity history
    */
   _showSourceDetail(sourceId) {
-    // Find the source
+    // Use enhanced EntityDetailPanel if available
+    if (this.entityDetailPanel) {
+      this.entityDetailPanel.showSourceDetail(sourceId);
+      return;
+    }
+
+    // Fallback to simple detail panel
     const source = this.sources?.find(s => s.id === sourceId) ||
       Array.from(this._getSourceRegistry().values()).find(s => s.id === sourceId);
 
@@ -1652,6 +1687,21 @@ class EODataWorkbench {
 
     // Show detail panel
     document.getElementById('detail-panel')?.classList.add('open');
+  }
+
+  /**
+   * Show set detail panel
+   * Displays lineage, provenance, and activity history
+   */
+  _showSetDetail(setId) {
+    // Use enhanced EntityDetailPanel if available
+    if (this.entityDetailPanel) {
+      this.entityDetailPanel.showSetDetail(setId);
+      return;
+    }
+
+    // Fallback - just select the set
+    this._selectSet(setId);
   }
 
   /**
@@ -7195,6 +7245,11 @@ class EODataWorkbench {
     if (!menu) return;
 
     menu.innerHTML = `
+      <div class="context-menu-item" data-action="details">
+        <i class="ph ph-info"></i>
+        <span>View Details</span>
+      </div>
+      <div class="context-menu-divider"></div>
       <div class="context-menu-item" data-action="rename">
         <i class="ph ph-pencil"></i>
         <span>Rename</span>
@@ -7235,7 +7290,22 @@ class EODataWorkbench {
     menu.querySelectorAll('.context-menu-item').forEach(item => {
       item.addEventListener('click', () => {
         menu.classList.remove('active');
-        // Handle set actions
+        const action = item.dataset.action;
+
+        switch (action) {
+          case 'details':
+            this._showSetDetail(setId);
+            break;
+          case 'rename':
+            this._renameSet(setId);
+            break;
+          case 'duplicate':
+            this._duplicateSet(setId);
+            break;
+          case 'delete':
+            this._deleteSet(setId);
+            break;
+        }
       });
     });
   }
