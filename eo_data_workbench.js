@@ -255,49 +255,67 @@ class EODataWorkbench {
   init(eoApp = null) {
     this.eoApp = eoApp;
 
-    // Initialize View Hierarchy Registry
-    this._initViewHierarchy();
-
-    // Load persisted data
-    this._loadData();
-
-    // If no workspaces exist, create a default one
-    if (this.viewRegistry.getAllWorkspaces().length === 0) {
-      this._createDefaultWorkspace();
-    }
-
-    // If no sets exist, create a default one
-    if (this.sets.length === 0) {
-      this._createDefaultSet();
-    }
-
-    // Set current set and view
-    if (!this.currentSetId && this.sets.length > 0) {
-      this.currentSetId = this.sets[0].id;
-      this.currentViewId = this.sets[0].views[0]?.id;
-    }
-
-    // Bind elements
+    // Bind elements first (needed for skeleton)
     this._bindElements();
 
-    // Attach event listeners
-    this._attachEventListeners();
+    // Show loading skeleton IMMEDIATELY before any processing
+    this._showLoadingSkeleton();
 
-    // Render initial UI immediately (critical path)
-    this._renderSidebar();
-    this._renderView();
+    // Defer ALL heavy work to let the skeleton paint first
+    setTimeout(() => {
+      this._initViewHierarchy();
+      this._loadData();
 
-    // Defer non-critical processing to after first paint
-    requestAnimationFrame(() => {
-      // Sync legacy sets with view registry (deferred - not needed for display)
-      this._syncSetsToRegistry();
+      if (this.viewRegistry.getAllWorkspaces().length === 0) {
+        this._createDefaultWorkspace();
+      }
 
-      // Update status (deferred)
-      this._updateStatus();
-    });
+      if (this.sets.length === 0) {
+        this._createDefaultSet();
+      }
 
-    console.log('EO Data Workbench initialized with compliant view hierarchy');
+      if (!this.currentSetId && this.sets.length > 0) {
+        this.currentSetId = this.sets[0].id;
+        this.currentViewId = this.sets[0].views[0]?.id;
+      }
+
+      this._attachEventListeners();
+
+      // Render after another frame to ensure skeleton is visible
+      requestAnimationFrame(() => {
+        this._renderSidebar();
+        this._renderView();
+
+        // Defer non-critical work
+        setTimeout(() => {
+          this._syncSetsToRegistry();
+          this._updateStatus();
+        }, 50);
+      });
+    }, 0);
+
     return this;
+  }
+
+  /**
+   * Show loading skeleton immediately while data loads
+   */
+  _showLoadingSkeleton() {
+    if (this.elements.contentArea) {
+      this.elements.contentArea.innerHTML = `
+        <div class="loading-skeleton" style="padding: 20px; animation: fadeIn 0.15s ease-out;">
+          <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <div style="width: 80px; height: 28px; background: var(--bg-tertiary, #e8e8e8); border-radius: 4px;"></div>
+            <div style="width: 120px; height: 28px; background: var(--bg-tertiary, #e8e8e8); border-radius: 4px;"></div>
+          </div>
+          <div style="border: 1px solid var(--border-primary, #ddd); border-radius: 6px; overflow: hidden;">
+            <div style="display: flex; background: var(--bg-secondary, #f5f5f5); border-bottom: 1px solid var(--border-primary, #ddd);">
+              ${[1,2,3,4].map(() => '<div style="flex:1; padding:10px;"><div style="height:14px; background:var(--bg-tertiary,#e0e0e0); border-radius:3px;"></div></div>').join('')}
+            </div>
+            ${[1,2,3,4,5].map(() => '<div style="display:flex; border-bottom:1px solid var(--border-primary,#eee);">' + [1,2,3,4].map(() => '<div style="flex:1; padding:10px;"><div style="height:12px; background:var(--bg-tertiary,#f0f0f0); border-radius:3px; width:' + (50 + Math.random()*40) + '%;"></div></div>').join('') + '</div>').join('')}
+          </div>
+        </div>`;
+    }
   }
 
   /**
