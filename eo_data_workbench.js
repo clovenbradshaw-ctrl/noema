@@ -502,11 +502,6 @@ class EODataWorkbench {
       });
     });
 
-    // Add record button
-    document.getElementById('btn-add-record')?.addEventListener('click', () => {
-      this.addRecord();
-    });
-
     // New set button
     document.getElementById('btn-new-set')?.addEventListener('click', () => {
       this._showNewSetModal();
