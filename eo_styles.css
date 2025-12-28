@@ -5732,8 +5732,8 @@ a:focus-visible,
   background: var(--meant-color);
 }
 
-/* Snapshot button styling */
-#btn-snapshot i {
+/* Export button styling */
+#btn-export i {
   color: var(--warning-500);
 }
 

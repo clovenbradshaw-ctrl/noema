@@ -8,7 +8,7 @@
  *   2. Sets - Typed data collections with schema
  *   3. Lenses - View types (Grid, Cards, Kanban, Timeline, Calendar, Graph)
  *   4. Focuses - Filtered/restricted views
- *   5. Snapshots - Immutable frozen captures
+ *   5. Exports - Immutable frozen captures (downloaded and recorded)
  *
  * Compliance:
  *   - Rule 1: All views are explicitly MEANT events (interpretations)
@@ -476,10 +476,10 @@ class FocusConfig {
 }
 
 // ============================================================================
-// Level 5: Snapshot (Immutable Capture)
+// Level 5: Export (Immutable Capture - Downloaded and Recorded)
 // ============================================================================
 
-class SnapshotConfig {
+class ExportConfig {
   /**
    * @param {Object} options
    * @param {string} options.id - Unique identifier
@@ -492,10 +492,10 @@ class SnapshotConfig {
   constructor(options) {
     // Rule 1: Explicitly typed as 'meant'
     this.type = 'meant';
-    this.viewType = 'snapshot';
+    this.viewType = 'export';
 
-    this.id = options.id || generateViewId('snap');
-    this.name = options.name || 'Snapshot';
+    this.id = options.id || generateViewId('exp');
+    this.name = options.name || 'Export';
     this.sourceViewId = options.sourceViewId || null;
 
     // Captured state
@@ -535,12 +535,12 @@ class SnapshotConfig {
 
     // Must have source view
     if (!this.sourceViewId) {
-      errors.push(new ViewHierarchyError(7, 'Snapshot must have source view'));
+      errors.push(new ViewHierarchyError(7, 'Export must have source view'));
     }
 
     // Must have captured data
     if (!this.viewConfig) {
-      errors.push(new ViewHierarchyError(7, 'Snapshot must capture view configuration'));
+      errors.push(new ViewHierarchyError(7, 'Export must capture view configuration'));
     }
 
     return { valid: errors.length === 0, errors };
@@ -583,7 +583,7 @@ class ViewRegistry {
     this.sets = new Map();
     this.lenses = new Map();
     this.focuses = new Map();
-    this.snapshots = new Map();
+    this.exports = new Map();
 
     // Active selections
     this.activeWorkspaceId = null;
@@ -828,13 +828,13 @@ class ViewRegistry {
   }
 
   // --------------------------------------------------------------------------
-  // Snapshot Operations
+  // Export Operations (Downloads and Records)
   // --------------------------------------------------------------------------
 
   /**
-   * Create an immutable snapshot of a view
+   * Create an immutable export of a view (downloads and records)
    */
-  createSnapshot(config, sourceViewId, actor = null) {
+  createExport(config, sourceViewId, actor = null) {
     // Find the source view (can be lens or focus)
     let sourceView = this.lenses.get(sourceViewId) || this.focuses.get(sourceViewId);
     if (!sourceView) {
@@ -845,7 +845,7 @@ class ViewRegistry {
     const set = this._getSetForView(sourceView);
     const recordIds = set ? set.records.map(r => r.id) : [];
 
-    const snapshot = new SnapshotConfig({
+    const exportRecord = new ExportConfig({
       ...config,
       sourceViewId,
       capturedBy: actor,
@@ -856,27 +856,27 @@ class ViewRegistry {
       }
     });
 
-    const validation = snapshot.validate();
+    const validation = exportRecord.validate();
     if (!validation.valid) {
       throw validation.errors[0];
     }
 
-    this.snapshots.set(snapshot.id, snapshot);
+    this.exports.set(exportRecord.id, exportRecord);
 
-    this._recordViewEvent('snapshot_created', snapshot);
-    this._notify('snapshot_created', snapshot);
+    this._recordViewEvent('export_created', exportRecord);
+    this._notify('export_created', exportRecord);
 
-    return snapshot;
+    return exportRecord;
   }
 
-  getSnapshot(snapshotId) {
-    return this.snapshots.get(snapshotId);
+  getExport(exportId) {
+    return this.exports.get(exportId);
   }
 
-  getSnapshotsForView(sourceViewId) {
-    return Array.from(this.snapshots.values())
-      .filter(s => s.sourceViewId === sourceViewId &&
-                   !s.supersededBy);
+  getExportsForView(sourceViewId) {
+    return Array.from(this.exports.values())
+      .filter(e => e.sourceViewId === sourceViewId &&
+                   !e.supersededBy);
   }
 
   // --------------------------------------------------------------------------
@@ -955,7 +955,7 @@ class ViewRegistry {
                    this.sets.get(id) ||
                    this.lenses.get(id) ||
                    this.focuses.get(id) ||
-                   this.snapshots.get(id);
+                   this.exports.get(id);
 
       if (!view) return;
 
@@ -1144,7 +1144,7 @@ class ViewRegistry {
       sets: Array.from(this.sets.values()).map(s => s.toJSON()),
       lenses: Array.from(this.lenses.values()).map(l => l.toJSON()),
       focuses: Array.from(this.focuses.values()).map(f => f.toJSON()),
-      snapshots: Array.from(this.snapshots.values()).map(s => s.toJSON()),
+      exports: Array.from(this.exports.values()).map(e => e.toJSON()),
       active: {
         workspaceId: this.activeWorkspaceId,
         setId: this.activeSetId,
@@ -1185,10 +1185,10 @@ class ViewRegistry {
       }
     }
 
-    // Import snapshots
-    if (data.snapshots) {
-      for (const s of data.snapshots) {
-        this.snapshots.set(s.id, new SnapshotConfig(s));
+    // Import exports
+    if (data.exports) {
+      for (const e of data.exports) {
+        this.exports.set(e.id, new ExportConfig(e));
       }
     }
 
@@ -1210,7 +1210,7 @@ class ViewRegistry {
       sets: this.sets.size,
       lenses: this.lenses.size,
       focuses: this.focuses.size,
-      snapshots: this.snapshots.size,
+      exports: this.exports.size,
       active: {
         workspaceId: this.activeWorkspaceId,
         setId: this.activeSetId,
@@ -1251,7 +1251,7 @@ if (typeof module !== 'undefined' && module.exports) {
     SetConfig,
     LensConfig,
     FocusConfig,
-    SnapshotConfig,
+    ExportConfig,
     ViewRegistry,
     getViewRegistry,
     initViewRegistry
@@ -1268,7 +1268,7 @@ if (typeof window !== 'undefined') {
   window.SetConfig = SetConfig;
   window.LensConfig = LensConfig;
   window.FocusConfig = FocusConfig;
-  window.SnapshotConfig = SnapshotConfig;
+  window.ExportConfig = ExportConfig;
   window.ViewRegistry = ViewRegistry;
   window.getViewRegistry = getViewRegistry;
   window.initViewRegistry = initViewRegistry;

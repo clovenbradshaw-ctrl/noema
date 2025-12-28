@@ -775,9 +775,8 @@ function searchCommands(query) {
     { id: 'new_record', name: 'New Record', desc: 'Create a new record', icon: 'ph-plus', action: 'newRecord' },
     { id: 'new_set', name: 'New Set', desc: 'Create a new data set', icon: 'ph-table-plus', action: 'newSet' },
     { id: 'import', name: 'Import Data', desc: 'Import CSV or JSON file', icon: 'ph-download', action: 'import' },
-    { id: 'export', name: 'Export Data', desc: 'Export current set', icon: 'ph-export', action: 'export' },
     { id: 'filter', name: 'Add Filter', desc: 'Create a focus/filter', icon: 'ph-funnel', action: 'filter' },
-    { id: 'snapshot', name: 'Create Snapshot', desc: 'Capture immutable snapshot', icon: 'ph-camera', action: 'snapshot' },
+    { id: 'createExport', name: 'Create Export', desc: 'Download and record immutable export', icon: 'ph-export', action: 'createExport' },
     { id: 'settings', name: 'Settings', desc: 'Open settings', icon: 'ph-gear', action: 'settings' }
   ];
 
@@ -922,14 +921,11 @@ function executeCommand(action) {
     case 'import':
       showImportModal?.() || document.getElementById('btn-import')?.click();
       break;
-    case 'export':
-      exportAllData();
-      break;
     case 'filter':
       document.getElementById('btn-filter')?.click();
       break;
-    case 'snapshot':
-      document.getElementById('btn-snapshot')?.click();
+    case 'createExport':
+      document.getElementById('btn-export')?.click();
       break;
     case 'settings':
       showSettingsModal();
