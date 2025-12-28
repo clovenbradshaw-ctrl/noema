@@ -7,7 +7,7 @@
  * - Sets: Typed data collections with schema
  * - Lenses: View types (Grid, Cards, Kanban, Timeline, Calendar, Graph)
  * - Focuses: Filtered/restricted views
- * - Snapshots: Immutable frozen captures
+ * - Exports: Immutable frozen captures (downloaded and recorded)
  *
  * EO Integration:
  * - All views are MEANT events (Rule 1: interpretations)
@@ -315,7 +315,7 @@ class EODataWorkbench {
         sets: new Map(),
         lenses: new Map(),
         focuses: new Map(),
-        snapshots: new Map(),
+        exports: new Map(),
         activeWorkspaceId: null,
         getAllWorkspaces: () => [],
         getAllSets: () => [],
@@ -426,8 +426,8 @@ class EODataWorkbench {
         this.currentFocusId = data?.id;
         this._renderView();
         break;
-      case 'snapshot_created':
-        this._showNotification('Snapshot created: ' + data.name);
+      case 'export_created':
+        this._showNotification('Export created: ' + data.name);
         break;
     }
   }
@@ -559,8 +559,8 @@ class EODataWorkbench {
       }
     });
 
-    // Snapshot button (Rule 9)
-    document.getElementById('btn-snapshot')?.addEventListener('click', () => this._showNewSnapshotModal());
+    // Export button (Rule 9: downloads and records)
+    document.getElementById('btn-export')?.addEventListener('click', () => this._showNewExportModal());
 
     // New workspace button
     document.getElementById('btn-new-workspace')?.addEventListener('click', () => this._showNewWorkspaceModal());
@@ -622,9 +622,9 @@ class EODataWorkbench {
         showImportModal();
       }
     });
-    document.getElementById('btn-snapshot-dropdown')?.addEventListener('click', () => {
+    document.getElementById('btn-export-dropdown')?.addEventListener('click', () => {
       this._hideToolsDropdown();
-      this._showNewSnapshotModal();
+      this._showNewExportModal();
     });
 
     // Close dropdown when clicking outside
@@ -9178,19 +9178,19 @@ class EODataWorkbench {
   }
 
   /**
-   * Show modal to create a snapshot
-   * Rule 9: Snapshots are immutable captures that can be superseded
+   * Show modal to create an export
+   * Rule 9: Exports are immutable captures that can be superseded (downloads and records)
    */
-  _showNewSnapshotModal() {
-    this._showModal('Create Snapshot', `
+  _showNewExportModal() {
+    this._showModal('Create Export', `
       <div class="form-group">
-        <label class="form-label">Snapshot Name</label>
-        <input type="text" class="form-input" id="new-snapshot-name"
+        <label class="form-label">Export Name</label>
+        <input type="text" class="form-input" id="new-export-name"
                placeholder="e.g., Q1 Review - ${new Date().toLocaleDateString()}" autofocus>
       </div>
       <div class="form-group">
         <label class="form-label">Purpose</label>
-        <select class="form-select" id="snapshot-purpose">
+        <select class="form-select" id="export-purpose">
           <option value="review">Review/Audit</option>
           <option value="backup">Backup</option>
           <option value="milestone">Milestone</option>
@@ -9199,36 +9199,36 @@ class EODataWorkbench {
       </div>
       <div class="form-group">
         <label class="form-label">Notes</label>
-        <textarea class="form-input" id="snapshot-notes" rows="2" placeholder="Optional notes about this snapshot..."></textarea>
+        <textarea class="form-input" id="export-notes" rows="2" placeholder="Optional notes about this export..."></textarea>
       </div>
       <div class="compliance-note">
-        <i class="ph ph-camera"></i>
-        <span><strong>Rule 9:</strong> Snapshots are immutable. They capture the current state and can be superseded but never modified.</span>
+        <i class="ph ph-export"></i>
+        <span><strong>Rule 9:</strong> Exports are immutable. They download the current state and record it. Can be superseded but never modified.</span>
       </div>
     `, () => {
-      const name = document.getElementById('new-snapshot-name')?.value ||
-                   `Snapshot ${new Date().toLocaleDateString()}`;
-      const purpose = document.getElementById('snapshot-purpose')?.value || 'review';
-      const notes = document.getElementById('snapshot-notes')?.value || '';
+      const name = document.getElementById('new-export-name')?.value ||
+                   `Export ${new Date().toLocaleDateString()}`;
+      const purpose = document.getElementById('export-purpose')?.value || 'review';
+      const notes = document.getElementById('export-notes')?.value || '';
 
       try {
         const sourceViewId = this.currentFocusId || this.currentLensId || this.currentViewId;
-        const snapshot = this.viewRegistry?.createSnapshot?.({
+        const exportRecord = this.viewRegistry?.createExport?.({
           name,
           annotations: { purpose, notes }
         }, sourceViewId, 'current_user');
 
-        if (snapshot) {
-          this._showNotification(`Snapshot "${name}" created successfully`);
-          alert(`Snapshot created!\n\nID: ${snapshot.id}\nCaptured at: ${snapshot.capturedAt}`);
+        if (exportRecord) {
+          this._showNotification(`Export "${name}" created successfully`);
+          alert(`Export created!\n\nID: ${exportRecord.id}\nCaptured at: ${exportRecord.capturedAt}`);
         }
       } catch (e) {
-        alert('Failed to create snapshot: ' + e.message);
+        alert('Failed to create export: ' + e.message);
       }
     });
 
     setTimeout(() => {
-      document.getElementById('new-snapshot-name')?.focus();
+      document.getElementById('new-export-name')?.focus();
     }, 100);
   }
 
@@ -9244,9 +9244,9 @@ class EODataWorkbench {
         <i class="ph ph-pencil"></i>
         <span>Rename</span>
       </div>
-      <div class="context-menu-item" data-action="snapshot">
-        <i class="ph ph-camera"></i>
-        <span>Create Snapshot</span>
+      <div class="context-menu-item" data-action="export">
+        <i class="ph ph-export"></i>
+        <span>Create Export</span>
       </div>
       <div class="context-menu-item" data-action="lineage">
         <i class="ph ph-tree-structure"></i>
@@ -9269,8 +9269,8 @@ class EODataWorkbench {
         const action = item.dataset.action;
 
         switch (action) {
-          case 'snapshot':
-            this._showNewSnapshotModal();
+          case 'export':
+            this._showNewExportModal();
             break;
           case 'lineage':
             this._showViewLineage(workspaceId);
@@ -10861,10 +10861,10 @@ class EODataWorkbench {
       this._toggleFilterPanel();
     }
 
-    // Cmd/Ctrl + S for snapshot
+    // Cmd/Ctrl + S for export
     if ((e.metaKey || e.ctrlKey) && e.key === 's' && !e.target.closest('input, textarea')) {
       e.preventDefault();
-      this._showNewSnapshotModal();
+      this._showNewExportModal();
     }
 
     // Cmd/Ctrl + / to focus search
