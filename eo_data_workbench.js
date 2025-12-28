@@ -12596,6 +12596,14 @@ class EODataWorkbench {
   _showSyncPanel() {
     this._initSyncAPI();
 
+    // Use the new sync wizard for a step-by-step experience
+    if (typeof EOSyncWizard !== 'undefined' && this.syncAPI) {
+      const wizard = new EOSyncWizard(this.syncAPI);
+      wizard.show();
+      return;
+    }
+
+    // Fallback to old panel if wizard not available
     const panel = document.getElementById('sync-panel');
     if (panel) {
       panel.style.display = 'flex';
