@@ -5334,42 +5334,137 @@ class EODataWorkbench {
   }
 
   _renderJsonEditor(cell, field, value) {
+    // Parse value into object for table view
+    let data = value;
+    if (typeof value === 'string' && value.trim()) {
+      try {
+        data = JSON.parse(value);
+      } catch (e) {
+        data = value;
+      }
+    }
+
+    // Create wrapper with toggle
+    const wrapper = document.createElement('div');
+    wrapper.className = 'json-editor-wrapper json-editor-table-mode';
+
+    // Create toggle header
+    const header = document.createElement('div');
+    header.className = 'json-editor-header';
+
+    const toggleGroup = document.createElement('div');
+    toggleGroup.className = 'json-editor-toggle-group';
+
+    const tableBtn = document.createElement('button');
+    tableBtn.className = 'json-editor-toggle active';
+    tableBtn.innerHTML = '<i class="ph ph-table"></i> Table';
+    tableBtn.type = 'button';
+
+    const rawBtn = document.createElement('button');
+    rawBtn.className = 'json-editor-toggle';
+    rawBtn.innerHTML = '<i class="ph ph-brackets-curly"></i> JSON';
+    rawBtn.type = 'button';
+
+    toggleGroup.appendChild(tableBtn);
+    toggleGroup.appendChild(rawBtn);
+    header.appendChild(toggleGroup);
+    wrapper.appendChild(header);
+
+    // Create content container
+    const content = document.createElement('div');
+    content.className = 'json-editor-content';
+
+    // Get key suggestions from all records with same field
+    const keySuggestions = this._getJsonKeySuggestions(field.id);
+
+    // Render table view by default
+    const tableView = this._createJsonTableView(data, keySuggestions);
+    content.appendChild(tableView);
+
+    // Create raw JSON view (hidden by default)
+    const rawView = document.createElement('div');
+    rawView.className = 'json-raw-view hidden';
+
     const textarea = document.createElement('textarea');
     textarea.className = 'cell-input cell-json-editor';
-
-    // Convert value to JSON string for editing
     let jsonString = '';
-    if (value !== null && value !== undefined) {
-      if (typeof value === 'object') {
+    if (data !== null && data !== undefined) {
+      if (typeof data === 'object') {
         try {
-          jsonString = JSON.stringify(value, null, 2);
+          jsonString = JSON.stringify(data, null, 2);
         } catch (e) {
-          jsonString = String(value);
+          jsonString = String(data);
         }
       } else {
-        jsonString = String(value);
+        jsonString = String(data);
       }
     }
     textarea.value = jsonString;
-
-    // Add validation indicator
-    const wrapper = document.createElement('div');
-    wrapper.className = 'json-editor-wrapper';
 
     const validationIndicator = document.createElement('span');
     validationIndicator.className = 'json-validation-indicator valid';
     validationIndicator.innerHTML = '<i class="ph ph-check-circle"></i>';
 
-    wrapper.appendChild(textarea);
-    wrapper.appendChild(validationIndicator);
+    rawView.appendChild(textarea);
+    rawView.appendChild(validationIndicator);
+    content.appendChild(rawView);
+
+    wrapper.appendChild(content);
+
+    // Add actions footer
+    const footer = document.createElement('div');
+    footer.className = 'json-editor-footer';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'json-editor-save';
+    saveBtn.innerHTML = '<i class="ph ph-check"></i> Save';
+    saveBtn.type = 'button';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'json-editor-cancel';
+    cancelBtn.innerHTML = 'Cancel';
+    cancelBtn.type = 'button';
+
+    footer.appendChild(cancelBtn);
+    footer.appendChild(saveBtn);
+    wrapper.appendChild(footer);
 
     cell.innerHTML = '';
     cell.appendChild(wrapper);
 
-    textarea.focus();
-    textarea.select();
+    // Toggle handlers
+    tableBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tableBtn.classList.add('active');
+      rawBtn.classList.remove('active');
+      wrapper.classList.add('json-editor-table-mode');
+      wrapper.classList.remove('json-editor-raw-mode');
+      tableView.classList.remove('hidden');
+      rawView.classList.add('hidden');
+      // Sync raw JSON to table
+      try {
+        const rawData = JSON.parse(textarea.value.trim() || '{}');
+        this._updateJsonTableView(tableView, rawData, keySuggestions);
+      } catch (e) {
+        // Invalid JSON, keep current table state
+      }
+    });
 
-    // Validate JSON on input
+    rawBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      rawBtn.classList.add('active');
+      tableBtn.classList.remove('active');
+      wrapper.classList.add('json-editor-raw-mode');
+      wrapper.classList.remove('json-editor-table-mode');
+      rawView.classList.remove('hidden');
+      tableView.classList.add('hidden');
+      // Sync table to raw JSON
+      const tableData = this._getJsonFromTableView(tableView);
+      textarea.value = JSON.stringify(tableData, null, 2);
+      textarea.focus();
+    });
+
+    // Validation for raw mode
     const validateJson = () => {
       const val = textarea.value.trim();
       if (!val) {
@@ -5388,27 +5483,239 @@ class EODataWorkbench {
         return false;
       }
     };
-
     textarea.addEventListener('input', validateJson);
 
-    textarea.addEventListener('blur', () => {
-      // Only save if valid JSON
-      if (validateJson()) {
+    // Save handler
+    saveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (wrapper.classList.contains('json-editor-raw-mode')) {
+        if (validateJson()) {
+          this._endJsonEdit();
+        }
+      } else {
+        // Get data from table view
+        const tableData = this._getJsonFromTableView(tableView);
+        textarea.value = JSON.stringify(tableData);
         this._endJsonEdit();
       }
     });
 
-    textarea.addEventListener('keydown', (e) => {
+    // Cancel handler
+    cancelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._cancelCellEdit();
+    });
+
+    // Keyboard shortcuts
+    wrapper.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this._cancelCellEdit();
       }
-      // Cmd/Ctrl+Enter to save
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        if (validateJson()) {
-          this._endJsonEdit();
+        e.preventDefault();
+        saveBtn.click();
+      }
+    });
+
+    // Focus first input in table view
+    const firstInput = tableView.querySelector('input');
+    if (firstInput) {
+      firstInput.focus();
+    }
+  }
+
+  /**
+   * Get all unique keys used in this JSON field across all records
+   */
+  _getJsonKeySuggestions(fieldId) {
+    const set = this.sets.find(s => s.id === this.currentSetId);
+    if (!set) return [];
+
+    const keys = new Set();
+    set.records.forEach(record => {
+      let value = record.values?.[fieldId];
+      if (typeof value === 'string') {
+        try {
+          value = JSON.parse(value);
+        } catch (e) {
+          return;
+        }
+      }
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        Object.keys(value).forEach(k => keys.add(k));
+      }
+    });
+    return Array.from(keys).sort();
+  }
+
+  /**
+   * Create editable table view for JSON object
+   */
+  _createJsonTableView(data, keySuggestions = []) {
+    const container = document.createElement('div');
+    container.className = 'json-table-editor';
+
+    // Create datalist for autocomplete
+    const datalistId = 'json-keys-' + Date.now();
+    const datalist = document.createElement('datalist');
+    datalist.id = datalistId;
+    keySuggestions.forEach(key => {
+      const option = document.createElement('option');
+      option.value = key;
+      datalist.appendChild(option);
+    });
+    container.appendChild(datalist);
+
+    // Create table
+    const table = document.createElement('div');
+    table.className = 'json-table-rows';
+
+    // Ensure data is an object
+    let objData = {};
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      objData = data;
+    } else if (data !== null && data !== undefined && typeof data !== 'object') {
+      // Primitive value - show as single row
+      objData = { value: data };
+    }
+
+    // Add rows for each key-value pair
+    Object.entries(objData).forEach(([key, value]) => {
+      const row = this._createJsonTableRow(key, value, datalistId);
+      table.appendChild(row);
+    });
+
+    container.appendChild(table);
+
+    // Add row button
+    const addRow = document.createElement('button');
+    addRow.className = 'json-add-row';
+    addRow.type = 'button';
+    addRow.innerHTML = '<i class="ph ph-plus"></i> Add field';
+    addRow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = this._createJsonTableRow('', '', datalistId);
+      table.appendChild(row);
+      const keyInput = row.querySelector('.json-row-key');
+      if (keyInput) keyInput.focus();
+    });
+    container.appendChild(addRow);
+
+    return container;
+  }
+
+  /**
+   * Create a single key-value row for the JSON table editor
+   */
+  _createJsonTableRow(key, value, datalistId) {
+    const row = document.createElement('div');
+    row.className = 'json-table-row';
+
+    // Key input with autocomplete
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'json-row-key';
+    keyInput.placeholder = 'key';
+    keyInput.value = key;
+    keyInput.setAttribute('list', datalistId);
+
+    // Value input
+    const valueInput = document.createElement('input');
+    valueInput.type = 'text';
+    valueInput.className = 'json-row-value';
+    valueInput.placeholder = 'value';
+    // Format value for display
+    if (value !== null && value !== undefined) {
+      if (typeof value === 'object') {
+        valueInput.value = JSON.stringify(value);
+      } else {
+        valueInput.value = String(value);
+      }
+    }
+
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'json-row-delete';
+    deleteBtn.innerHTML = '<i class="ph ph-trash"></i>';
+    deleteBtn.title = 'Remove field';
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      row.remove();
+    });
+
+    row.appendChild(keyInput);
+    row.appendChild(valueInput);
+    row.appendChild(deleteBtn);
+
+    return row;
+  }
+
+  /**
+   * Update JSON table view with new data
+   */
+  _updateJsonTableView(container, data, keySuggestions) {
+    const table = container.querySelector('.json-table-rows');
+    if (!table) return;
+
+    // Get datalist ID
+    const datalist = container.querySelector('datalist');
+    const datalistId = datalist?.id || 'json-keys-' + Date.now();
+
+    // Clear existing rows
+    table.innerHTML = '';
+
+    // Add rows for new data
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      Object.entries(data).forEach(([key, value]) => {
+        const row = this._createJsonTableRow(key, value, datalistId);
+        table.appendChild(row);
+      });
+    }
+  }
+
+  /**
+   * Extract JSON object from table view
+   */
+  _getJsonFromTableView(container) {
+    const result = {};
+    const rows = container.querySelectorAll('.json-table-row');
+
+    rows.forEach(row => {
+      const keyInput = row.querySelector('.json-row-key');
+      const valueInput = row.querySelector('.json-row-value');
+
+      if (keyInput && valueInput) {
+        const key = keyInput.value.trim();
+        let value = valueInput.value.trim();
+
+        if (key) {
+          // Try to parse value as JSON (for numbers, booleans, objects, arrays)
+          if (value === '') {
+            result[key] = '';
+          } else if (value === 'true') {
+            result[key] = true;
+          } else if (value === 'false') {
+            result[key] = false;
+          } else if (value === 'null') {
+            result[key] = null;
+          } else if (!isNaN(value) && value !== '') {
+            result[key] = Number(value);
+          } else if ((value.startsWith('{') && value.endsWith('}')) ||
+                     (value.startsWith('[') && value.endsWith(']'))) {
+            try {
+              result[key] = JSON.parse(value);
+            } catch (e) {
+              result[key] = value;
+            }
+          } else {
+            result[key] = value;
+          }
         }
       }
     });
+
+    return result;
   }
 
   _endJsonEdit() {
@@ -9150,6 +9457,8 @@ class EODataWorkbench {
 
         ${this._renderProvenanceSection(record, set)}
 
+        ${this._renderHistorySection(record)}
+
         <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-primary);">
           <div style="font-size: 11px; color: var(--text-muted);">
             <i class="ph ph-clock"></i> Created: ${new Date(record.createdAt).toLocaleString()}<br>
@@ -11590,7 +11899,7 @@ class EODataWorkbench {
       <div class="provenance-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-primary);">
         <div class="provenance-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
           <span class="prov-indicator prov-${status}" style="font-size: 14px;">${indicator}</span>
-          <span style="font-weight: 500; font-size: 13px;">Provenance</span>
+          <span style="font-weight: 500; font-size: 13px;">Interpretation</span>
           <span style="font-size: 11px; color: var(--text-muted);">
             ${status === 'full' ? '(complete)' : status === 'partial' ? '(partial)' : '(none)'}
           </span>
@@ -11598,9 +11907,10 @@ class EODataWorkbench {
         <div class="provenance-grid" style="display: grid; gap: 8px;">
           ${elements.map(el => {
             const value = recordProv[el.key] ?? datasetProv[el.key] ?? null;
-            const inherited = !recordProv[el.key] && datasetProv[el.key];
-            const isRef = value && typeof value === 'object' && '$ref' in value;
+            const inherited = !this._hasProvenanceValue(recordProv[el.key]) && this._hasProvenanceValue(datasetProv[el.key]);
+            const isRef = this._isProvenanceRef(value);
             const displayValue = this._formatProvenanceValue(value);
+            const hasValue = this._hasProvenanceValue(value);
 
             return `
               <div class="provenance-field" data-prov-key="${el.key}" data-record-id="${record.id}"
@@ -11615,7 +11925,7 @@ class EODataWorkbench {
                        data-prov-key="${el.key}"
                        data-record-id="${record.id}"
                        title="${el.hint}"
-                       style="font-size: 12px; color: ${value ? 'var(--text-primary)' : 'var(--text-muted)'}; cursor: pointer;">
+                       style="font-size: 12px; color: ${hasValue ? 'var(--text-primary)' : 'var(--text-muted)'}; cursor: pointer;">
                     ${displayValue || '<span style="opacity: 0.5;">Click to add</span>'}
                   </div>
                 </div>
@@ -11628,6 +11938,34 @@ class EODataWorkbench {
   }
 
   /**
+   * Check if a provenance value has actual content (handles nested format)
+   */
+  _hasProvenanceValue(value) {
+    if (value === null || value === undefined) {
+      return false;
+    }
+    // Extract from nested format
+    if (typeof value === 'object' && 'value' in value && !('$ref' in value)) {
+      return value.value !== null && value.value !== undefined;
+    }
+    return true;
+  }
+
+  /**
+   * Check if provenance value is a record reference (handles nested format)
+   */
+  _isProvenanceRef(value) {
+    if (!value) return false;
+    // Check nested format first
+    if (typeof value === 'object' && 'value' in value && !('$ref' in value)) {
+      const actualValue = value.value;
+      return actualValue && typeof actualValue === 'object' && '$ref' in actualValue;
+    }
+    // Direct reference check
+    return typeof value === 'object' && '$ref' in value;
+  }
+
+  /**
    * Format provenance value for display
    */
   _formatProvenanceValue(value) {
@@ -11635,16 +11973,32 @@ class EODataWorkbench {
       return '';
     }
 
+    // Extract actual value from nested format (handles both old flat and new nested format)
+    // Nested format: { value: "actual_value", uploadContext: {...}, ... }
+    let actualValue = value;
+    if (typeof value === 'object' && 'value' in value && !('$ref' in value)) {
+      actualValue = value.value;
+    }
+
+    // Use getProvenanceValue helper if available for consistent extraction
+    if (typeof getProvenanceValue === 'function') {
+      actualValue = getProvenanceValue(value);
+    }
+
+    if (actualValue === null || actualValue === undefined) {
+      return '';
+    }
+
     // Record reference
-    if (typeof value === 'object' && '$ref' in value) {
-      const refId = value.$ref;
+    if (typeof actualValue === 'object' && '$ref' in actualValue) {
+      const refId = actualValue.$ref;
       // Try to find the referenced record's name
       const refRecord = this._findRecordById(refId);
       const refName = refRecord ? this._getRecordPrimaryValue(refRecord) : refId.substring(0, 8);
       return `<span class="prov-ref"><i class="ph ph-arrow-right"></i> ${this._escapeHtml(refName)}</span>`;
     }
 
-    return this._escapeHtml(String(value));
+    return this._escapeHtml(String(actualValue));
   }
 
   /**
@@ -11666,6 +12020,210 @@ class EODataWorkbench {
     if (!set) return record.id;
     const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
     return record.values[primaryField?.id] || record.id;
+  }
+
+  // --------------------------------------------------------------------------
+  // History Section (Grounding: Lineage + History + Impact)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get history events for a record from the Event Store
+   */
+  _getRecordHistory(recordId) {
+    // Try to get events from the Event Store
+    const eventStore = this.eoApp?.eventStore;
+    if (eventStore && typeof eventStore.getEntityHistory === 'function') {
+      return eventStore.getEntityHistory(recordId);
+    }
+
+    // Fallback: check if global EOEventStore exists
+    if (typeof window !== 'undefined' && window.eoEventStore) {
+      return window.eoEventStore.getEntityHistory(recordId);
+    }
+
+    return [];
+  }
+
+  /**
+   * Render history section for detail panel
+   * Shows: Lineage (where from) → History (what changed) → Impact (what depends)
+   */
+  _renderHistorySection(record) {
+    const history = this._getRecordHistory(record.id);
+    const hasHistory = history.length > 0;
+
+    // Group events by type for display
+    const creationEvents = history.filter(e =>
+      e.payload?.action === 'record_created' ||
+      e.payload?.action === 'import' ||
+      e.payload?.action === 'create'
+    );
+    const modificationEvents = history.filter(e =>
+      e.payload?.action === 'record_updated' ||
+      e.payload?.action === 'field_changed' ||
+      e.payload?.action === 'update'
+    );
+    const otherEvents = history.filter(e =>
+      !creationEvents.includes(e) && !modificationEvents.includes(e)
+    );
+
+    return `
+      <div class="history-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-primary);">
+        <div class="history-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <i class="ph ph-clock-counter-clockwise" style="font-size: 14px; color: var(--text-muted);"></i>
+          <span style="font-weight: 500; font-size: 13px;">History</span>
+          <span style="font-size: 11px; color: var(--text-muted);">
+            ${hasHistory ? `(${history.length} event${history.length !== 1 ? 's' : ''})` : '(no events tracked)'}
+          </span>
+        </div>
+
+        ${hasHistory ? `
+          <div class="history-timeline" style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">
+            ${history.slice().reverse().map(event => this._renderHistoryEvent(event)).join('')}
+          </div>
+        ` : `
+          <div style="font-size: 12px; color: var(--text-muted); padding: 8px 0;">
+            <div style="margin-bottom: 8px;">
+              <i class="ph ph-info" style="margin-right: 4px;"></i>
+              Event tracking not connected. History shows:
+            </div>
+            <ul style="margin: 0; padding-left: 20px; opacity: 0.8;">
+              <li>When records were created/modified</li>
+              <li>Who made changes and why</li>
+              <li>Field-level change details</li>
+            </ul>
+            <div style="margin-top: 12px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+              <div style="font-size: 11px; opacity: 0.7;">Inferred from timestamps:</div>
+              <div style="margin-top: 4px;">
+                <i class="ph ph-plus-circle" style="color: var(--success);"></i>
+                Created ${this._formatRelativeTime(record.createdAt)}
+              </div>
+              ${record.updatedAt !== record.createdAt ? `
+                <div style="margin-top: 2px;">
+                  <i class="ph ph-pencil-simple" style="color: var(--primary);"></i>
+                  Modified ${this._formatRelativeTime(record.updatedAt)}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  /**
+   * Render a single history event
+   */
+  _renderHistoryEvent(event) {
+    const action = event.payload?.action || 'unknown';
+    const timestamp = event.timestamp ? new Date(event.timestamp) : null;
+    const actor = event.actor || 'system';
+
+    // Determine icon and color based on action
+    let icon = 'ph-circle';
+    let color = 'var(--text-muted)';
+    let label = action;
+
+    switch (action) {
+      case 'record_created':
+      case 'create':
+      case 'import':
+        icon = 'ph-plus-circle';
+        color = 'var(--success)';
+        label = 'Created';
+        break;
+      case 'record_updated':
+      case 'field_changed':
+      case 'update':
+        icon = 'ph-pencil-simple';
+        color = 'var(--primary)';
+        label = 'Modified';
+        break;
+      case 'record_deleted':
+      case 'delete':
+        icon = 'ph-trash';
+        color = 'var(--danger)';
+        label = 'Deleted';
+        break;
+      case 'tombstone':
+        icon = 'ph-prohibit';
+        color = 'var(--warning)';
+        label = 'Tombstoned';
+        break;
+      case 'supersession':
+        icon = 'ph-arrows-clockwise';
+        color = 'var(--info)';
+        label = 'Superseded';
+        break;
+    }
+
+    // Extract field change details if available
+    const fieldId = event.payload?.fieldId;
+    const previousValue = event.payload?.previousValue;
+    const newValue = event.payload?.newValue || event.payload?.value;
+    const hasFieldChange = fieldId && (previousValue !== undefined || newValue !== undefined);
+
+    return `
+      <div class="history-event" style="display: flex; gap: 8px; font-size: 12px; padding: 4px 0;">
+        <i class="ph ${icon}" style="color: ${color}; margin-top: 2px; flex-shrink: 0;"></i>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; justify-content: space-between; gap: 8px;">
+            <span style="font-weight: 500;">${label}</span>
+            <span style="color: var(--text-muted); font-size: 11px;">
+              ${timestamp ? this._formatRelativeTime(timestamp) : ''}
+            </span>
+          </div>
+          ${hasFieldChange ? `
+            <div style="color: var(--text-secondary); font-size: 11px; margin-top: 2px;">
+              ${fieldId}: ${previousValue !== undefined ? `"${this._truncate(previousValue, 20)}" → ` : ''}${newValue !== undefined ? `"${this._truncate(newValue, 20)}"` : ''}
+            </div>
+          ` : ''}
+          <div style="color: var(--text-muted); font-size: 10px; margin-top: 2px;">
+            by ${this._formatActor(actor)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Format relative time (e.g., "2 hours ago")
+   */
+  _formatRelativeTime(date) {
+    if (!date) return '';
+    const d = date instanceof Date ? date : new Date(date);
+    const now = new Date();
+    const diff = now - d;
+
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 7) return d.toLocaleDateString();
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'just now';
+  }
+
+  /**
+   * Format actor for display
+   */
+  _formatActor(actor) {
+    if (!actor) return 'unknown';
+    if (actor.startsWith('user:')) return actor.substring(5);
+    if (actor.startsWith('system:')) return actor.substring(7);
+    return actor;
+  }
+
+  /**
+   * Truncate string for display
+   */
+  _truncate(value, maxLen) {
+    if (value === null || value === undefined) return 'null';
+    const str = String(value);
+    return str.length > maxLen ? str.substring(0, maxLen) + '…' : str;
   }
 
   /**
