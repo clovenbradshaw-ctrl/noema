@@ -14,6 +14,9 @@
   <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
   <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
 
+  <!-- SheetJS for Excel export -->
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <link rel="stylesheet" href="eo_styles.css">
 </head>
 <body>
@@ -173,7 +176,7 @@
         <div class="header-right">
           <div class="header-actions">
             <button class="header-btn" id="btn-import" title="Import CSV or JSON">
-              <i class="ph ph-upload"></i>
+              <i class="ph ph-download"></i>
               <span class="btn-label">Import</span>
             </button>
             <button class="header-btn" id="btn-filter" title="Create Focus (Rule 5: Restrict only)">
@@ -567,6 +570,7 @@
 
   <!-- Scripts - Core EO Modules -->
   <script src="eo_operators.js"></script>     <!-- Layer 4: 9 EO Operators -->
+  <script src="eo_ontology.js"></script>      <!-- Ontology: Source/Set separation, Derivation, Workflow -->
   <script src="eo_activity.js"></script>      <!-- Activity System: Operator × Target × Context -->
   <script src="eo_event_store.js"></script>
   <script src="eo_horizon.js"></script>
@@ -583,6 +587,7 @@
   <script src="eo_graph.js"></script>
   <script src="eo_provenance.js"></script>
   <script src="eo_import.js"></script>
+  <script src="eo_export.js"></script>
   <script src="eo_data_workbench.js"></script>
 
   <!-- Scripts - Transparency -->
