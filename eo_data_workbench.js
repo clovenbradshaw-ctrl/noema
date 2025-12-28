@@ -210,6 +210,7 @@ class EODataWorkbench {
     this.sets = [];
     this.currentSetId = null;
     this.currentViewId = null;
+    this.currentSourceId = null; // Track when viewing a source (GIVEN data)
     this.lastViewPerSet = {}; // Remember last active view for each set
     this.expandedSets = {}; // Track which sets are expanded in sidebar
     this.currentSetTagFilter = null; // Filter sets by tag in header
@@ -2386,8 +2387,9 @@ class EODataWorkbench {
   }
 
   /**
-   * Show source detail panel
-   * Displays provenance information and derived sets
+   * Show source data viewer
+   * Displays source data in main content area as read-only table
+   * This is the primary way users view GIVEN (immutable) source data
    */
   _showSourceDetail(sourceId) {
     // Find the source
@@ -2399,7 +2401,30 @@ class EODataWorkbench {
       return;
     }
 
-    // Find sets derived from this source
+    // Set current source and clear set selection (we're viewing a source, not a set)
+    this.currentSourceId = sourceId;
+
+    // Update source item selection in sidebar
+    document.querySelectorAll('.source-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.sourceId === sourceId);
+    });
+
+    // Render source data view in main content area
+    this._renderSourceDataView(source);
+
+    // Update breadcrumb to show we're viewing a source
+    this._updateSourceBreadcrumb(source);
+  }
+
+  /**
+   * Render source data viewer in main content area
+   * Shows source data as read-only table with provenance info
+   */
+  _renderSourceDataView(source) {
+    const contentArea = this.elements.contentArea;
+    if (!contentArea) return;
+
+    // Find sets derived from this source to get the actual data
     const derivedSets = this.sets.filter(set => {
       const prov = set.datasetProvenance;
       if (!prov) return false;
@@ -2407,76 +2432,337 @@ class EODataWorkbench {
       return sourceName?.toLowerCase() === source.name.toLowerCase();
     });
 
-    // Show in detail panel
-    const detailBody = document.getElementById('detail-panel-body');
-    if (!detailBody) return;
+    // Get records from the first derived set (this contains the original import data)
+    const primarySet = derivedSets[0];
+    const records = primarySet?.records || [];
 
-    detailBody.innerHTML = `
-      <div class="source-detail">
-        <div class="source-detail-header">
-          <i class="ph ${this._getSourceIcon(source.name)} source-detail-icon"></i>
-          <h3>${this._escapeHtml(source.name)}</h3>
-          <span class="given-badge">GIVEN</span>
+    // Get fields from the records
+    const fields = records.length > 0
+      ? Object.keys(records[0]).filter(k => !k.startsWith('_'))
+      : [];
+
+    // Build the source data viewer HTML
+    contentArea.innerHTML = `
+      <div class="source-data-viewer">
+        <!-- Source Header -->
+        <div class="source-viewer-header">
+          <div class="source-viewer-title">
+            <div class="source-viewer-icon">
+              <i class="ph ${this._getSourceIcon(source.name)}"></i>
+            </div>
+            <div class="source-viewer-info">
+              <h2>
+                ${this._escapeHtml(source.name)}
+                <span class="given-badge">
+                  <i class="ph ph-lock-simple"></i>
+                  GIVEN
+                </span>
+              </h2>
+              <div class="source-viewer-meta">
+                Imported ${source.importedAt ? new Date(source.importedAt).toLocaleString() : 'Unknown'} ·
+                ${source.recordCount} records ·
+                ${fields.length} fields
+              </div>
+            </div>
+          </div>
+          <div class="source-viewer-actions">
+            <button class="source-action-btn" id="source-export-btn" title="Export source data">
+              <i class="ph ph-export"></i>
+              <span>Export</span>
+            </button>
+            <button class="source-action-btn primary" id="source-create-set-btn" title="Create a new Set from this source">
+              <i class="ph ph-git-branch"></i>
+              <span>Create Set</span>
+            </button>
+          </div>
         </div>
 
-        <div class="detail-section provenance-section">
-          <h4><i class="ph ph-git-branch"></i> Provenance</h4>
-          <div class="provenance-info">
-            <div class="provenance-item">
-              <span class="provenance-label">Imported:</span>
-              <span class="provenance-value">${source.importedAt ? new Date(source.importedAt).toLocaleString() : 'Unknown'}</span>
+        <!-- Toolbar -->
+        <div class="source-viewer-toolbar">
+          <div class="source-search-box">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="source-search-input" placeholder="Search records... (read-only view)">
+          </div>
+          <div class="source-record-count">
+            Showing ${records.length} of ${source.recordCount} records
+          </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="source-data-table-container">
+          ${records.length > 0 ? `
+            <table class="source-data-table">
+              <thead>
+                <tr>
+                  <th class="source-row-num">#</th>
+                  ${fields.map(field => `
+                    <th>
+                      <div class="source-col-header">
+                        <span class="source-col-name">${this._escapeHtml(field)}</span>
+                        <span class="source-col-type">${this._inferFieldType(records, field)}</span>
+                      </div>
+                    </th>
+                  `).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${records.slice(0, 100).map((record, index) => `
+                  <tr>
+                    <td class="source-row-num">${index + 1}</td>
+                    ${fields.map(field => {
+                      const value = record[field];
+                      const cellClass = this._getSourceCellClass(value);
+                      const displayValue = this._formatSourceCellValue(value);
+                      return `<td class="${cellClass}" title="${this._escapeHtml(String(value ?? ''))}">${displayValue}</td>`;
+                    }).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            ${records.length > 100 ? `
+              <div class="source-more-records">
+                <i class="ph ph-info"></i>
+                Showing first 100 of ${records.length} records. Export or create a Set to work with all data.
+              </div>
+            ` : ''}
+          ` : `
+            <div class="source-empty-state">
+              <i class="ph ph-file-dashed"></i>
+              <p>No records found in this source</p>
             </div>
+          `}
+        </div>
+
+        <!-- Provenance Panel -->
+        <div class="source-provenance-panel">
+          <div class="source-provenance-header">
+            <i class="ph ph-fingerprint"></i>
+            <span>Provenance</span>
+          </div>
+          <div class="source-provenance-items">
             ${source.provenance?.agent ? `
-              <div class="provenance-item">
-                <span class="provenance-label">Agent:</span>
-                <span class="provenance-value">${source.provenance.agent}</span>
+              <div class="source-provenance-item">
+                <i class="ph ph-user"></i>
+                <div>
+                  <span class="label">Agent</span>
+                  <span class="value">${this._escapeHtml(source.provenance.agent)}</span>
+                </div>
               </div>
             ` : ''}
             ${source.provenance?.method ? `
-              <div class="provenance-item">
-                <span class="provenance-label">Method:</span>
-                <span class="provenance-value">${source.provenance.method}</span>
+              <div class="source-provenance-item">
+                <i class="ph ph-gear"></i>
+                <div>
+                  <span class="label">Method</span>
+                  <span class="value">${this._escapeHtml(source.provenance.method)}</span>
+                </div>
               </div>
             ` : ''}
-            <div class="provenance-item">
-              <span class="provenance-label">Records:</span>
-              <span class="provenance-value">${source.recordCount}</span>
+            ${source.provenance?.source ? `
+              <div class="source-provenance-item">
+                <i class="ph ph-link"></i>
+                <div>
+                  <span class="label">Origin</span>
+                  <span class="value">${this._escapeHtml(source.provenance.source)}</span>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+          <div class="source-immutable-notice">
+            <i class="ph ph-lock"></i>
+            <p><strong>Read-only source.</strong> This data is immutable. To modify records, create a derived Set.</p>
+          </div>
+          ${derivedSets.length > 0 ? `
+            <div class="source-derived-sets">
+              <div class="source-derived-header">
+                <i class="ph ph-git-branch"></i>
+                <span>Derived Sets (${derivedSets.length})</span>
+              </div>
+              ${derivedSets.map(set => `
+                <div class="source-derived-item" data-set-id="${set.id}">
+                  <i class="${set.icon || 'ph ph-table'}"></i>
+                  <span>${this._escapeHtml(set.name)}</span>
+                  <span class="count">${set.records?.length || 0}</span>
+                </div>
+              `).join('')}
             </div>
-          </div>
-        </div>
-
-        <div class="detail-section derived-sets-section">
-          <h4><i class="ph ph-table"></i> Derived Sets (${derivedSets.length})</h4>
-          <div class="derived-sets-list">
-            ${derivedSets.map(set => `
-              <div class="derived-set-item" data-set-id="${set.id}">
-                <i class="${set.icon || 'ph ph-table'}"></i>
-                <span>${this._escapeHtml(set.name)}</span>
-                <span class="nav-item-count">${set.records?.length || 0}</span>
-              </div>
-            `).join('')}
-            ${derivedSets.length === 0 ? `
-              <div class="empty-hint">No sets derived from this source</div>
-            ` : ''}
-          </div>
-        </div>
-
-        <div class="detail-section immutability-notice">
-          <i class="ph ph-lock"></i>
-          <span>Sources are immutable (read-only). Sets derived from sources can be freely edited.</span>
+          ` : ''}
         </div>
       </div>
     `;
 
-    // Attach handlers for derived set items
-    detailBody.querySelectorAll('.derived-set-item').forEach(item => {
-      item.addEventListener('click', () => {
-        this._selectSet(item.dataset.setId);
-      });
+    // Attach event handlers
+    this._attachSourceViewerHandlers(source, derivedSets);
+  }
+
+  /**
+   * Attach event handlers for source viewer
+   */
+  _attachSourceViewerHandlers(source, derivedSets) {
+    // Export button
+    document.getElementById('source-export-btn')?.addEventListener('click', () => {
+      this._exportSource(source.id);
     });
 
-    // Show detail panel
-    document.getElementById('detail-panel')?.classList.add('open');
+    // Create Set button
+    document.getElementById('source-create-set-btn')?.addEventListener('click', () => {
+      this._createSetFromSource(source);
+    });
+
+    // Search input
+    const searchInput = document.getElementById('source-search-input');
+    searchInput?.addEventListener('input', (e) => {
+      this._filterSourceRecords(source, e.target.value);
+    });
+
+    // Derived set clicks
+    document.querySelectorAll('.source-derived-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const setId = item.dataset.setId;
+        this.currentSourceId = null; // Clear source view
+        this._selectSet(setId);
+      });
+    });
+  }
+
+  /**
+   * Update breadcrumb when viewing a source
+   */
+  _updateSourceBreadcrumb(source) {
+    const setBreadcrumb = document.getElementById('current-set-name');
+    if (setBreadcrumb) {
+      setBreadcrumb.innerHTML = `
+        <i class="ph ${this._getSourceIcon(source.name)}"></i>
+        ${this._escapeHtml(source.name)}
+        <span class="given-badge" style="margin-left: 8px; font-size: 10px;">GIVEN</span>
+      `;
+    }
+  }
+
+  /**
+   * Infer field type from record values
+   */
+  _inferFieldType(records, field) {
+    const sample = records.slice(0, 10);
+    let types = sample.map(r => {
+      const val = r[field];
+      if (val === null || val === undefined || val === '') return 'null';
+      if (typeof val === 'number') return 'number';
+      if (typeof val === 'boolean') return 'boolean';
+      if (!isNaN(Date.parse(val)) && String(val).match(/^\d{4}-\d{2}-\d{2}/)) return 'date';
+      if (!isNaN(Number(val))) return 'number';
+      return 'string';
+    }).filter(t => t !== 'null');
+
+    const primary = types[0] || 'string';
+    return primary;
+  }
+
+  /**
+   * Get CSS class for source cell based on value type
+   */
+  _getSourceCellClass(value) {
+    if (value === null || value === undefined) return 'source-cell source-cell-null';
+    if (typeof value === 'number') return 'source-cell source-cell-number';
+    if (typeof value === 'boolean') return 'source-cell source-cell-boolean';
+    if (!isNaN(Date.parse(value)) && String(value).match(/^\d{4}-\d{2}-\d{2}/)) return 'source-cell source-cell-date';
+    return 'source-cell';
+  }
+
+  /**
+   * Format source cell value for display
+   */
+  _formatSourceCellValue(value) {
+    if (value === null || value === undefined) return '<span class="null-value">null</span>';
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    const str = String(value);
+    return str.length > 50 ? this._escapeHtml(str.substring(0, 50)) + '...' : this._escapeHtml(str);
+  }
+
+  /**
+   * Filter source records based on search term
+   */
+  _filterSourceRecords(source, searchTerm) {
+    const tbody = document.querySelector('.source-data-table tbody');
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll('tr');
+    const term = searchTerm.toLowerCase();
+
+    rows.forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = term === '' || text.includes(term) ? '' : 'none';
+    });
+
+    // Update count
+    const visibleCount = Array.from(rows).filter(r => r.style.display !== 'none').length;
+    const countEl = document.querySelector('.source-record-count');
+    if (countEl) {
+      countEl.textContent = term
+        ? `Showing ${visibleCount} matching records`
+        : `Showing ${rows.length} of ${source.recordCount} records`;
+    }
+  }
+
+  /**
+   * Create a new Set from a source
+   */
+  _createSetFromSource(source) {
+    // Find the primary set with this source's data
+    const primarySet = this.sets.find(set => {
+      const prov = set.datasetProvenance;
+      if (!prov) return false;
+      const sourceName = prov.originalFilename || prov.provenance?.source;
+      return sourceName?.toLowerCase() === source.name.toLowerCase();
+    });
+
+    if (primarySet) {
+      // Duplicate the set as a new derived set
+      const newSet = {
+        ...JSON.parse(JSON.stringify(primarySet)),
+        id: 'set_' + Date.now(),
+        name: source.name.replace(/\.[^/.]+$/, '') + ' (derived)',
+        datasetProvenance: {
+          ...primarySet.datasetProvenance,
+          derivedFrom: source.id,
+          derivedAt: new Date().toISOString()
+        }
+      };
+      this.sets.push(newSet);
+      this.currentSourceId = null;
+      this._selectSet(newSet.id);
+      this._renderSidebar();
+      this._saveData();
+    }
+  }
+
+  /**
+   * Export source data
+   */
+  _exportSource(sourceId) {
+    const source = this.sources?.find(s => s.id === sourceId) ||
+      Array.from(this._getSourceRegistry().values()).find(s => s.id === sourceId);
+
+    if (!source) return;
+
+    // Find the primary set with this source's data
+    const primarySet = this.sets.find(set => {
+      const prov = set.datasetProvenance;
+      if (!prov) return false;
+      const sourceName = prov.originalFilename || prov.provenance?.source;
+      return sourceName?.toLowerCase() === source.name.toLowerCase();
+    });
+
+    if (primarySet?.records) {
+      const json = JSON.stringify(primarySet.records, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = source.name.replace(/\.[^/.]+$/, '') + '_export.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   }
 
   /**
