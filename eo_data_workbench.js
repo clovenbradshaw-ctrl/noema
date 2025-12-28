@@ -124,6 +124,7 @@ function createField(name, type, options = {}) {
       break;
     case FieldTypes.LINK:
       field.options.linkedSetId = options.linkedSetId || null;
+      field.options.linkedViewId = options.linkedViewId || null; // Optional: link to a specific view within the set
       field.options.allowMultiple = options.allowMultiple || false;
       break;
     case FieldTypes.ATTACHMENT:
@@ -4484,6 +4485,7 @@ class EODataWorkbench {
 
   _renderLinkEditor(cell, field, currentValue) {
     const linkedSetId = field.options?.linkedSetId;
+    const linkedViewId = field.options?.linkedViewId;
     const allowMultiple = field.options?.allowMultiple !== false;
     const linkedSet = linkedSetId ? this.sets.find(s => s.id === linkedSetId) : this.getCurrentSet();
 
@@ -4495,15 +4497,33 @@ class EODataWorkbench {
     const primaryField = linkedSet.fields.find(f => f.isPrimary) || linkedSet.fields[0];
     const currentLinks = Array.isArray(currentValue) ? currentValue : (currentValue ? [currentValue] : []);
 
+    // Get records, optionally filtered by view
+    let availableRecords = [...linkedSet.records];
+    let linkedView = null;
+
+    if (linkedViewId) {
+      linkedView = linkedSet.views?.find(v => v.id === linkedViewId);
+      if (linkedView?.config?.filters?.length > 0) {
+        // Apply the view's filters to the records
+        availableRecords = availableRecords.filter(record => {
+          return linkedView.config.filters.every(filter => {
+            const value = record.values[filter.fieldId];
+            return this._matchesFilter(value, filter);
+          });
+        });
+      }
+    }
+
     // Build dropdown with available records
     let html = '<div class="link-dropdown">';
     html += '<div class="link-dropdown-header">';
-    html += `<span class="link-dropdown-title">Link to ${this._escapeHtml(linkedSet.name)}</span>`;
+    const viewLabel = linkedView ? ` › ${this._escapeHtml(linkedView.name)}` : '';
+    html += `<span class="link-dropdown-title">Link to ${this._escapeHtml(linkedSet.name)}${viewLabel}</span>`;
     html += '</div>';
     html += '<div class="link-dropdown-search"><input type="text" placeholder="Search records..." class="link-search-input"></div>';
     html += '<div class="link-dropdown-options">';
 
-    linkedSet.records.forEach(record => {
+    availableRecords.forEach(record => {
       const recordName = record.values?.[primaryField?.id] || 'Untitled';
       const isLinked = currentLinks.includes(record.id);
       html += `
@@ -4514,8 +4534,9 @@ class EODataWorkbench {
       `;
     });
 
-    if (linkedSet.records.length === 0) {
-      html += '<div class="link-option-empty">No records in this set</div>';
+    if (availableRecords.length === 0) {
+      const emptyMsg = linkedView ? 'No records match this view\'s filters' : 'No records in this set';
+      html += `<div class="link-option-empty">${emptyMsg}</div>`;
     }
 
     html += '</div></div>';
@@ -7070,6 +7091,7 @@ class EODataWorkbench {
       case FieldTypes.LINK:
         // Use provided options or defaults
         field.options.linkedSetId = options.linkedSetId || null;
+        field.options.linkedViewId = options.linkedViewId || null;
         field.options.allowMultiple = options.allowMultiple || false;
         break;
       case FieldTypes.ATTACHMENT:
@@ -7283,6 +7305,27 @@ class EODataWorkbench {
       'json': 'JSON'
     };
 
+    // Build linked set/view info for LINK fields
+    let linkInfo = '';
+    if (field.type === FieldTypes.LINK && field.options?.linkedSetId) {
+      const linkedSet = this.sets.find(s => s.id === field.options.linkedSetId);
+      if (linkedSet) {
+        let linkTarget = linkedSet.name;
+        if (field.options.linkedViewId) {
+          const linkedView = linkedSet.views?.find(v => v.id === field.options.linkedViewId);
+          if (linkedView) {
+            linkTarget += ` › ${linkedView.name}`;
+          }
+        }
+        linkInfo = `
+          <div class="context-menu-item" data-action="configure-link" style="opacity: 0.8;">
+            <i class="ph ph-arrow-bend-up-right"></i>
+            <span style="font-size: 11px;">→ ${this._escapeHtml(linkTarget)}</span>
+          </div>
+        `;
+      }
+    }
+
     menu.innerHTML = `
       <div class="context-menu-item" data-action="rename">
         <i class="ph ph-pencil"></i>
@@ -7292,6 +7335,7 @@ class EODataWorkbench {
         <i class="ph ${FieldTypeIcons[field.type]}"></i>
         <span>Change type (${typeNames[field.type] || field.type})</span>
       </div>
+      ${linkInfo}
       <div class="context-menu-item" data-action="hide">
         <i class="ph ph-eye-slash"></i>
         <span>Hide field</span>
@@ -7348,6 +7392,17 @@ class EODataWorkbench {
             this._showFieldTypePicker(clickEvent, (newType, options = {}) => {
               this._changeFieldType(fieldId, newType, options);
             });
+            break;
+          case 'configure-link':
+            // Reconfigure linked set/view for LINK fields
+            this._showLinkedSetSelectionModal((options) => {
+              field.options.linkedSetId = options.linkedSetId;
+              field.options.linkedViewId = options.linkedViewId;
+              field.options.allowMultiple = options.allowMultiple;
+              this._renderView();
+              this._saveData();
+              this._showToast('Link configuration updated', 'success');
+            }, field.options);
             break;
           case 'hide':
             this._hideField(fieldId);
@@ -7496,15 +7551,15 @@ class EODataWorkbench {
         picker.classList.remove('active');
         const type = item.dataset.type;
 
-        // For LINK type, show a modal to select the target set
+        // For LINK type, show a modal to select the target set/view
         if (type === FieldTypes.LINK) {
-          this._showLinkedSetSelectionModal(({ linkedSetId, allowMultiple }) => {
+          this._showLinkedSetSelectionModal(({ linkedSetId, linkedViewId, allowMultiple }) => {
             if (callback) {
               // When changing type, pass the options through callback
-              callback(type, { linkedSetId, allowMultiple });
+              callback(type, { linkedSetId, linkedViewId, allowMultiple });
             } else {
               // When adding new field, pass options directly
-              this._addField(type, 'Link', { linkedSetId, allowMultiple });
+              this._addField(type, 'Link', { linkedSetId, linkedViewId, allowMultiple });
             }
           });
         } else {
@@ -7993,8 +8048,8 @@ class EODataWorkbench {
   }
 
   /**
-   * Show modal to select which set to link to when creating/changing to a LINK field
-   * @param {Function} callback - Called with { linkedSetId, allowMultiple } when confirmed
+   * Show modal to select which set or view to link to when creating/changing to a LINK field
+   * @param {Function} callback - Called with { linkedSetId, linkedViewId, allowMultiple } when confirmed
    * @param {Object} existingOptions - Optional existing options to pre-populate
    */
   _showLinkedSetSelectionModal(callback, existingOptions = {}) {
@@ -8016,6 +8071,19 @@ class EODataWorkbench {
 
     const allowMultipleChecked = existingOptions.allowMultiple ? 'checked' : '';
 
+    // Build initial view options if a set is pre-selected
+    let initialViewOptions = '<option value="">All records (no view filter)</option>';
+    if (existingOptions.linkedSetId) {
+      const preSelectedSet = availableSets.find(s => s.id === existingOptions.linkedSetId);
+      if (preSelectedSet?.views?.length > 0) {
+        initialViewOptions += preSelectedSet.views.map(v => {
+          const selected = existingOptions.linkedViewId === v.id ? 'selected' : '';
+          const hasFilters = v.config?.filters?.length > 0 ? ' (filtered)' : '';
+          return `<option value="${v.id}" ${selected}>${this._escapeHtml(v.name)}${hasFilters}</option>`;
+        }).join('');
+      }
+    }
+
     this._showModal('Link to Records', `
       <div class="form-group">
         <label class="form-label">Link to which set?</label>
@@ -8025,6 +8093,15 @@ class EODataWorkbench {
         </select>
         <div class="form-hint" style="margin-top: 6px; font-size: 11px; color: var(--text-tertiary);">
           Choose the set containing records you want to link to
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Link to which view? <span style="font-weight: normal; color: var(--text-muted);">(optional)</span></label>
+        <select class="form-select" id="linked-view-select">
+          ${initialViewOptions}
+        </select>
+        <div class="form-hint" style="margin-top: 6px; font-size: 11px; color: var(--text-tertiary);">
+          Optionally restrict to records visible in a specific view (applies that view's filters)
         </div>
       </div>
       <div class="form-group">
@@ -8038,6 +8115,7 @@ class EODataWorkbench {
       </div>
     `, () => {
       const linkedSetId = document.getElementById('linked-set-select')?.value;
+      const linkedViewId = document.getElementById('linked-view-select')?.value || null;
       const allowMultiple = document.getElementById('allow-multiple-check')?.checked || false;
 
       if (!linkedSetId) {
@@ -8046,7 +8124,28 @@ class EODataWorkbench {
       }
 
       if (callback) {
-        callback({ linkedSetId, allowMultiple });
+        callback({ linkedSetId, linkedViewId, allowMultiple });
+      }
+    });
+
+    // Update view dropdown when set selection changes
+    const setSelect = document.getElementById('linked-set-select');
+    const viewSelect = document.getElementById('linked-view-select');
+
+    setSelect?.addEventListener('change', () => {
+      const selectedSetId = setSelect.value;
+      const selectedSet = availableSets.find(s => s.id === selectedSetId);
+
+      let viewOptions = '<option value="">All records (no view filter)</option>';
+      if (selectedSet?.views?.length > 0) {
+        viewOptions += selectedSet.views.map(v => {
+          const hasFilters = v.config?.filters?.length > 0 ? ' (filtered)' : '';
+          return `<option value="${v.id}">${this._escapeHtml(v.name)}${hasFilters}</option>`;
+        }).join('');
+      }
+
+      if (viewSelect) {
+        viewSelect.innerHTML = viewOptions;
       }
     });
 
