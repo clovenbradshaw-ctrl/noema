@@ -858,18 +858,13 @@ class EODataWorkbench {
       const stability = set.stabilityLevel || 'holon';
       const stabilityClass = `stability-${stability}`;
 
-      // Check for ontology warnings
-      const warnings = this._validateSetOntology(set);
-      const hasWarning = warnings.length > 0;
-
       return `
-        <div class="nav-item set-item ${set.id === this.currentSetId ? 'active' : ''} ${stabilityClass} ${hasWarning ? 'has-warning' : ''}"
+        <div class="nav-item set-item ${set.id === this.currentSetId ? 'active' : ''} ${stabilityClass}"
              data-set-id="${set.id}"
-             title="${derivation.description}\n${fieldCount} fields · ${recordCount} records${hasWarning ? '\n⚠️ ' + warnings[0] : ''}">
+             title="${derivation.description}\n${fieldCount} fields · ${recordCount} records">
           ${operatorBadge}
           <i class="${set.icon || 'ph ph-table'}"></i>
           <span class="set-name">${this._escapeHtml(set.name)}</span>
-          ${hasWarning ? '<i class="ph ph-warning-circle set-warning-icon" title="' + this._escapeHtml(warnings[0]) + '"></i>' : ''}
           <span class="nav-item-count">${recordCount}</span>
         </div>
       `;
@@ -943,33 +938,6 @@ class EODataWorkbench {
   }
 
   /**
-   * Validate set against ontology rules
-   * Returns array of warning messages
-   */
-  _validateSetOntology(set) {
-    const warnings = [];
-
-    // Use ontology validator if available
-    if (typeof window.EOOntology !== 'undefined') {
-      const validator = new window.EOOntology.OntologyValidator();
-      const result = validator.validateSet(set, { requireFrame: false });
-      if (!result.valid) {
-        result.errors.forEach(err => warnings.push(err.getUserMessage()));
-      }
-    }
-
-    // Basic checks if validator not available
-    if (!set.derivation && !set.datasetProvenance) {
-      // Only warn for sets with no records (truly empty)
-      if (!set.records || set.records.length === 0) {
-        warnings.push('Empty set with no derivation strategy');
-      }
-    }
-
-    return warnings;
-  }
-
-  /**
    * Show operator-first creation modal
    * FIX #8: Ask HOW to transform, not WHAT to create
    */
@@ -980,7 +948,7 @@ class EODataWorkbench {
       { id: 'SLICE', icon: 'ph-clock', label: 'Slice by time', operator: 'ALT', description: 'Create time-based partitions' },
       { id: 'COMBINE', icon: 'ph-stack', label: 'Combine perspectives', operator: 'SUP', description: 'Overlay multiple views' },
       { id: 'IMPORT', icon: 'ph-upload', label: 'Import new data', operator: 'INS', description: 'Import external data as source' },
-      { id: 'EMPTY', icon: 'ph-plus-circle', label: 'Start empty', operator: 'INS', description: 'Create an empty set (manual entry)', warning: 'Not recommended - prefer deriving from data' }
+      { id: 'EMPTY', icon: 'ph-plus-circle', label: 'Start empty', operator: 'INS', description: 'Create an empty set (manual entry)' }
     ];
 
     const html = `
@@ -988,12 +956,11 @@ class EODataWorkbench {
         <p class="creation-prompt">How do you want to create this set?</p>
         <div class="creation-intents">
           ${intents.map(intent => `
-            <button class="creation-intent-btn ${intent.warning ? 'has-warning' : ''}" data-intent="${intent.id}">
+            <button class="creation-intent-btn" data-intent="${intent.id}">
               <i class="ph ${intent.icon}"></i>
               <div class="intent-content">
                 <span class="intent-label">${intent.label}</span>
                 <span class="intent-description">${intent.description}</span>
-                ${intent.warning ? `<span class="intent-warning"><i class="ph ph-warning"></i> ${intent.warning}</span>` : ''}
               </div>
               <span class="intent-operator" title="EO Operator">${intent.operator}</span>
             </button>
