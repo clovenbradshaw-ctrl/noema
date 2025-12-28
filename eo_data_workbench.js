@@ -2759,9 +2759,28 @@ class EODataWorkbench {
    * This is the primary way users view GIVEN (immutable) source data
    */
   _showSourceDetail(sourceId) {
-    // Find the source
-    const source = this.sources?.find(s => s.id === sourceId) ||
-      Array.from(this._getSourceRegistry().values()).find(s => s.id === sourceId);
+    // Find the source - check sourceStore FIRST (for new imports)
+    let source = null;
+
+    // 1. Check sourceStore first (new source-only imports)
+    if (this.sourceStore) {
+      source = this.sourceStore.get(sourceId);
+      if (!source) {
+        // Try to find by ID in active sources
+        const allSources = this.sourceStore.getByStatus('active');
+        source = allSources.find(s => s.id === sourceId);
+      }
+    }
+
+    // 2. Check local sources array
+    if (!source) {
+      source = this.sources?.find(s => s.id === sourceId);
+    }
+
+    // 3. Check legacy source registry (from sets with provenance)
+    if (!source) {
+      source = Array.from(this._getSourceRegistry().values()).find(s => s.id === sourceId);
+    }
 
     if (!source) {
       console.warn('Source not found:', sourceId);
@@ -2791,36 +2810,47 @@ class EODataWorkbench {
     const contentArea = this.elements.contentArea;
     if (!contentArea) return;
 
-    // First try to get source data from SourceStore (for source-only imports)
-    let sourceStoreSource = null;
-    if (this.sourceStore) {
-      // Try by ID first
-      sourceStoreSource = this.sourceStore.get(source.id);
-      // If not found by ID, try by name (IDs may differ between registry and store)
+    let records = [];
+    let fields = [];
+
+    // PRIORITY 1: Source object already has records (from sourceStore)
+    // This happens when _showSourceDetail passes a source directly from sourceStore
+    if (source.records && source.records.length > 0) {
+      // Use records directly from source (raw format - key:value objects)
+      records = source.records.map((record, index) => ({
+        id: `rec_${index}`,
+        values: record
+      }));
+      // Build fields from schema
+      fields = (source.schema?.fields || []).map((f, i) => ({
+        id: f.name,
+        name: f.name,
+        type: f.type || 'text'
+      }));
+    }
+    // PRIORITY 2: Look up in sourceStore by ID or name
+    else if (this.sourceStore) {
+      let sourceStoreSource = this.sourceStore.get(source.id);
       if (!sourceStoreSource) {
         const allSources = this.sourceStore.getByStatus('active');
         sourceStoreSource = allSources.find(s => s.name.toLowerCase() === source.name.toLowerCase());
       }
+
+      if (sourceStoreSource && sourceStoreSource.records && sourceStoreSource.records.length > 0) {
+        records = sourceStoreSource.records.map((record, index) => ({
+          id: `rec_${index}`,
+          values: record
+        }));
+        fields = (sourceStoreSource.schema?.fields || []).map((f, i) => ({
+          id: f.name,
+          name: f.name,
+          type: f.type || 'text'
+        }));
+      }
     }
 
-    let records = [];
-    let fields = [];
-
-    // If we have source data in SourceStore, use it directly
-    if (sourceStoreSource && sourceStoreSource.records && sourceStoreSource.records.length > 0) {
-      // Use records directly from SourceStore (raw format)
-      records = sourceStoreSource.records.map((record, index) => ({
-        id: `rec_${index}`,
-        values: record // Raw records use field names as keys
-      }));
-      // Build fields from schema
-      fields = (sourceStoreSource.schema?.fields || []).map((f, i) => ({
-        id: f.name, // Use field name as ID for raw records
-        name: f.name,
-        type: f.type || 'text'
-      }));
-    } else {
-      // Fallback: Find sets derived from this source to get the actual data
+    // PRIORITY 3: Fallback to legacy sets with provenance
+    if (records.length === 0) {
       const derivedSets = this.sets.filter(set => {
         const prov = set.datasetProvenance;
         if (!prov) return false;
@@ -2828,17 +2858,13 @@ class EODataWorkbench {
         return sourceName?.toLowerCase() === source.name.toLowerCase();
       });
 
-      // Get records from the first derived set (this contains the original import data)
       const primarySet = derivedSets[0];
 
-      // Ensure records are loaded if using lazy loading
       if (primarySet && this._useLazyLoading) {
         this._loadSetRecords(primarySet.id);
       }
 
       records = primarySet?.records || [];
-
-      // Get fields from the set's field definitions (not from record keys)
       fields = primarySet?.fields || [];
     }
 
@@ -3165,19 +3191,38 @@ class EODataWorkbench {
    * Export source data
    */
   _exportSource(sourceId) {
-    const source = this.sources?.find(s => s.id === sourceId) ||
-      Array.from(this._getSourceRegistry().values()).find(s => s.id === sourceId);
+    // Find source - check sourceStore first (for new imports)
+    let source = null;
+
+    if (this.sourceStore) {
+      source = this.sourceStore.get(sourceId);
+      if (!source) {
+        const allSources = this.sourceStore.getByStatus('active');
+        source = allSources.find(s => s.id === sourceId);
+      }
+    }
+
+    if (!source) {
+      source = this.sources?.find(s => s.id === sourceId);
+    }
+
+    if (!source) {
+      source = Array.from(this._getSourceRegistry().values()).find(s => s.id === sourceId);
+    }
 
     if (!source) return;
 
     let exportData = null;
     let fileName = source.name.replace(/\.[^/.]+$/, '') + '_export.json';
 
-    // First try to get data from SourceStore (source-only imports)
-    if (this.sourceStore) {
+    // PRIORITY 1: Source object already has records
+    if (source.records && source.records.length > 0) {
+      exportData = source.records;
+    }
+    // PRIORITY 2: Look up in sourceStore
+    else if (this.sourceStore) {
       let sourceInStore = this.sourceStore.get(sourceId);
       if (!sourceInStore) {
-        // Try by name
         const allSources = this.sourceStore.getByStatus('active');
         sourceInStore = allSources.find(s => s.name.toLowerCase() === source.name.toLowerCase());
       }
@@ -13998,6 +14043,14 @@ class EODataWorkbench {
   _showSyncPanel() {
     this._initSyncAPI();
 
+    // Use the new sync wizard for a step-by-step experience
+    if (typeof EOSyncWizard !== 'undefined' && this.syncAPI) {
+      const wizard = new EOSyncWizard(this.syncAPI);
+      wizard.show();
+      return;
+    }
+
+    // Fallback to old panel if wizard not available
     const panel = document.getElementById('sync-panel');
     if (panel) {
       panel.style.display = 'flex';
