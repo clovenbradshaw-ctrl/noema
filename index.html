@@ -263,6 +263,26 @@
         </div>
       </div>
 
+      <!-- View Disclosure Panel (shows views for current set) -->
+      <div class="view-disclosure" id="view-disclosure" style="display: none;">
+        <div class="view-disclosure-header">
+          <button class="view-disclosure-toggle" id="view-disclosure-toggle" title="Toggle view disclosure">
+            <i class="ph ph-caret-down"></i>
+          </button>
+          <span class="view-disclosure-title">
+            <i class="ph ph-eye"></i>
+            <span id="view-disclosure-set-name">Views</span>
+          </span>
+          <span class="view-disclosure-count" id="view-disclosure-count">0 views</span>
+          <button class="view-disclosure-add" id="view-disclosure-add" title="Add new view">
+            <i class="ph ph-plus"></i>
+          </button>
+        </div>
+        <div class="view-disclosure-content" id="view-disclosure-content">
+          <!-- Views for current set rendered dynamically -->
+        </div>
+      </div>
+
       <!-- Content Area -->
       <div class="content-area" id="content-area">
         <!-- Workbench rendered here -->

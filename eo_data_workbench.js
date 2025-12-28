@@ -814,6 +814,207 @@ class EODataWorkbench {
     this._renderSourcesNav();
     this._renderSetsNavFlat();
     this._renderViewsHierarchy();
+    // Update view disclosure panel when inside a set
+    this._renderViewDisclosure();
+  }
+
+  /**
+   * Render View Disclosure Panel
+   * Shows views for the current set prominently at the top when inside a set
+   */
+  _renderViewDisclosure() {
+    const panel = document.getElementById('view-disclosure');
+    const content = document.getElementById('view-disclosure-content');
+    const setNameEl = document.getElementById('view-disclosure-set-name');
+    const countEl = document.getElementById('view-disclosure-count');
+
+    if (!panel || !content) return;
+
+    const set = this.getCurrentSet();
+
+    // Only show when we have a current set
+    if (!set) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    // Show the panel
+    panel.style.display = 'block';
+
+    // Update set name in title
+    if (setNameEl) {
+      setNameEl.textContent = `${set.name} Views`;
+    }
+
+    // Get views for current set
+    const views = set.views || [];
+
+    // Update count
+    if (countEl) {
+      countEl.textContent = `${views.length} view${views.length !== 1 ? 's' : ''}`;
+    }
+
+    // Render view items
+    const viewIcons = {
+      table: 'ph-table',
+      cards: 'ph-cards',
+      kanban: 'ph-kanban',
+      calendar: 'ph-calendar-blank',
+      graph: 'ph-graph',
+      filesystem: 'ph-folder-open',
+      timeline: 'ph-clock-countdown'
+    };
+
+    content.innerHTML = views.map(view => {
+      const isActive = view.id === this.currentViewId;
+      const icon = viewIcons[view.type] || 'ph-table';
+      const epistemicBadge = this._getEpistemicStatusBadge(view);
+
+      return `
+        <div class="view-disclosure-item ${isActive ? 'active' : ''}"
+             data-view-id="${view.id}"
+             title="${view.type} view">
+          <i class="ph ${icon}"></i>
+          <span>${this._escapeHtml(view.name)}</span>
+          <span class="view-disclosure-item-badge">${epistemicBadge}</span>
+        </div>
+      `;
+    }).join('');
+
+    // If no views, show prompt to create one
+    if (views.length === 0) {
+      content.innerHTML = `
+        <div class="view-disclosure-empty">
+          <span>No views yet. Click + to create one.</span>
+        </div>
+      `;
+    }
+
+    // Attach event handlers
+    this._attachViewDisclosureHandlers();
+  }
+
+  /**
+   * Attach event handlers for view disclosure panel
+   */
+  _attachViewDisclosureHandlers() {
+    const panel = document.getElementById('view-disclosure');
+    if (!panel) return;
+
+    // Toggle collapse/expand
+    const toggle = panel.querySelector('#view-disclosure-toggle');
+    const header = panel.querySelector('.view-disclosure-header');
+
+    // Header click toggles collapse
+    header?.addEventListener('click', (e) => {
+      // Don't toggle if clicking the add button
+      if (e.target.closest('#view-disclosure-add')) return;
+      panel.classList.toggle('collapsed');
+      // Remember state
+      localStorage.setItem('eo-view-disclosure-collapsed', panel.classList.contains('collapsed'));
+    });
+
+    // Restore collapse state
+    const wasCollapsed = localStorage.getItem('eo-view-disclosure-collapsed') === 'true';
+    if (wasCollapsed) {
+      panel.classList.add('collapsed');
+    }
+
+    // View item clicks
+    panel.querySelectorAll('.view-disclosure-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const viewId = item.dataset.viewId;
+        if (viewId) {
+          this._selectView(viewId);
+        }
+      });
+    });
+
+    // Add button
+    const addBtn = panel.querySelector('#view-disclosure-add');
+    addBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._showCreateViewModal();
+    });
+  }
+
+  /**
+   * Show modal to create a new view
+   */
+  _showCreateViewModal() {
+    const set = this.getCurrentSet();
+    if (!set) return;
+
+    const viewTypes = [
+      { type: 'table', name: 'Table', icon: 'ph-table', desc: 'Spreadsheet-style rows and columns' },
+      { type: 'cards', name: 'Cards', icon: 'ph-cards', desc: 'Visual cards for each record' },
+      { type: 'kanban', name: 'Kanban', icon: 'ph-kanban', desc: 'Drag-and-drop board by status' },
+      { type: 'calendar', name: 'Calendar', icon: 'ph-calendar-blank', desc: 'Date-based calendar view' },
+      { type: 'graph', name: 'Graph', icon: 'ph-graph', desc: 'Network visualization of relationships' },
+      { type: 'filesystem', name: 'Filesystem', icon: 'ph-folder-open', desc: 'Hierarchical tree structure' }
+    ];
+
+    const html = `
+      <div class="create-view-form">
+        <div class="form-group">
+          <label for="view-name" class="form-label">View Name</label>
+          <input type="text" id="view-name" class="form-input" placeholder="My View" value="New View">
+        </div>
+        <div class="form-group">
+          <label class="form-label">View Type</label>
+          <div class="view-type-grid">
+            ${viewTypes.map(vt => `
+              <div class="view-type-option" data-type="${vt.type}">
+                <i class="ph ${vt.icon}"></i>
+                <span class="view-type-name">${vt.name}</span>
+                <span class="view-type-desc">${vt.desc}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    this._showModal('Create New View', html, () => {
+      const name = document.getElementById('view-name')?.value || 'New View';
+      const selectedType = document.querySelector('.view-type-option.selected')?.dataset.type || 'table';
+      this._createNewView(name, selectedType);
+    });
+
+    // Handle view type selection
+    setTimeout(() => {
+      const options = document.querySelectorAll('.view-type-option');
+      options.forEach(opt => {
+        opt.addEventListener('click', () => {
+          options.forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+        });
+      });
+      // Default select table
+      options[0]?.classList.add('selected');
+    }, 0);
+  }
+
+  /**
+   * Create a new view for the current set
+   */
+  _createNewView(name, type) {
+    const set = this.getCurrentSet();
+    if (!set) return;
+
+    const newView = createView(name, type);
+    set.views.push(newView);
+
+    // Switch to the new view
+    this.currentViewId = newView.id;
+    this.lastViewPerSet[this.currentSetId] = newView.id;
+
+    // Re-render
+    this._renderSidebar();
+    this._renderView();
+    this._updateBreadcrumb();
+    this._saveData();
   }
 
   /**
@@ -2976,6 +3177,7 @@ class EODataWorkbench {
     });
 
     this._renderViewsNav();
+    this._renderViewDisclosure();
     this._renderView();
     this._updateBreadcrumb();
     this._saveData();
@@ -3005,6 +3207,7 @@ class EODataWorkbench {
       btn.classList.toggle('active', btn.dataset.view === viewType);
     });
 
+    this._renderViewDisclosure();
     this._renderView();
     this._updateBreadcrumb();
     this._saveData();
