@@ -1053,6 +1053,328 @@ if (typeof document !== 'undefined') {
 }
 
 // ============================================================================
+// MetadataParser - Enriches provenance with import metadata
+// ============================================================================
+
+/**
+ * MetadataParser enriches provenance fields with human-readable summaries
+ * derived from import metadata (file identity, parsing decisions, etc.)
+ *
+ * This ensures the Source field (and others) display meaningful import context
+ * rather than just raw filenames.
+ */
+class MetadataParser {
+  /**
+   * Parse and enrich provenance from import metadata
+   * @param {Object} importContext - Import metadata
+   * @param {string} importContext.filename - Original filename
+   * @param {number} importContext.fileSize - File size in bytes
+   * @param {string} importContext.mimeType - MIME type
+   * @param {string} importContext.contentHash - SHA-256 hash
+   * @param {string} importContext.fileType - Detected file type (csv, json, xlsx, ics)
+   * @param {Object} importContext.parsingDecisions - Parser decisions
+   * @param {Object} importContext.schemaInference - Schema inference results
+   * @param {number} importContext.recordCount - Number of records
+   * @param {number} importContext.fieldCount - Number of fields
+   * @param {string} importContext.sourceUrl - Original source URL (if fetched)
+   * @returns {Object} Enriched provenance object
+   */
+  static parseImportMetadata(importContext = {}) {
+    const enriched = {};
+
+    // Enrich SOURCE with import identity
+    enriched.source = this._enrichSource(importContext);
+
+    // Enrich METHOD with parsing details
+    enriched.method = this._enrichMethod(importContext);
+
+    // Enrich SCALE with data dimensions
+    enriched.scale = this._enrichScale(importContext);
+
+    // Enrich TIMEFRAME with import timing
+    enriched.timeframe = this._enrichTimeframe(importContext);
+
+    // Enrich DEFINITION with format interpretation
+    enriched.definition = this._enrichDefinition(importContext);
+
+    // Enrich BACKGROUND with import context
+    enriched.background = this._enrichBackground(importContext);
+
+    return enriched;
+  }
+
+  /**
+   * Enrich the Source field with file identity information
+   */
+  static _enrichSource(ctx) {
+    const parts = [];
+
+    // Start with filename if available
+    if (ctx.filename) {
+      parts.push(ctx.filename);
+    }
+
+    // Add source URL if it's a remote fetch
+    if (ctx.sourceUrl) {
+      try {
+        const url = new URL(ctx.sourceUrl);
+        parts.length = 0; // Clear filename, use URL instead
+        parts.push(`${url.hostname}${url.pathname}`);
+      } catch {
+        parts.push(ctx.sourceUrl);
+      }
+    }
+
+    // Add file type context
+    const typeLabel = this._getFileTypeLabel(ctx.fileType, ctx.mimeType);
+    if (typeLabel && !parts.some(p => p.toLowerCase().includes(typeLabel.toLowerCase()))) {
+      parts.push(`(${typeLabel})`);
+    }
+
+    // Add size if significant
+    if (ctx.fileSize) {
+      parts.push(this._formatFileSize(ctx.fileSize));
+    }
+
+    // Add hash snippet for verification
+    if (ctx.contentHash) {
+      const hashSnippet = ctx.contentHash.substring(0, 8);
+      parts.push(`#${hashSnippet}`);
+    }
+
+    return parts.join(' ') || null;
+  }
+
+  /**
+   * Enrich the Method field with parsing methodology
+   */
+  static _enrichMethod(ctx) {
+    const parts = [];
+
+    // Base method from file type
+    const typeLabel = this._getFileTypeLabel(ctx.fileType, ctx.mimeType);
+    if (typeLabel) {
+      parts.push(`${typeLabel} import`);
+    } else {
+      parts.push('Data import');
+    }
+
+    // Add parsing decisions if available
+    if (ctx.parsingDecisions) {
+      const decisions = [];
+      if (ctx.parsingDecisions.delimiterDetected) {
+        decisions.push(`delimiter: "${ctx.parsingDecisions.delimiterDetected}"`);
+      }
+      if (ctx.parsingDecisions.encodingDetected) {
+        decisions.push(`encoding: ${ctx.parsingDecisions.encodingDetected}`);
+      }
+      if (ctx.parsingDecisions.headerRowDetected !== undefined) {
+        decisions.push(ctx.parsingDecisions.headerRowDetected ? 'with headers' : 'no headers');
+      }
+      if (decisions.length > 0) {
+        parts.push(`[${decisions.join(', ')}]`);
+      }
+    }
+
+    return parts.join(' ') || null;
+  }
+
+  /**
+   * Enrich the Scale field with data dimensions
+   */
+  static _enrichScale(ctx) {
+    const parts = [];
+
+    if (ctx.recordCount !== undefined) {
+      parts.push(`${ctx.recordCount.toLocaleString()} records`);
+    }
+
+    if (ctx.fieldCount !== undefined) {
+      parts.push(`${ctx.fieldCount} fields`);
+    }
+
+    if (ctx.sheetCount && ctx.sheetCount > 1) {
+      parts.push(`${ctx.sheetCount} sheets`);
+    }
+
+    return parts.join(', ') || null;
+  }
+
+  /**
+   * Enrich the Timeframe field with import timing
+   */
+  static _enrichTimeframe(ctx) {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const parts = [`Imported ${dateStr}`];
+
+    // Add file modification date if available
+    if (ctx.fileModifiedAt) {
+      try {
+        const modDate = new Date(ctx.fileModifiedAt);
+        const modStr = modDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+        parts.push(`(file dated ${modStr})`);
+      } catch {
+        // Ignore invalid dates
+      }
+    }
+
+    return parts.join(' ') || null;
+  }
+
+  /**
+   * Enrich the Definition field with format interpretation
+   */
+  static _enrichDefinition(ctx) {
+    if (!ctx.schemaInference && !ctx.parsingDecisions) return null;
+
+    const parts = [];
+
+    // Add detected field types summary
+    if (ctx.schemaInference?.fieldInferences) {
+      const types = Object.values(ctx.schemaInference.fieldInferences);
+      const typeCounts = {};
+      types.forEach(t => {
+        const type = t.type || t;
+        typeCounts[type] = (typeCounts[type] || 0) + 1;
+      });
+
+      const typesSummary = Object.entries(typeCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([type, count]) => `${count} ${type}`)
+        .join(', ');
+
+      if (typesSummary) {
+        parts.push(`Schema: ${typesSummary}`);
+      }
+    }
+
+    // Add format details
+    if (ctx.parsingDecisions?.nullRepresentations) {
+      parts.push(`nulls: ${ctx.parsingDecisions.nullRepresentations.join('/')}`);
+    }
+
+    return parts.join('; ') || null;
+  }
+
+  /**
+   * Enrich the Background field with import context
+   */
+  static _enrichBackground(ctx) {
+    const parts = [];
+
+    if (ctx.importMode) {
+      parts.push(`Mode: ${ctx.importMode}`);
+    }
+
+    if (ctx.triggeredBy) {
+      parts.push(`Triggered by: ${ctx.triggeredBy}`);
+    }
+
+    if (ctx.previousVersionHash) {
+      parts.push(`Supersedes: #${ctx.previousVersionHash.substring(0, 8)}`);
+    }
+
+    return parts.join('; ') || null;
+  }
+
+  /**
+   * Get human-readable file type label
+   */
+  static _getFileTypeLabel(fileType, mimeType) {
+    const typeMap = {
+      'csv': 'CSV',
+      'json': 'JSON',
+      'xlsx': 'Excel',
+      'xls': 'Excel',
+      'ics': 'iCalendar',
+      'tsv': 'TSV'
+    };
+
+    if (fileType && typeMap[fileType]) {
+      return typeMap[fileType];
+    }
+
+    if (mimeType) {
+      if (mimeType.includes('csv')) return 'CSV';
+      if (mimeType.includes('json')) return 'JSON';
+      if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return 'Excel';
+      if (mimeType.includes('calendar')) return 'iCalendar';
+    }
+
+    return null;
+  }
+
+  /**
+   * Format file size in human-readable form
+   */
+  static _formatFileSize(bytes) {
+    if (!bytes || bytes <= 0) return null;
+
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+
+    return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+  }
+
+  /**
+   * Merge enriched provenance with user-provided values
+   * User values take precedence over auto-enriched values
+   */
+  static mergeWithUserProvenance(enriched, userProvenance = {}) {
+    const merged = { ...enriched };
+
+    for (const key of Object.keys(userProvenance)) {
+      if (userProvenance[key] !== null && userProvenance[key] !== undefined) {
+        merged[key] = userProvenance[key];
+      }
+    }
+
+    return merged;
+  }
+
+  /**
+   * Extract import context from parse result and options
+   * Helper to build the importContext object from existing data structures
+   */
+  static extractImportContext(parseResult = {}, options = {}) {
+    return {
+      filename: options.setName || options.originalFilename || null,
+      fileSize: options.originalFileSize || parseResult.rawSize || null,
+      mimeType: options.mimeType || options.originalFileType || null,
+      contentHash: options.contentHash || null,
+      fileType: parseResult.fileType || null,
+      parsingDecisions: parseResult.parsingDecisions || null,
+      schemaInference: options.schemaInference || null,
+      recordCount: parseResult.rows?.length || options.recordCount || null,
+      fieldCount: parseResult.headers?.length || options.fieldCount || null,
+      sheetCount: options.sheetCount || null,
+      sourceUrl: options.sourceUrl || null,
+      fileModifiedAt: options.fileModifiedAt || null,
+      importMode: options.importMode || 'create',
+      triggeredBy: options.triggeredBy || 'user',
+      previousVersionHash: options.previousVersionHash || null
+    };
+  }
+}
+
+// ============================================================================
 // Exports
 // ============================================================================
 
@@ -1110,7 +1432,10 @@ if (typeof module !== 'undefined' && module.exports) {
     findProvenanceCitations,
 
     // Import mapping
-    mapEmbeddedProvenance
+    mapEmbeddedProvenance,
+
+    // Metadata parser for enriching provenance
+    MetadataParser
   };
 }
 
@@ -1168,6 +1493,9 @@ if (typeof window !== 'undefined') {
     findProvenanceCitations,
 
     // Import mapping
-    mapEmbeddedProvenance
+    mapEmbeddedProvenance,
+
+    // Metadata parser for enriching provenance
+    MetadataParser
   };
 }
