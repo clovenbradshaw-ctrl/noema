@@ -127,9 +127,32 @@
   --radius-xl: 12px;
 }
 
-/* Light theme */
+/* Light theme - applied via class for user preference persistence */
+html.light-theme,
+html.light-theme :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --bg-elevated: #ffffff;
+    --bg-hover: rgba(0, 0, 0, 0.03);
+    --bg-active: rgba(0, 0, 0, 0.06);
+
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+    --text-disabled: #94a3b8;
+
+    --border-primary: #e2e8f0;
+    --border-secondary: #cbd5e1;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+/* Also support system preference as fallback when no user preference is saved */
 @media (prefers-color-scheme: light) {
-  :root {
+  html:not(.dark-theme):not(.light-theme) {
     --bg-primary: #ffffff;
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
@@ -1588,6 +1611,104 @@ html, body {
 }
 
 .link-chip i {
+  font-size: 12px;
+}
+
+/* Link Dropdown Editor */
+.link-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 280px;
+  max-width: 400px;
+  max-height: 320px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.link-dropdown-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.link-dropdown-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.link-dropdown-search {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.link-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  outline: none;
+}
+
+.link-search-input:focus {
+  border-color: var(--primary-500);
+}
+
+.link-dropdown-options {
+  overflow-y: auto;
+  max-height: 220px;
+  padding: 4px;
+}
+
+.link-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.link-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.link-option.selected {
+  background: var(--primary-50);
+}
+
+.link-option-check {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-500);
+}
+
+.link-option-name {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.link-option-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.link-editor-error {
+  padding: 8px;
+  color: var(--danger-500);
   font-size: 12px;
 }
 
