@@ -5261,6 +5261,11 @@ class EODataWorkbench {
         <button class="view-tabs-add" id="view-tabs-add-btn" title="Add view">
           <i class="ph ph-plus"></i>
         </button>
+        <div class="view-tabs-divider"></div>
+        <button class="view-tabs-add-field" id="view-tabs-add-field-btn" title="Add field">
+          <i class="ph ph-plus-circle"></i>
+          <span>Field</span>
+        </button>
         <div class="view-search-container">
           <i class="ph ph-magnifying-glass view-search-icon"></i>
           <input type="text"
@@ -5324,6 +5329,13 @@ class EODataWorkbench {
     addBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this._showCreateViewModal();
+    });
+
+    // Add field button
+    const addFieldBtn = header.querySelector('#view-tabs-add-field-btn');
+    addFieldBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._showAddFieldMenu(e.target.closest('button'));
     });
 
     // Search input
@@ -7669,42 +7681,75 @@ class EODataWorkbench {
   }
 
   _attachKanbanDragHandlers(groupField) {
-    const cards = document.querySelectorAll('.kanban-card');
-    const columns = document.querySelectorAll('.kanban-column-body');
+    const container = document.querySelector('.kanban-container');
+    if (!container) return;
 
-    cards.forEach(card => {
-      card.addEventListener('dragstart', (e) => {
-        card.classList.add('dragging');
-        e.dataTransfer.setData('text/plain', card.dataset.recordId);
-      });
+    // Store groupField reference for event handlers
+    const fieldId = groupField.id;
 
-      card.addEventListener('dragend', () => {
+    // Use event delegation on the container for more reliable drag-and-drop
+    container.addEventListener('dragstart', (e) => {
+      const card = e.target.closest('.kanban-card');
+      if (!card) return;
+
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', card.dataset.recordId);
+      e.dataTransfer.setData('application/x-kanban-card', card.dataset.recordId);
+    });
+
+    container.addEventListener('dragend', (e) => {
+      const card = e.target.closest('.kanban-card');
+      if (card) {
         card.classList.remove('dragging');
-        columns.forEach(col => col.classList.remove('drag-over'));
+      }
+      // Clear all drag-over states
+      container.querySelectorAll('.kanban-column-body').forEach(col => {
+        col.classList.remove('drag-over');
       });
     });
 
-    columns.forEach(column => {
-      column.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        column.classList.add('drag-over');
+    container.addEventListener('dragover', (e) => {
+      const column = e.target.closest('.kanban-column-body');
+      if (!column) return;
+
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+
+      // Only add drag-over to the target column
+      container.querySelectorAll('.kanban-column-body').forEach(col => {
+        col.classList.toggle('drag-over', col === column);
       });
+    });
 
-      column.addEventListener('dragleave', () => {
-        column.classList.remove('drag-over');
-      });
+    container.addEventListener('dragleave', (e) => {
+      const column = e.target.closest('.kanban-column-body');
+      if (!column) return;
 
-      column.addEventListener('drop', (e) => {
-        e.preventDefault();
-        column.classList.remove('drag-over');
+      // Check if we're leaving to a child element
+      const relatedTarget = e.relatedTarget;
+      if (column.contains(relatedTarget)) return;
 
-        const recordId = e.dataTransfer.getData('text/plain');
-        const columnId = column.dataset.columnId;
-        const newValue = columnId === 'null' ? null : columnId;
+      column.classList.remove('drag-over');
+    });
 
-        this._updateRecordValue(recordId, groupField.id, newValue);
-        this._renderKanbanView();
-      });
+    container.addEventListener('drop', (e) => {
+      const column = e.target.closest('.kanban-column-body');
+      if (!column) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      column.classList.remove('drag-over');
+
+      const recordId = e.dataTransfer.getData('text/plain') ||
+                       e.dataTransfer.getData('application/x-kanban-card');
+      if (!recordId) return;
+
+      const columnId = column.dataset.columnId;
+      const newValue = columnId === 'null' ? null : columnId;
+
+      this._updateRecordValue(recordId, fieldId, newValue);
+      this._renderKanbanView();
     });
   }
 
@@ -7837,44 +7882,62 @@ class EODataWorkbench {
     html += '</div></div>';
     this.elements.contentArea.innerHTML = html;
 
-    // Attach event listeners
-    document.querySelectorAll('.calendar-event').forEach(event => {
-      event.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._showRecordDetail(event.dataset.recordId);
-      });
-    });
+    // Use event delegation on the calendar container for reliable event handling
+    const calendarContainer = document.querySelector('.calendar-container');
+    if (calendarContainer) {
+      const dateFieldId = dateField.id;
 
-    document.querySelectorAll('.calendar-day').forEach(day => {
-      day.addEventListener('click', () => {
-        const date = day.dataset.date;
-        if (date) {
-          const record = this.addRecord();
-          this._updateRecordValue(record.id, dateField.id, date);
-          // Re-render calendar to show the new event on this day
+      calendarContainer.addEventListener('click', (e) => {
+        const target = e.target;
+
+        // Handle navigation buttons
+        const prevBtn = target.closest('#cal-prev');
+        const nextBtn = target.closest('#cal-next');
+        const todayBtn = target.closest('#cal-today');
+
+        if (prevBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.calendarDate.setMonth(this.calendarDate.getMonth() - 1);
           this._renderCalendarView();
+          return;
+        }
+
+        if (nextBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.calendarDate.setMonth(this.calendarDate.getMonth() + 1);
+          this._renderCalendarView();
+          return;
+        }
+
+        if (todayBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.calendarDate = new Date();
+          this._renderCalendarView();
+          return;
+        }
+
+        // Handle calendar event clicks
+        const eventEl = target.closest('.calendar-event');
+        if (eventEl && eventEl.dataset.recordId) {
+          e.stopPropagation();
+          this._showRecordDetail(eventEl.dataset.recordId);
+          return;
+        }
+
+        // Handle calendar day clicks (for adding new records)
+        const dayEl = target.closest('.calendar-day');
+        if (dayEl && dayEl.dataset.date && !dayEl.classList.contains('other-month')) {
+          const date = dayEl.dataset.date;
+          const record = this.addRecord();
+          this._updateRecordValue(record.id, dateFieldId, date);
+          this._renderCalendarView();
+          return;
         }
       });
-    });
-
-    // Calendar navigation handlers
-    document.getElementById('cal-prev')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.calendarDate.setMonth(this.calendarDate.getMonth() - 1);
-      this._renderCalendarView();
-    });
-
-    document.getElementById('cal-next')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.calendarDate.setMonth(this.calendarDate.getMonth() + 1);
-      this._renderCalendarView();
-    });
-
-    document.getElementById('cal-today')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.calendarDate = new Date();
-      this._renderCalendarView();
-    });
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -9830,6 +9893,18 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
   // Field Type Picker
   // --------------------------------------------------------------------------
+
+  _showAddFieldMenu(targetBtn) {
+    // Show field type picker positioned relative to the button
+    if (targetBtn) {
+      const rect = targetBtn.getBoundingClientRect();
+      const position = {
+        left: rect.left,
+        top: rect.bottom + 4
+      };
+      this._showFieldTypePicker({ target: targetBtn }, null, position);
+    }
+  }
 
   _showFieldTypePicker(e, callback = null, position = null) {
     const picker = this.elements.fieldTypePicker;

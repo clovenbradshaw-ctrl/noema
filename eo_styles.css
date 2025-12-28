@@ -1541,6 +1541,40 @@ body:has(.header-simplified) .view-disclosure {
   font-size: 14px;
 }
 
+.view-tabs-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-secondary);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+.view-tabs-add-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.view-tabs-add-field:hover {
+  border-color: var(--primary-400);
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+
+.view-tabs-add-field i {
+  font-size: 14px;
+}
+
 /* ===== View Search ===== */
 .view-search-container {
   display: flex;
