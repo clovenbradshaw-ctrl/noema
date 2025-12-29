@@ -1812,6 +1812,8 @@ mark.search-highlight {
 .data-table th,
 .data-table td {
   height: var(--row-height);
+  min-height: var(--row-height);
+  max-height: var(--row-height);
   padding: var(--cell-padding);
   border-bottom: 1px solid var(--border-primary);
   border-right: 1px solid var(--border-primary);
@@ -1820,6 +1822,7 @@ mark.search-highlight {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
 /* Table Header */
@@ -1938,6 +1941,7 @@ mark.search-highlight {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  height: 100%;
 }
 
 .col-source .provenance-icon {
@@ -2150,17 +2154,24 @@ mark.search-highlight {
   align-items: center;
   gap: 4px;
   height: 100%;
+  max-height: var(--row-height);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .cell-empty {
   color: var(--text-muted);
   font-style: italic;
+  display: block;
+  line-height: calc(var(--row-height) - 16px);
 }
 
 /* Number Field */
 .cell-number {
   font-family: var(--font-mono);
   text-align: right;
+  display: block;
+  line-height: calc(var(--row-height) - 16px);
 }
 
 /* Checkbox Field */
@@ -2169,6 +2180,8 @@ mark.search-highlight {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  height: 100%;
+  width: 100%;
 }
 
 .cell-checkbox i {
@@ -2195,8 +2208,12 @@ mark.search-highlight {
 /* Select Field */
 .cell-select {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  overflow: hidden;
+  align-items: center;
+  height: 100%;
+  max-height: calc(var(--row-height) - 16px);
 }
 
 .select-tag {
@@ -2207,6 +2224,10 @@ mark.search-highlight {
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
+  max-height: 20px;
+  line-height: 1;
 }
 
 .select-tag.color-blue { background: #dbeafe; color: #1e40af; }
@@ -2357,13 +2378,19 @@ mark.search-highlight {
 /* Date Field */
 .cell-date {
   color: var(--text-secondary);
+  display: block;
+  line-height: calc(var(--row-height) - 16px);
 }
 
 /* Link Field */
 .cell-link {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  align-items: center;
+  height: 100%;
+  max-height: calc(var(--row-height) - 16px);
 }
 
 .link-chip {
@@ -2377,6 +2404,10 @@ mark.search-highlight {
   color: var(--primary-500);
   cursor: pointer;
   transition: var(--transition-fast);
+  flex-shrink: 0;
+  white-space: nowrap;
+  max-height: 20px;
+  line-height: 1;
 }
 
 .link-chip:hover {
@@ -2643,6 +2674,13 @@ mark.search-highlight {
 }
 
 /* URL Field */
+.cell-url {
+  display: block;
+  line-height: calc(var(--row-height) - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cell-url a {
   color: var(--primary-500);
   text-decoration: none;
@@ -2656,6 +2694,10 @@ mark.search-highlight {
 .cell-attachment {
   display: flex;
   gap: 4px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  align-items: center;
+  height: 100%;
 }
 
 .attachment-preview {
