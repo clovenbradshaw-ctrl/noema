@@ -560,6 +560,18 @@ class EOEventStore {
     return this.getDerivedValues().filter(e => !this.isSuperseded(e.id));
   }
 
+  /**
+   * Get active interpretations (non-superseded Meant events)
+   * Optionally filtered by frame purpose
+   */
+  getActiveInterpretations(frame = null) {
+    let active = this.getActiveMeant();
+    if (frame) {
+      active = active.filter(e => e.frame?.purpose === frame);
+    }
+    return active;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Grounding Queries
   // ─────────────────────────────────────────────────────────────────────────
