@@ -1815,9 +1815,8 @@ mark.search-highlight {
 }
 
 .data-table {
-  width: 100%;
   border-collapse: collapse;
-  table-layout: fixed; /* CRITICAL: Column widths from th, not content */
+  table-layout: auto; /* Allow columns to expand for many-field datasets */
 }
 
 .data-table th,
