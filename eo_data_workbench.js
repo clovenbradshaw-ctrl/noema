@@ -2794,9 +2794,27 @@ class EODataWorkbench {
         type: f.type || 'text'
       }));
     } else if (rawRecords.length > 0) {
-      // Infer fields from first record
-      const firstRecord = rawRecords[0];
-      fields = Object.keys(firstRecord).map(key => ({
+      // Infer fields from ALL records (some records may have fields others don't)
+      const fieldSet = new Set();
+      const fieldOrder = [];
+
+      // First, add fields from the first record (preserves typical order)
+      for (const key of Object.keys(rawRecords[0])) {
+        fieldOrder.push(key);
+        fieldSet.add(key);
+      }
+
+      // Then scan remaining records for any additional fields
+      for (let i = 1; i < rawRecords.length; i++) {
+        for (const key of Object.keys(rawRecords[i])) {
+          if (!fieldSet.has(key)) {
+            fieldOrder.push(key);
+            fieldSet.add(key);
+          }
+        }
+      }
+
+      fields = fieldOrder.map(key => ({
         id: key,
         name: key,
         type: this._inferFieldType(rawRecords, key)

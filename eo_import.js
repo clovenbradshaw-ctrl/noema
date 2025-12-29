@@ -1495,8 +1495,28 @@ class ImportOrchestrator {
       return { headers: [], rows: [], hasHeaders: true };
     }
 
-    // Extract headers from first record
-    const headers = Object.keys(records[0]).filter(k => !k.startsWith('_'));
+    // Extract headers from ALL records to capture fields that may be missing in some records
+    // Preserve order from first record, then add any additional fields found in other records
+    const headerSet = new Set();
+    const headers = [];
+
+    // First, add headers from the first record (preserves original order)
+    for (const key of Object.keys(records[0])) {
+      if (!key.startsWith('_')) {
+        headers.push(key);
+        headerSet.add(key);
+      }
+    }
+
+    // Then scan remaining records for any additional fields
+    for (let i = 1; i < records.length; i++) {
+      for (const key of Object.keys(records[i])) {
+        if (!key.startsWith('_') && !headerSet.has(key)) {
+          headers.push(key);
+          headerSet.add(key);
+        }
+      }
+    }
 
     return {
       headers,
