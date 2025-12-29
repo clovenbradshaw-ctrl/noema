@@ -64,6 +64,93 @@ const FieldTypeIcons = {
 const SelectColors = ['blue', 'green', 'yellow', 'red', 'purple', 'pink', 'orange', 'gray'];
 
 // ============================================================================
+// TABLE RENDERING RULES - NEVER VIOLATE THESE
+// ============================================================================
+//
+// RULE 1: Every field MUST have a valid numeric width (minimum 80px, default 200px)
+//         - Invalid or undefined widths render as "undefinedpx" breaking layout
+//         - Always use ensureValidField() before rendering
+//
+// RULE 2: Every cell MUST have a td element for every field in the header
+//         - Missing cells break column alignment and borders
+//         - Empty values should show placeholder content, not skip cells
+//
+// RULE 3: Every field MUST have a valid id, name, and type
+//         - Missing id causes record.values lookup failures
+//         - Missing type defaults to TEXT for safe fallback
+//
+// RULE 4: Table layout MUST be consistent
+//         - Use table-layout: fixed for predictable widths
+//         - Always set explicit widths on th elements
+//         - All borders come from CSS, never inline styles
+//
+// ============================================================================
+
+// Field default/minimum values
+const FIELD_MIN_WIDTH = 80;
+const FIELD_DEFAULT_WIDTH = 200;
+const FIELD_DEFAULT_TYPE = 'text';
+
+/**
+ * Ensure a field has all required properties for rendering.
+ * This is the single source of truth for field validation.
+ * ALWAYS call this before rendering a field.
+ *
+ * @param {Object} field - The field to validate
+ * @returns {Object} - A field with guaranteed valid properties
+ */
+function ensureValidField(field) {
+  if (!field) return null;
+
+  return {
+    ...field,
+    id: field.id || generateId(),
+    name: field.name || 'Untitled',
+    type: field.type || FIELD_DEFAULT_TYPE,
+    width: Math.max(FIELD_MIN_WIDTH, Number(field.width) || FIELD_DEFAULT_WIDTH),
+    isPrimary: field.isPrimary || false,
+    options: field.options || {}
+  };
+}
+
+/**
+ * Ensure all fields in an array are valid for rendering.
+ *
+ * @param {Array} fields - Array of fields to validate
+ * @returns {Array} - Array of validated fields (invalid entries filtered out)
+ */
+function ensureValidFields(fields) {
+  if (!Array.isArray(fields)) return [];
+  return fields.map(ensureValidField).filter(Boolean);
+}
+
+/**
+ * Ensure a record has values for all fields.
+ * Missing field values are set to null (not undefined).
+ *
+ * @param {Object} record - The record to validate
+ * @param {Array} fields - The fields that should have values
+ * @returns {Object} - Record with guaranteed values object
+ */
+function ensureRecordValues(record, fields) {
+  if (!record) return null;
+
+  const values = { ...(record.values || {}) };
+
+  // Ensure every field has a value entry (null is valid, undefined is not)
+  for (const field of fields) {
+    if (!(field.id in values)) {
+      values[field.id] = null;
+    }
+  }
+
+  return {
+    ...record,
+    values
+  };
+}
+
+// ============================================================================
 // Data Model
 // ============================================================================
 
@@ -805,14 +892,11 @@ class EODataWorkbench {
           this._loadSetRecords(this.currentSetId);
         }
 
-        // Migration: Ensure all fields have a width property (default 200px)
+        // Migration: Validate all fields to ensure proper rendering (TABLE RULES 1 & 3)
+        // This fixes any legacy data that might have missing width, type, or other properties
         this.sets.forEach(set => {
           if (set.fields) {
-            set.fields.forEach(field => {
-              if (field.width === undefined) {
-                field.width = 200;
-              }
-            });
+            set.fields = set.fields.map(field => ensureValidField(field));
           }
         });
       }
@@ -1962,13 +2046,15 @@ class EODataWorkbench {
 
   /**
    * Merge schemas from multiple sets
+   * Uses ensureValidField to guarantee all merged fields have proper width (TABLE RULE 1)
    */
   _mergeSchemas(sets) {
     const fieldMap = new Map();
     for (const set of sets) {
       for (const field of set.fields || []) {
         if (!fieldMap.has(field.name)) {
-          fieldMap.set(field.name, { ...field, id: generateId() });
+          // Ensure merged field has valid width and properties
+          fieldMap.set(field.name, ensureValidField({ ...field, id: generateId() }));
         }
       }
     }
@@ -2289,11 +2375,13 @@ class EODataWorkbench {
     const result = builderResult.result;
 
     // Create workbench-compatible fields from SetConfig fields
-    const fields = (setConfig.fields || []).map(field => ({
+    // Use ensureValidField to guarantee width and required properties (TABLE RULE 1, 3)
+    const fields = (setConfig.fields || []).map((field, index) => ensureValidField({
       id: field.id,
       name: field.name,
       type: this._mapEOFieldType(field.type),
-      sourceColumn: field.sourceColumn
+      sourceColumn: field.sourceColumn,
+      isPrimary: index === 0
     }));
 
     // Create records with values mapped to field IDs
@@ -2853,7 +2941,8 @@ class EODataWorkbench {
         }
       }
 
-      fields = fieldOrder.map(key => ({
+      // Use ensureValidField to guarantee proper width (TABLE RULE 1)
+      fields = fieldOrder.map(key => ensureValidField({
         id: key,
         name: key,
         type: this._inferFieldType(rawRecords, key)
@@ -7904,9 +7993,11 @@ class EODataWorkbench {
   _renderTableView() {
     const set = this.getCurrentSet();
     const baseRecords = this.getFilteredRecords();
-    const fields = this._getVisibleFields();
     const view = this.getCurrentView();
     const searchTerm = this.viewSearchTerm;
+
+    // TABLE RULE 1 & 3: Validate all fields before rendering to guarantee width and required properties
+    const fields = ensureValidFields(this._getVisibleFields());
 
     // Apply search filter
     let allRecords = baseRecords;
@@ -7917,6 +8008,9 @@ class EODataWorkbench {
       });
     }
 
+    // TABLE RULE 2: Ensure all records have values for all fields
+    allRecords = allRecords.map(record => ensureRecordValues(record, fields));
+
     // Debug: Log render state to help diagnose empty cell issues
     console.log('[Debug] _renderTableView:', {
       setId: set?.id,
@@ -7924,6 +8018,7 @@ class EODataWorkbench {
       recordCount: allRecords.length,
       fieldCount: fields.length,
       fieldIds: fields.map(f => f.id),
+      fieldWidths: fields.map(f => f.width),
       sampleRecordKeys: allRecords[0] ? Object.keys(allRecords[0].values) : [],
       searchTerm: searchTerm
     });
@@ -7956,7 +8051,7 @@ class EODataWorkbench {
                 </th>
               ` : ''}
               ${fields.map(field => `
-                <th style="width: ${field.width || 200}px; position: relative;"
+                <th style="width: ${field.width}px; position: relative;"
                     data-field-id="${field.id}">
                   <div class="th-content">
                     <i class="ph ${FieldTypeIcons[field.type] || 'ph-text-aa'}"></i>
@@ -17646,6 +17741,12 @@ if (typeof window !== 'undefined') {
   window.createField = createField;
   window.createView = createView;
   window.createRecord = createRecord;
+  // Table rendering utilities (TABLE RULES enforcement)
+  window.ensureValidField = ensureValidField;
+  window.ensureValidFields = ensureValidFields;
+  window.ensureRecordValues = ensureRecordValues;
+  window.FIELD_MIN_WIDTH = FIELD_MIN_WIDTH;
+  window.FIELD_DEFAULT_WIDTH = FIELD_DEFAULT_WIDTH;
   window.EODataWorkbench = EODataWorkbench;
   window.initDataWorkbench = initDataWorkbench;
   window.getDataWorkbench = getDataWorkbench;
@@ -17659,6 +17760,11 @@ if (typeof module !== 'undefined' && module.exports) {
     createField,
     createView,
     createRecord,
+    ensureValidField,
+    ensureValidFields,
+    ensureRecordValues,
+    FIELD_MIN_WIDTH,
+    FIELD_DEFAULT_WIDTH,
     EODataWorkbench,
     initDataWorkbench,
     getDataWorkbench

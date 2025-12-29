@@ -1797,6 +1797,17 @@ mark.search-highlight {
 }
 
 /* ===== Data Table ===== */
+/*
+ * TABLE RENDERING RULES - CSS Safeguards
+ * These rules ensure consistent borders and layout regardless of data issues:
+ *
+ * 1. table-layout: fixed - Widths come from th, not content
+ * 2. border-collapse: collapse - No double borders
+ * 3. min-width on th - Prevents columns from disappearing
+ * 4. Explicit borders on all cells - No missing lines
+ * 5. Empty cells still get borders via ::before fallback
+ */
+
 .data-table-container {
   flex: 1;
   overflow: auto;
@@ -1806,7 +1817,7 @@ mark.search-highlight {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: fixed; /* CRITICAL: Column widths from th, not content */
 }
 
 .data-table th,
@@ -1814,6 +1825,7 @@ mark.search-highlight {
   height: var(--row-height);
   min-height: var(--row-height);
   max-height: var(--row-height);
+  min-width: 80px; /* SAFEGUARD: Minimum width prevents invisible columns */
   padding: var(--cell-padding);
   border-bottom: 1px solid var(--border-primary);
   border-right: 1px solid var(--border-primary);
@@ -1823,6 +1835,12 @@ mark.search-highlight {
   overflow: hidden;
   text-overflow: ellipsis;
   box-sizing: border-box;
+}
+
+/* SAFEGUARD: Ensure empty cells are visible and have proper borders */
+.data-table td:empty::before {
+  content: '\200B'; /* Zero-width space to maintain cell height */
+  display: inline-block;
 }
 
 /* Table Header */
@@ -2752,10 +2770,17 @@ mark.search-highlight {
   padding: 4px 8px;
   text-align: left;
   border-bottom: 1px solid var(--border-secondary);
+  border-right: 1px solid var(--border-secondary); /* TABLE RULE 4: Consistent borders */
+  min-width: 50px; /* Smaller min-width for nested tables */
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nested-table th:last-child,
+.nested-table td:last-child {
+  border-right: none; /* No right border on last cell */
 }
 
 .nested-table th {
@@ -11300,6 +11325,7 @@ body.has-picked-up .browser-tab:hover {
 .source-data-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed; /* TABLE RULE 4: Consistent column widths */
   font-size: 13px;
 }
 
@@ -11316,6 +11342,8 @@ body.has-picked-up .browser-tab:hover {
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color); /* TABLE RULE 4: Consistent borders */
+  min-width: 80px; /* TABLE RULE 1: Minimum column width */
   white-space: nowrap;
 }
 
@@ -11342,6 +11370,8 @@ body.has-picked-up .browser-tab:hover {
 .source-data-table td {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color); /* TABLE RULE 4: Consistent borders */
+  min-width: 80px; /* TABLE RULE 1: Minimum column width */
   max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
