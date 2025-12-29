@@ -18411,6 +18411,62 @@ class EODataWorkbench {
     return this.sets;
   }
 
+  /**
+   * Debug function to diagnose column rendering issues.
+   * Call window.eoWorkbench.debugColumnData() in browser console.
+   */
+  debugColumnData() {
+    const set = this.getCurrentSet();
+    if (!set) {
+      console.log('[Debug] No current set');
+      return;
+    }
+
+    console.log('=== DEBUG: Column Data Integrity Check ===');
+    console.log('Set Name:', set.name);
+    console.log('Set ID:', set.id);
+
+    console.log('\n--- Fields ---');
+    set.fields.forEach((field, idx) => {
+      console.log(`[${idx}] ID: ${field.id}, Name: "${field.name}", Type: "${field.type}"`);
+    });
+
+    console.log('\n--- Field IDs (for matching) ---');
+    const fieldIds = set.fields.map(f => f.id);
+    console.log('Field IDs:', fieldIds);
+
+    console.log('\n--- First 3 Records ---');
+    set.records.slice(0, 3).forEach((record, idx) => {
+      console.log(`\nRecord ${idx + 1} (ID: ${record.id}):`);
+      console.log('  Value Keys:', Object.keys(record.values));
+      console.log('  Values:', record.values);
+
+      // Check for mismatches
+      const recordKeys = Object.keys(record.values);
+      const missingInFields = recordKeys.filter(k => !fieldIds.includes(k));
+      const missingInRecord = fieldIds.filter(k => !recordKeys.includes(k));
+
+      if (missingInFields.length > 0) {
+        console.warn('  ⚠️ Record has keys NOT in fields:', missingInFields);
+      }
+      if (missingInRecord.length > 0) {
+        console.warn('  ⚠️ Fields missing from record:', missingInRecord);
+      }
+    });
+
+    console.log('\n--- Value Type Check ---');
+    if (set.records.length > 0) {
+      const record = set.records[0];
+      set.fields.forEach(field => {
+        const value = record.values[field.id];
+        console.log(`Field "${field.name}" (${field.type}): value = ${JSON.stringify(value)} (${typeof value})`);
+      });
+    }
+
+    console.log('\n=== END DEBUG ===');
+    return { set, fieldIds };
+  }
+
   getRecords(setId = null) {
     const targetSetId = setId || this.currentSetId;
     const set = this.sets.find(s => s.id === targetSetId);
