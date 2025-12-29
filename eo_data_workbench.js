@@ -547,47 +547,164 @@ class EODataWorkbench {
   }
 
   _createDefaultSet() {
-    const set = createSet('My Data');
+    const set = createSet('Projects');
 
-    // Add some default fields
+    // Create status field with choices
+    const statusChoices = [
+      { id: generateId(), name: 'Backlog', color: 'gray' },
+      { id: generateId(), name: 'In Progress', color: 'blue' },
+      { id: generateId(), name: 'Review', color: 'yellow' },
+      { id: generateId(), name: 'Complete', color: 'green' }
+    ];
+
+    // Create priority field with choices
+    const priorityChoices = [
+      { id: generateId(), name: 'Low', color: 'gray' },
+      { id: generateId(), name: 'Medium', color: 'yellow' },
+      { id: generateId(), name: 'High', color: 'orange' },
+      { id: generateId(), name: 'Urgent', color: 'red' }
+    ];
+
+    // Create category field with choices
+    const categoryChoices = [
+      { id: generateId(), name: 'Development', color: 'purple' },
+      { id: generateId(), name: 'Design', color: 'pink' },
+      { id: generateId(), name: 'Documentation', color: 'cyan' },
+      { id: generateId(), name: 'Testing', color: 'teal' }
+    ];
+
+    // Add fields - index 0 is Name (primary), created by createSet
+    const statusField = createField('Status', FieldTypes.SELECT, { choices: statusChoices });
+    const priorityField = createField('Priority', FieldTypes.SELECT, { choices: priorityChoices });
+    const categoryField = createField('Category', FieldTypes.SELECT, { choices: categoryChoices });
+    const dueDateField = createField('Due Date', FieldTypes.DATE);
+    const estimateField = createField('Estimate (hrs)', FieldTypes.NUMBER, { precision: 1 });
+    const completedField = createField('Completed', FieldTypes.CHECKBOX);
+    const notesField = createField('Notes', FieldTypes.LONG_TEXT);
+
     set.fields.push(
-      createField('Status', FieldTypes.SELECT, {
-        choices: [
-          { id: generateId(), name: 'To Do', color: 'gray' },
-          { id: generateId(), name: 'In Progress', color: 'blue' },
-          { id: generateId(), name: 'Done', color: 'green' }
-        ]
-      }),
-      createField('Due Date', FieldTypes.DATE),
-      createField('Notes', FieldTypes.LONG_TEXT)
+      statusField,
+      priorityField,
+      categoryField,
+      dueDateField,
+      estimateField,
+      completedField,
+      notesField
     );
 
-    // Debug: Log field structure after creation
-    console.log('[Debug] _createDefaultSet - Fields after creation:', set.fields.map(f => ({
-      id: f.id,
-      name: f.name,
-      type: f.type
-    })));
+    // Get field references for record creation
+    const nameField = set.fields[0];
 
-    // Add some sample records
-    for (let i = 1; i <= 5; i++) {
-      const recordValues = {
-        [set.fields[0].id]: `Record ${i}`,
-        [set.fields[1].id]: set.fields[1].options.choices[i % 3].id,
-        [set.fields[2].id]: new Date(Date.now() + i * 86400000).toISOString().split('T')[0]
+    // Helper to get date string offset from today
+    const getDate = (daysOffset) => {
+      const date = new Date();
+      date.setDate(date.getDate() + daysOffset);
+      return date.toISOString().split('T')[0];
+    };
+
+    // Sample project data
+    const projectData = [
+      {
+        name: 'User authentication system',
+        status: statusChoices[2].id, // Review
+        priority: priorityChoices[2].id, // High
+        category: categoryChoices[0].id, // Development
+        dueDate: getDate(3),
+        estimate: 16,
+        completed: false,
+        notes: 'Implement OAuth2 with Google and GitHub providers. Include password reset flow.'
+      },
+      {
+        name: 'Dashboard redesign',
+        status: statusChoices[1].id, // In Progress
+        priority: priorityChoices[1].id, // Medium
+        category: categoryChoices[1].id, // Design
+        dueDate: getDate(7),
+        estimate: 24,
+        completed: false,
+        notes: 'New layout with improved data visualization. Focus on mobile responsiveness.'
+      },
+      {
+        name: 'API documentation',
+        status: statusChoices[3].id, // Complete
+        priority: priorityChoices[0].id, // Low
+        category: categoryChoices[2].id, // Documentation
+        dueDate: getDate(-2),
+        estimate: 8,
+        completed: true,
+        notes: 'OpenAPI spec and usage examples for all public endpoints.'
+      },
+      {
+        name: 'Performance optimization',
+        status: statusChoices[0].id, // Backlog
+        priority: priorityChoices[3].id, // Urgent
+        category: categoryChoices[0].id, // Development
+        dueDate: getDate(14),
+        estimate: 32,
+        completed: false,
+        notes: 'Database query optimization and caching layer implementation.'
+      },
+      {
+        name: 'Integration tests',
+        status: statusChoices[1].id, // In Progress
+        priority: priorityChoices[2].id, // High
+        category: categoryChoices[3].id, // Testing
+        dueDate: getDate(5),
+        estimate: 12,
+        completed: false,
+        notes: 'End-to-end tests for critical user flows.'
+      },
+      {
+        name: 'Mobile app wireframes',
+        status: statusChoices[3].id, // Complete
+        priority: priorityChoices[1].id, // Medium
+        category: categoryChoices[1].id, // Design
+        dueDate: getDate(-5),
+        estimate: 6,
+        completed: true,
+        notes: 'Initial wireframes approved by stakeholders.'
+      },
+      {
+        name: 'Database migration',
+        status: statusChoices[0].id, // Backlog
+        priority: priorityChoices[1].id, // Medium
+        category: categoryChoices[0].id, // Development
+        dueDate: getDate(21),
+        estimate: 20,
+        completed: false,
+        notes: 'Migrate from PostgreSQL 12 to 16. Plan for zero-downtime deployment.'
+      },
+      {
+        name: 'User onboarding flow',
+        status: statusChoices[2].id, // Review
+        priority: priorityChoices[2].id, // High
+        category: categoryChoices[1].id, // Design
+        dueDate: getDate(2),
+        estimate: 10,
+        completed: false,
+        notes: 'Interactive tutorial and tooltips for new users.'
+      }
+    ];
+
+    // Create records from project data
+    projectData.forEach(project => {
+      const values = {
+        [nameField.id]: project.name,
+        [statusField.id]: project.status,
+        [priorityField.id]: project.priority,
+        [categoryField.id]: project.category,
+        [dueDateField.id]: project.dueDate,
+        [estimateField.id]: project.estimate,
+        [completedField.id]: project.completed,
+        [notesField.id]: project.notes
       };
+      set.records.push(createRecord(set.id, values));
+    });
 
-      // Debug: Log record values being created
-      console.log('[Debug] _createDefaultSet - Creating record:', {
-        i,
-        nameFieldId: set.fields[0].id,
-        statusFieldId: set.fields[1].id,
-        dueDateFieldId: set.fields[2].id,
-        values: recordValues
-      });
-
-      set.records.push(createRecord(set.id, recordValues));
-    }
+    // Add a Kanban view for status-based workflow
+    set.views.push(createView('Kanban', 'kanban', {
+      groupByFieldId: statusField.id
+    }));
 
     this.sets.push(set);
     this._saveData();
