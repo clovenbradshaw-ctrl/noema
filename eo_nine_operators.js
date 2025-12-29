@@ -1,10 +1,10 @@
 /**
- * EO Nine Operators - Semantic Operator Encoding
+ * EO Nine Operators - The Canonical Vocabulary
  *
  * All actions in the app are encoded as compositions of these 9 operators.
  * Semantics: operator(target, context)
  *
- * Each operator represents a fundamental epistemic transformation:
+ * THE 9 OPERATORS (these are the verbs - we don't rename them):
  *
  * | Operator | Symbol | What It Does                  | Epistemic Guarantee               |
  * |----------|--------|-------------------------------|-----------------------------------|
@@ -13,10 +13,14 @@
  * | SEG      | ⊘      | Scope visibility              | Hidden ≠ deleted                  |
  * | CON      | ⊗      | Connect entities              | Semantics live in the connection  |
  * | SYN      | ≡      | Synthesize identity           | Equivalence is pre-query          |
- * | ALT      | Δ      | Alternate (temporal/branching)| Time/version is structural        |
+ * | ALT      | Δ      | Alternate world state         | Time is projection, not filtering |
  * | SUP      | ∥      | Superpose interpretations     | Disagreement preserved            |
  * | REC      | ←      | Record grounding              | Nothing floats; everything traceable |
  * | NUL      | ∅      | Assert meaningful absence     | Non-events are first-class        |
+ *
+ * DICTIONARY:
+ * Technical operations from eo_operators.js map to these 9 canonical operators.
+ * See TechnicalOperatorDictionary below.
  */
 
 // ============================================================================
@@ -182,6 +186,172 @@ const OperatorMetadata = Object.freeze({
     ]
   }
 });
+
+// ============================================================================
+// Technical Operator Dictionary
+// ============================================================================
+
+/**
+ * Maps technical operators (from eo_operators.js) to the 9 canonical operators.
+ *
+ * The 9 operators are THE vocabulary. Technical terms are just citations.
+ * When you see 'filter' in code, it means SEG.
+ * When you see 'join' in code, it means CON.
+ */
+const TechnicalOperatorDictionary = Object.freeze({
+  // ─────────────────────────────────────────────────────────────────────────
+  // ENTRY class → INS
+  // ─────────────────────────────────────────────────────────────────────────
+  'source_given': { canonical: 'INS', note: 'Assert existence from external reality' },
+  'source_derived': { canonical: 'INS', note: 'Assert existence from EO sets' },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RESTRICTIVE class → SEG
+  // ─────────────────────────────────────────────────────────────────────────
+  'filter': { canonical: 'SEG', note: 'Scope visibility by predicate' },
+  'select': { canonical: 'SEG', note: 'Scope visibility by fields' },
+  'limit': { canonical: 'SEG', note: 'Scope visibility by count' },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHAPE class → DES (mostly) or ALT
+  // ─────────────────────────────────────────────────────────────────────────
+  'map': { canonical: 'ALT', note: 'Transform/alternate values' },
+  'rename': { canonical: 'DES', note: 'Re-designate identity' },
+  'flatten': { canonical: 'ALT', note: 'Alternate structure' },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // COMPUTE class → INS (derived values) + REC
+  // Compute creates new values, which is INS with DERIVED epistemic type
+  // ─────────────────────────────────────────────────────────────────────────
+  'aggregate': { canonical: 'INS', note: 'Assert derived value (SUM, COUNT, etc.)', epistemicType: 'DERIVED' },
+  'compute': { canonical: 'INS', note: 'Assert computed value', epistemicType: 'DERIVED' },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATIONAL class → CON
+  // ─────────────────────────────────────────────────────────────────────────
+  'join': { canonical: 'CON', note: 'Connect sets by condition' },
+  'link': { canonical: 'CON', note: 'Connect records by relationship' },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TEMPORAL class → ALT
+  // ─────────────────────────────────────────────────────────────────────────
+  'asof': { canonical: 'ALT', note: 'Alternate to world-state at time T' },
+  'between': { canonical: 'ALT', note: 'Alternate to event-time range' },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROVENANCE class → REC
+  // ─────────────────────────────────────────────────────────────────────────
+  'trace': { canonical: 'REC', note: 'Record provenance chain' },
+  'root': { canonical: 'REC', note: 'Record origin' },
+  'supersedes': { canonical: 'NUL', note: 'Assert absence of prior (tombstone)' },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // EPISTEMIC class → SUP
+  // ─────────────────────────────────────────────────────────────────────────
+  'assess_confidence': { canonical: 'SUP', note: 'Superpose confidence levels' }
+});
+
+/**
+ * Translate a technical operator to its canonical 9-operator form
+ */
+function toCanonical(technicalOp) {
+  const entry = TechnicalOperatorDictionary[technicalOp];
+  return entry ? entry.canonical : null;
+}
+
+/**
+ * Get all technical operators that map to a canonical operator
+ */
+function getTechnicalOps(canonicalOp) {
+  const results = [];
+  for (const [tech, entry] of Object.entries(TechnicalOperatorDictionary)) {
+    if (entry.canonical === canonicalOp) {
+      results.push({ technical: tech, ...entry });
+    }
+  }
+  return results;
+}
+
+/**
+ * UI Action Dictionary
+ *
+ * Maps user-facing action names to canonical operators.
+ * These are the verbs users see in the UI.
+ */
+const UIActionDictionary = Object.freeze({
+  // Data entry
+  'Import': 'INS',
+  'Create': 'INS',
+  'Add': 'INS',
+  'Insert': 'INS',
+
+  // Identity
+  'Name': 'DES',
+  'Rename': 'DES',
+  'Alias': 'DES',
+  'Label': 'DES',
+
+  // Visibility
+  'Filter': 'SEG',
+  'Focus': 'SEG',
+  'Hide': 'SEG',
+  'Show': 'SEG',
+  'Scope': 'SEG',
+
+  // Connection
+  'Join': 'CON',
+  'Link': 'CON',
+  'Connect': 'CON',
+  'Relate': 'CON',
+
+  // Identity synthesis
+  'Merge': 'SYN',
+  'Deduplicate': 'SYN',
+  'Resolve': 'SYN',
+  'Match': 'SYN',
+
+  // Alternation
+  'Edit': 'ALT',
+  'Update': 'ALT',
+  'Change': 'ALT',
+  'Modify': 'ALT',
+  'Switch': 'ALT',
+  'Toggle': 'ALT',
+  'Version': 'ALT',
+  'AsOf': 'ALT',
+
+  // Superposition
+  'Compare': 'SUP',
+  'Preserve': 'SUP',
+  'Uncertain': 'SUP',
+  'Maybe': 'SUP',
+
+  // Grounding
+  'Trace': 'REC',
+  'Provenance': 'REC',
+  'Source': 'REC',
+  'Attribute': 'REC',
+
+  // Absence
+  'Delete': 'NUL',
+  'Remove': 'NUL',
+  'Toss': 'NUL',
+  'Expect': 'NUL',
+  'Missing': 'NUL'
+});
+
+/**
+ * Get the canonical operator for a UI action verb
+ */
+function fromUIAction(actionVerb) {
+  // Try exact match first
+  if (UIActionDictionary[actionVerb]) {
+    return UIActionDictionary[actionVerb];
+  }
+  // Try case-insensitive
+  const normalized = actionVerb.charAt(0).toUpperCase() + actionVerb.slice(1).toLowerCase();
+  return UIActionDictionary[normalized] || null;
+}
 
 // ============================================================================
 // Operator Invocation
@@ -1529,17 +1699,31 @@ if (typeof document !== 'undefined') {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    // The 9 canonical operators
     NINE_OPERATORS,
     OperatorSymbols,
     OperatorMetadata,
+
+    // Dictionaries (technical terms → canonical operators)
+    TechnicalOperatorDictionary,
+    UIActionDictionary,
+    toCanonical,
+    getTechnicalOps,
+    fromUIAction,
+
+    // Invocation
     invoke,
     normalizeTarget,
     normalizeContext,
     createEmptyContext,
+
+    // Action encoding
     ActionOperatorMapping,
     encodeAction,
     getOperatorsForAction,
     getActionsForOperator,
+
+    // Validation & display
     validateOperatorChain,
     formatOperator,
     formatOperatorChain,
@@ -1549,17 +1733,33 @@ if (typeof module !== 'undefined' && module.exports) {
 
 if (typeof window !== 'undefined') {
   window.NineOperators = {
+    // The 9 canonical operators (THE vocabulary)
     operators: NINE_OPERATORS,
     symbols: OperatorSymbols,
     metadata: OperatorMetadata,
+
+    // Dictionaries (citations → canonical)
+    dictionary: {
+      technical: TechnicalOperatorDictionary,
+      ui: UIActionDictionary,
+      toCanonical,
+      getTechnicalOps,
+      fromUIAction
+    },
+
+    // Invocation
     invoke,
     normalizeTarget,
     normalizeContext,
     emptyContext: createEmptyContext,
+
+    // Action encoding
     actions: ActionOperatorMapping,
     encode: encodeAction,
     getOperatorsForAction,
     getActionsForOperator,
+
+    // Validation & display
     validateChain: validateOperatorChain,
     format: formatOperator,
     formatChain: formatOperatorChain,
