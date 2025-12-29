@@ -11551,7 +11551,25 @@ body.has-picked-up .browser-tab:hover {
 /* Source item active state in sidebar */
 .source-item.active {
   background: var(--bg-active);
-  border: 1px solid var(--given-color, #f0883e);
+  border: 2px solid var(--given-color);
+  color: var(--text-primary);
+}
+
+.source-item.active .source-name {
+  color: var(--text-primary);
+}
+
+.source-item.active .source-meta-inline {
+  color: var(--text-secondary);
+}
+
+.source-item.active .nav-item-count {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
+.source-item.active .source-icon {
+  color: var(--given-color);
 }
 
 /* Responsive adjustments */
