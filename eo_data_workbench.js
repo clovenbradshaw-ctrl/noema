@@ -1879,7 +1879,7 @@ class EODataWorkbench {
         this._showFilterSetCreationFlow();
         break;
       case 'RELATE':
-        this._showJoinSetCreationFlow();
+        this._showJoinBuilderUI();
         break;
       case 'SLICE':
         this._showTimeSliceCreationFlow();
