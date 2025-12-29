@@ -804,6 +804,17 @@ class EODataWorkbench {
         if (this._useLazyLoading && this.currentSetId) {
           this._loadSetRecords(this.currentSetId);
         }
+
+        // Migration: Ensure all fields have a width property (default 200px)
+        this.sets.forEach(set => {
+          if (set.fields) {
+            set.fields.forEach(field => {
+              if (field.width === undefined) {
+                field.width = 200;
+              }
+            });
+          }
+        });
       }
     } catch (e) {
       console.error('Failed to load data:', e);
@@ -7945,7 +7956,7 @@ class EODataWorkbench {
                 </th>
               ` : ''}
               ${fields.map(field => `
-                <th style="width: ${field.width}px; position: relative;"
+                <th style="width: ${field.width || 200}px; position: relative;"
                     data-field-id="${field.id}">
                   <div class="th-content">
                     <i class="ph ${FieldTypeIcons[field.type] || 'ph-text-aa'}"></i>
