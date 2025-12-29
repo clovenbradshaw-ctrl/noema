@@ -15705,15 +15705,37 @@ class EODataWorkbench {
    * Get history events for a record from the Event Store
    */
   _getRecordHistory(recordId) {
-    // Try to get events from the Event Store
+    // Try to get events from the Event Store via eoApp
     const eventStore = this.eoApp?.eventStore;
-    if (eventStore && typeof eventStore.getEntityHistory === 'function') {
-      return eventStore.getEntityHistory(recordId);
+    if (eventStore) {
+      // Prefer getEntityHistory (sorted) over getByEntity
+      if (typeof eventStore.getEntityHistory === 'function') {
+        return eventStore.getEntityHistory(recordId);
+      }
+      // Fallback to getByEntity if getEntityHistory doesn't exist
+      if (typeof eventStore.getByEntity === 'function') {
+        const events = eventStore.getByEntity(recordId);
+        // Sort by timestamp, newest first
+        return events.sort((a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+      }
     }
 
-    // Fallback: check if global EOEventStore exists
-    if (typeof window !== 'undefined' && window.eoEventStore) {
-      return window.eoEventStore.getEntityHistory(recordId);
+    // Fallback: check if global event store getter exists
+    if (typeof window !== 'undefined') {
+      const globalStore = window.eoEventStore || (window.getEventStore && window.getEventStore());
+      if (globalStore) {
+        if (typeof globalStore.getEntityHistory === 'function') {
+          return globalStore.getEntityHistory(recordId);
+        }
+        if (typeof globalStore.getByEntity === 'function') {
+          const events = globalStore.getByEntity(recordId);
+          return events.sort((a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        }
+      }
     }
 
     return [];

@@ -163,11 +163,12 @@ class EOApp {
   recordGiven(mode, content, options = {}) {
     const event = {
       id: generateEventId({ action: 'record_given', content }),
-      type: EpistemicType.GIVEN,
+      epistemicType: EpistemicType.GIVEN,
+      category: 'raw_data',
       actor: options.actor || this.currentActor,
       timestamp: new Date().toISOString(),
       mode: mode,
-      parents: this.eventStore.getHeads().map(e => e.id),
+      parents: this.eventStore.getHeads ? this.eventStore.getHeads().map(e => e.id) : [],
       context: {
         workspace: options.workspace || this.currentWorkspace,
         schemaVersion: APP_CONFIG.schemaVersion,
@@ -198,10 +199,11 @@ class EOApp {
 
     const event = {
       id: generateEventId({ action: 'record_meant', interpretation }),
-      type: EpistemicType.MEANT,
+      epistemicType: EpistemicType.MEANT,
+      category: 'interpretation',
       actor: options.actor || this.currentActor,
       timestamp: new Date().toISOString(),
-      parents: this.eventStore.getHeads().map(e => e.id),
+      parents: this.eventStore.getHeads ? this.eventStore.getHeads().map(e => e.id) : [],
       context: {
         workspace: options.workspace || this.currentWorkspace,
         schemaVersion: APP_CONFIG.schemaVersion,

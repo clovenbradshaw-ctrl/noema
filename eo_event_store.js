@@ -501,6 +501,37 @@ class EOEventStore {
   }
 
   /**
+   * Get entity history (alias for getByEntity for clarity)
+   * Returns all events associated with an entity, sorted by timestamp
+   */
+  getEntityHistory(entityId) {
+    const events = this.getByEntity(entityId);
+    // Sort by timestamp, newest first
+    return events.sort((a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }
+
+  /**
+   * Get head events (events with no children)
+   * These are the latest events in each branch of the DAG
+   */
+  getHeads() {
+    // Build set of all parent IDs
+    const parentIds = new Set();
+    for (const event of this._log) {
+      if (event.parents) {
+        for (const parentId of event.parents) {
+          parentIds.add(parentId);
+        }
+      }
+    }
+
+    // Events that are not parents are heads
+    return this._log.filter(event => !parentIds.has(event.id));
+  }
+
+  /**
    * Check if an event is superseded
    */
   isSuperseded(eventId) {
