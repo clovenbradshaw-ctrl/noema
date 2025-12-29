@@ -3237,7 +3237,7 @@ class QueryBuilderUI {
     this._onComplete = null;
     this._onCancel = null;
     this._source = null;
-    this._sources = []; // For multi-source queries (joins)
+    this._availableSources = []; // All sources available for joining
     this._mode = 'wizard'; // 'wizard' or 'query'
     this._language = 'sql'; // 'sql' or 'eoql'
     this._queryText = '';
@@ -3247,6 +3247,10 @@ class QueryBuilderUI {
     this._filterBuilder = null;
     this._selectedFields = [];
     this._setName = '';
+    // Join support
+    this._joins = []; // Array of { sourceId, alias, conditions: [{left, op, right}], type, conflict }
+    this._conflictPolicies = ['EXPOSE_ALL', 'PICK_FIRST', 'PICK_LAST', 'AGGREGATE', 'CLUSTER'];
+    this._joinTypes = ['LEFT', 'INNER', 'RIGHT', 'FULL'];
   }
 
   /**
@@ -3256,21 +3260,32 @@ class QueryBuilderUI {
     this._onComplete = options.onComplete;
     this._onCancel = options.onCancel;
     this._source = this.setCreator.sourceStore.get(sourceId);
-    this._sources = options.sources || [this._source];
 
     if (!this._source) {
       throw new Error(`Source not found: ${sourceId}`);
     }
 
+    // Get all available sources for joining (exclude current source)
+    this._availableSources = [];
+    if (this.setCreator.sourceStore.sources) {
+      this.setCreator.sourceStore.sources.forEach((src, id) => {
+        if (id !== sourceId) {
+          this._availableSources.push(src);
+        }
+      });
+    }
+
     // Initialize state
     this._mode = options.mode || 'wizard';
     this._language = options.language || 'sql';
-    this._setName = `${this._source.name}_filtered`;
+    this._setName = `${this._source.name}_query`;
+    this._joins = []; // Reset joins
     this._selectedFields = this._source.schema.fields.map(f => ({
       name: f.name,
       type: f.type,
       rename: null,
-      include: true
+      include: true,
+      source: 'primary'
     }));
 
     // Initialize filter builder for wizard mode
@@ -3345,6 +3360,22 @@ class QueryBuilderUI {
   _generateEOQL(fields, filters) {
     let query = `FROM "${this._source.name}" AS s`;
 
+    // Add joins
+    for (const join of this._joins) {
+      if (join.sourceId && join.conditions.length > 0) {
+        const source = this._availableSources.find(s => s.id === join.sourceId);
+        if (source) {
+          const condStr = join.conditions
+            .filter(c => c.left && c.right)
+            .map(c => `s.${c.left} = ${join.alias}.${c.right}`)
+            .join(' AND ');
+          if (condStr) {
+            query += `\n|> CON "${source.name}" AS ${join.alias} ON ${condStr} CONFLICT ${join.conflict}`;
+          }
+        }
+      }
+    }
+
     // Add filter if present
     if (filters && filters.conditions && filters.conditions.length > 0) {
       const filterExpr = this._filterGroupToEOQL(filters);
@@ -3364,7 +3395,29 @@ class QueryBuilderUI {
 
   _generateSQL(fields, filters) {
     const fieldList = fields.length > 0 ? fields.join(', ') : '*';
-    let query = `SELECT ${fieldList}\nFROM "${this._source.name}"`;
+    let query = `SELECT ${fieldList}\nFROM "${this._source.name}" s`;
+
+    // Add joins
+    for (const join of this._joins) {
+      if (join.sourceId && join.conditions.length > 0) {
+        const source = this._availableSources.find(s => s.id === join.sourceId);
+        if (source) {
+          const condStr = join.conditions
+            .filter(c => c.left && c.right)
+            .map(c => `s.${c.left} = ${join.alias}.${c.right}`)
+            .join(' AND ');
+          if (condStr) {
+            query += `\n${join.type} JOIN "${source.name}" ${join.alias} ON ${condStr}`;
+          }
+        }
+      }
+    }
+
+    // Add CONFLICT clause if there are joins
+    if (this._joins.some(j => j.sourceId)) {
+      const conflict = this._joins[0]?.conflict || 'EXPOSE_ALL';
+      query += `\nCONFLICT ${conflict}`;
+    }
 
     // Add WHERE if filters present
     if (filters && filters.conditions && filters.conditions.length > 0) {
@@ -3670,6 +3723,16 @@ class QueryBuilderUI {
         <div class="wizard-step">
           <div class="step-header">
             <span class="step-num">2</span>
+            <span class="step-label">Join with other sources <span class="step-optional">(optional)</span></span>
+          </div>
+          <div class="join-builder" id="qb-join-builder">
+            ${this._renderJoinsUI()}
+          </div>
+        </div>
+
+        <div class="wizard-step">
+          <div class="step-header">
+            <span class="step-num">3</span>
             <span class="step-label">Filter records</span>
           </div>
           <div id="qb-filter-builder"></div>
@@ -3677,16 +3740,11 @@ class QueryBuilderUI {
 
         <div class="wizard-step">
           <div class="step-header">
-            <span class="step-num">3</span>
+            <span class="step-num">4</span>
             <span class="step-label">Select columns</span>
           </div>
           <div class="column-chips" id="qb-column-chips">
-            ${this._selectedFields.map((f, i) => `
-              <span class="column-chip ${f.include ? 'selected' : ''}" data-index="${i}">
-                <i class="ph ${f.include ? 'ph-check' : 'ph-plus'}"></i>
-                ${this._escapeHtml(f.name)}
-              </span>
-            `).join('')}
+            ${this._renderColumnChips()}
           </div>
         </div>
       </div>
@@ -3706,12 +3764,16 @@ class QueryBuilderUI {
         </div>
 
         <div class="query-editor-container">
-          <textarea class="query-editor" id="qb-query-editor"
-                    placeholder="Write your query here...">${this._escapeHtml(this._queryText)}</textarea>
+          <div class="query-editor-wrapper">
+            <div class="query-editor-highlight" id="qb-highlight"></div>
+            <textarea class="query-editor with-highlight" id="qb-query-editor"
+                      placeholder="Write your query here..." spellcheck="false">${this._escapeHtml(this._queryText)}</textarea>
+          </div>
+          <div class="autocomplete-dropdown" id="qb-autocomplete" style="display: none;"></div>
           <div class="query-toolbar">
             <div class="query-hints">
               <span class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> Run</span>
-              <span class="hint"><kbd>Tab</kbd> Format</span>
+              <span class="hint"><kbd>Tab</kbd> Autocomplete</span>
             </div>
             <button class="btn btn-sm btn-primary" id="qb-run-query">
               <i class="ph ph-play"></i> Run
@@ -3724,6 +3786,454 @@ class QueryBuilderUI {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Apply syntax highlighting to query text
+   */
+  _highlightQuery(text) {
+    if (!text) return '';
+
+    const language = this._language;
+    let highlighted = this._escapeHtml(text);
+
+    // SQL/EOQL Keywords
+    const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'LIKE', 'IS', 'NULL',
+      'ORDER', 'BY', 'ASC', 'DESC', 'LIMIT', 'OFFSET', 'GROUP', 'HAVING',
+      'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'ON', 'AS',
+      'DISTINCT', 'BETWEEN', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'UNION'];
+
+    const eoqlKeywords = ['FROM', 'SEG', 'CON', 'ALT', 'DES', 'SYN', 'SUP', 'NUL', 'AGG', 'INS'];
+
+    const eoExtensions = ['AS OF', 'AS SET', 'CONFLICT', 'EXPOSE_ALL', 'PICK_FIRST', 'PICK_LAST',
+      'AGGREGATE', 'CLUSTER', 'NOW', 'STATIC', 'DYNAMIC'];
+
+    const functions = ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'FIRST', 'LAST', 'ROUND', 'COALESCE'];
+
+    // Apply highlighting in order
+    // 1. Comments
+    highlighted = highlighted.replace(/(--[^\n]*)/g, '<span class="hl-comment">$1</span>');
+
+    // 2. Strings (single and double quotes)
+    highlighted = highlighted.replace(/('[^']*'|"[^"]*")/g, '<span class="hl-string">$1</span>');
+
+    // 3. Numbers
+    highlighted = highlighted.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
+
+    // 4. EO Extensions (must be before keywords)
+    for (const ext of eoExtensions) {
+      const regex = new RegExp(`\\b(${ext.replace(' ', '\\s+')})\\b`, 'gi');
+      highlighted = highlighted.replace(regex, '<span class="hl-eo-extension">$1</span>');
+    }
+
+    // 5. Pipe operator for EOQL
+    highlighted = highlighted.replace(/(\|&gt;)/g, '<span class="hl-operator">$1</span>');
+
+    // 6. Functions
+    for (const fn of functions) {
+      const regex = new RegExp(`\\b(${fn})\\b`, 'gi');
+      highlighted = highlighted.replace(regex, '<span class="hl-function">$1</span>');
+    }
+
+    // 7. Keywords
+    const keywords = language === 'eoql' ? [...eoqlKeywords, ...sqlKeywords] : sqlKeywords;
+    for (const kw of keywords) {
+      const regex = new RegExp(`\\b(${kw})\\b`, 'gi');
+      highlighted = highlighted.replace(regex, '<span class="hl-keyword">$1</span>');
+    }
+
+    return highlighted;
+  }
+
+  /**
+   * Update the syntax highlighting display
+   */
+  _updateHighlight() {
+    const highlight = this.container?.querySelector('#qb-highlight');
+    const editor = this.container?.querySelector('#qb-query-editor');
+    if (highlight && editor) {
+      highlight.innerHTML = this._highlightQuery(editor.value) + '\n';
+      // Sync scroll
+      highlight.scrollTop = editor.scrollTop;
+      highlight.scrollLeft = editor.scrollLeft;
+    }
+  }
+
+  /**
+   * Get autocomplete suggestions based on cursor position
+   */
+  _getAutocompleteSuggestions(text, cursorPos) {
+    const suggestions = [];
+
+    // Get word at cursor
+    const beforeCursor = text.substring(0, cursorPos);
+    const wordMatch = beforeCursor.match(/[\w.]*$/);
+    const currentWord = wordMatch ? wordMatch[0].toLowerCase() : '';
+
+    if (currentWord.length < 1) return suggestions;
+
+    // SQL/EOQL Keywords
+    const keywords = this._language === 'eoql'
+      ? ['FROM', 'SEG', 'CON', 'ALT', 'DES', 'SYN', 'SUP', 'NUL', 'AGG', 'NOW', 'CONFLICT', 'EXPOSE_ALL']
+      : ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'ON', 'AS', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT'];
+
+    // Add matching keywords
+    keywords.forEach(kw => {
+      if (kw.toLowerCase().startsWith(currentWord)) {
+        suggestions.push({ text: kw, type: 'keyword', icon: 'ph-hash' });
+      }
+    });
+
+    // Add field names from source
+    if (this._source) {
+      this._source.schema.fields.forEach(f => {
+        if (f.name.toLowerCase().startsWith(currentWord)) {
+          suggestions.push({ text: f.name, type: 'field', icon: 'ph-columns' });
+        }
+      });
+    }
+
+    // Add joined source field names
+    this._joins.forEach(join => {
+      if (join.sourceId) {
+        const source = this._availableSources.find(s => s.id === join.sourceId);
+        if (source) {
+          source.schema.fields.forEach(f => {
+            const prefixed = `${join.alias}.${f.name}`;
+            if (f.name.toLowerCase().startsWith(currentWord) || prefixed.toLowerCase().startsWith(currentWord)) {
+              suggestions.push({ text: prefixed, type: 'field', icon: 'ph-intersect' });
+            }
+          });
+        }
+      }
+    });
+
+    // EO extensions
+    const eoExt = ['AS OF NOW', 'AS SET', 'CONFLICT EXPOSE_ALL', 'CONFLICT PICK_FIRST'];
+    eoExt.forEach(ext => {
+      if (ext.toLowerCase().startsWith(currentWord)) {
+        suggestions.push({ text: ext, type: 'eo', icon: 'ph-lightning' });
+      }
+    });
+
+    return suggestions.slice(0, 10);
+  }
+
+  /**
+   * Show autocomplete dropdown
+   */
+  _showAutocomplete(suggestions) {
+    const dropdown = this.container?.querySelector('#qb-autocomplete');
+    const editor = this.container?.querySelector('#qb-query-editor');
+    if (!dropdown || !editor || suggestions.length === 0) {
+      this._hideAutocomplete();
+      return;
+    }
+
+    dropdown.innerHTML = suggestions.map((s, i) => `
+      <div class="autocomplete-item ${i === 0 ? 'selected' : ''}" data-index="${i}">
+        <i class="${s.icon} autocomplete-item-icon"></i>
+        <span class="autocomplete-item-text">${this._escapeHtml(s.text)}</span>
+        <span class="autocomplete-item-type">${s.type}</span>
+      </div>
+    `).join('');
+
+    dropdown.style.display = 'block';
+    this._autocompleteSuggestions = suggestions;
+    this._autocompleteIndex = 0;
+
+    // Attach click handlers
+    dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('click', () => {
+        this._insertAutocomplete(parseInt(item.dataset.index));
+      });
+    });
+  }
+
+  /**
+   * Hide autocomplete dropdown
+   */
+  _hideAutocomplete() {
+    const dropdown = this.container?.querySelector('#qb-autocomplete');
+    if (dropdown) {
+      dropdown.style.display = 'none';
+    }
+    this._autocompleteSuggestions = null;
+    this._autocompleteIndex = -1;
+  }
+
+  /**
+   * Insert selected autocomplete suggestion
+   */
+  _insertAutocomplete(index) {
+    if (!this._autocompleteSuggestions || index < 0) return;
+
+    const suggestion = this._autocompleteSuggestions[index];
+    if (!suggestion) return;
+
+    const editor = this.container?.querySelector('#qb-query-editor');
+    if (!editor) return;
+
+    const cursorPos = editor.selectionStart;
+    const text = editor.value;
+    const beforeCursor = text.substring(0, cursorPos);
+    const afterCursor = text.substring(cursorPos);
+
+    // Find the word to replace
+    const wordMatch = beforeCursor.match(/[\w.]*$/);
+    const wordStart = cursorPos - (wordMatch ? wordMatch[0].length : 0);
+
+    // Insert suggestion
+    const newText = text.substring(0, wordStart) + suggestion.text + afterCursor;
+    editor.value = newText;
+    this._queryText = newText;
+
+    // Set cursor after inserted text
+    const newCursorPos = wordStart + suggestion.text.length;
+    editor.setSelectionRange(newCursorPos, newCursorPos);
+    editor.focus();
+
+    this._hideAutocomplete();
+    this._updateHighlight();
+    this._parseQuery();
+  }
+
+  /**
+   * Render the joins UI for wizard mode
+   */
+  _renderJoinsUI() {
+    const hasAvailableSources = this._availableSources.length > 0;
+
+    if (!hasAvailableSources) {
+      return `<div class="join-empty">No other sources available to join</div>`;
+    }
+
+    return `
+      <div class="joins-list">
+        ${this._joins.map((join, i) => this._renderJoinRow(join, i)).join('')}
+      </div>
+      <button class="add-join-btn" id="qb-add-join">
+        <i class="ph ph-plus"></i>
+        Add Join
+      </button>
+    `;
+  }
+
+  /**
+   * Render a single join row
+   */
+  _renderJoinRow(join, index) {
+    const joinSource = this._availableSources.find(s => s.id === join.sourceId);
+    const primaryFields = this._source.schema.fields.map(f => f.name);
+    const joinFields = joinSource ? joinSource.schema.fields.map(f => f.name) : [];
+
+    return `
+      <div class="join-row" data-join-index="${index}">
+        <div class="join-row-header">
+          <div class="join-type-select">
+            <select class="qb-select join-type" data-join-index="${index}">
+              ${this._joinTypes.map(t => `
+                <option value="${t}" ${join.type === t ? 'selected' : ''}>${t} JOIN</option>
+              `).join('')}
+            </select>
+          </div>
+          <div class="join-source-select">
+            <select class="qb-select join-source" data-join-index="${index}">
+              <option value="">Select source...</option>
+              ${this._availableSources.map(s => `
+                <option value="${s.id}" ${join.sourceId === s.id ? 'selected' : ''}>
+                  ${this._escapeHtml(s.name)}
+                </option>
+              `).join('')}
+            </select>
+          </div>
+          <button class="join-remove-btn" data-join-index="${index}">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+
+        ${join.sourceId ? `
+          <div class="join-conditions">
+            ${join.conditions.map((cond, ci) => `
+              <div class="join-condition" data-join-index="${index}" data-cond-index="${ci}">
+                <select class="qb-select join-left-field" data-join-index="${index}" data-cond-index="${ci}">
+                  ${primaryFields.map(f => `
+                    <option value="${f}" ${cond.left === f ? 'selected' : ''}>${f}</option>
+                  `).join('')}
+                </select>
+                <span class="join-equals">=</span>
+                <select class="qb-select join-right-field" data-join-index="${index}" data-cond-index="${ci}">
+                  ${joinFields.map(f => `
+                    <option value="${f}" ${cond.right === f ? 'selected' : ''}>${f}</option>
+                  `).join('')}
+                </select>
+                ${join.conditions.length > 1 ? `
+                  <button class="join-cond-remove" data-join-index="${index}" data-cond-index="${ci}">
+                    <i class="ph ph-x"></i>
+                  </button>
+                ` : ''}
+              </div>
+            `).join('')}
+            <button class="add-condition-btn" data-join-index="${index}">
+              <i class="ph ph-plus"></i> Add condition
+            </button>
+          </div>
+
+          <div class="join-conflict">
+            <label>Conflict policy:</label>
+            <select class="qb-select join-conflict-policy" data-join-index="${index}">
+              ${this._conflictPolicies.map(p => `
+                <option value="${p}" ${join.conflict === p ? 'selected' : ''}>${p.replace('_', ' ')}</option>
+              `).join('')}
+            </select>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  /**
+   * Render column chips including joined source columns
+   */
+  _renderColumnChips() {
+    // Group fields by source
+    const primaryFields = this._selectedFields.filter(f => f.source === 'primary');
+    const joinedFields = this._selectedFields.filter(f => f.source !== 'primary');
+
+    let html = `
+      <div class="column-group">
+        <div class="column-group-label">${this._escapeHtml(this._source.name)}</div>
+        <div class="column-group-chips">
+          ${primaryFields.map((f, i) => `
+            <span class="column-chip ${f.include ? 'selected' : ''}" data-index="${this._selectedFields.indexOf(f)}">
+              <i class="ph ${f.include ? 'ph-check' : 'ph-plus'}"></i>
+              ${this._escapeHtml(f.name)}
+            </span>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Add joined source columns grouped by source
+    const joinedSources = new Map();
+    joinedFields.forEach(f => {
+      if (!joinedSources.has(f.source)) {
+        joinedSources.set(f.source, []);
+      }
+      joinedSources.get(f.source).push(f);
+    });
+
+    joinedSources.forEach((fields, sourceId) => {
+      const source = this._availableSources.find(s => s.id === sourceId);
+      const sourceName = source ? source.name : sourceId;
+      html += `
+        <div class="column-group joined">
+          <div class="column-group-label"><i class="ph ph-intersect"></i> ${this._escapeHtml(sourceName)}</div>
+          <div class="column-group-chips">
+            ${fields.map(f => `
+              <span class="column-chip ${f.include ? 'selected' : ''}" data-index="${this._selectedFields.indexOf(f)}">
+                <i class="ph ${f.include ? 'ph-check' : 'ph-plus'}"></i>
+                ${this._escapeHtml(f.name)}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    });
+
+    return html;
+  }
+
+  /**
+   * Add a new join
+   */
+  _addJoin() {
+    this._joins.push({
+      sourceId: '',
+      alias: `j${this._joins.length + 1}`,
+      conditions: [{ left: '', right: '' }],
+      type: 'LEFT',
+      conflict: 'EXPOSE_ALL'
+    });
+    this._updateJoinsUI();
+  }
+
+  /**
+   * Remove a join
+   */
+  _removeJoin(index) {
+    const join = this._joins[index];
+    if (join && join.sourceId) {
+      // Remove fields from this join
+      this._selectedFields = this._selectedFields.filter(f => f.source !== join.sourceId);
+    }
+    this._joins.splice(index, 1);
+    this._updateJoinsUI();
+    this._updateColumnChipsUI();
+    this._onWizardChange();
+  }
+
+  /**
+   * Update join source selection
+   */
+  _updateJoinSource(index, sourceId) {
+    const join = this._joins[index];
+    const oldSourceId = join.sourceId;
+
+    // Remove old source fields
+    if (oldSourceId) {
+      this._selectedFields = this._selectedFields.filter(f => f.source !== oldSourceId);
+    }
+
+    join.sourceId = sourceId;
+
+    // Add new source fields
+    if (sourceId) {
+      const source = this._availableSources.find(s => s.id === sourceId);
+      if (source) {
+        source.schema.fields.forEach(f => {
+          this._selectedFields.push({
+            name: f.name,
+            type: f.type,
+            rename: null,
+            include: true,
+            source: sourceId
+          });
+        });
+
+        // Auto-populate first condition with first fields
+        if (join.conditions.length > 0 && !join.conditions[0].left) {
+          join.conditions[0].left = this._source.schema.fields[0]?.name || '';
+          join.conditions[0].right = source.schema.fields[0]?.name || '';
+        }
+      }
+    }
+
+    this._updateJoinsUI();
+    this._updateColumnChipsUI();
+    this._onWizardChange();
+  }
+
+  /**
+   * Update joins UI
+   */
+  _updateJoinsUI() {
+    const container = this.container.querySelector('#qb-join-builder');
+    if (container) {
+      container.innerHTML = this._renderJoinsUI();
+      this._attachJoinEventListeners();
+    }
+  }
+
+  /**
+   * Update column chips UI
+   */
+  _updateColumnChipsUI() {
+    const container = this.container.querySelector('#qb-column-chips');
+    if (container) {
+      container.innerHTML = this._renderColumnChips();
+      this._attachColumnChipListeners();
+    }
   }
 
   _renderOperatorChain() {
@@ -3911,6 +4421,9 @@ class QueryBuilderUI {
         });
       }
 
+      // Join builder
+      this._attachJoinEventListeners();
+
       // Filter builder
       const filterContainer = this.container.querySelector('#qb-filter-builder');
       if (filterContainer && this._filterBuilder) {
@@ -3918,15 +4431,7 @@ class QueryBuilderUI {
       }
 
       // Column chips
-      this.container.querySelectorAll('.column-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-          const index = parseInt(chip.dataset.index);
-          this._selectedFields[index].include = !this._selectedFields[index].include;
-          chip.classList.toggle('selected');
-          chip.querySelector('i').className = this._selectedFields[index].include ? 'ph ph-check' : 'ph ph-plus';
-          this._onWizardChange();
-        });
-      });
+      this._attachColumnChipListeners();
     } else {
       // Language tabs
       this.container.querySelectorAll('.lang-tab').forEach(tab => {
@@ -3938,8 +4443,21 @@ class QueryBuilderUI {
       // Query editor
       const editor = this.container.querySelector('#qb-query-editor');
       if (editor) {
+        // Initial highlight
+        this._updateHighlight();
+
         editor.addEventListener('input', (e) => {
           this._queryText = e.target.value;
+          this._updateHighlight();
+
+          // Show autocomplete suggestions
+          const suggestions = this._getAutocompleteSuggestions(e.target.value, e.target.selectionStart);
+          if (suggestions.length > 0) {
+            this._showAutocomplete(suggestions);
+          } else {
+            this._hideAutocomplete();
+          }
+
           // Debounce parsing
           if (this._parseDebounce) clearTimeout(this._parseDebounce);
           this._parseDebounce = setTimeout(() => {
@@ -3947,11 +4465,49 @@ class QueryBuilderUI {
           }, 500);
         });
 
-        // Ctrl+Enter to run
+        // Sync scroll between editor and highlight
+        editor.addEventListener('scroll', () => {
+          this._updateHighlight();
+        });
+
+        // Keyboard navigation
         editor.addEventListener('keydown', (e) => {
+          // Ctrl+Enter to run
           if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
             this._parseQuery();
+            return;
           }
+
+          // Tab for autocomplete
+          if (e.key === 'Tab' && this._autocompleteSuggestions?.length > 0) {
+            e.preventDefault();
+            this._insertAutocomplete(this._autocompleteIndex);
+            return;
+          }
+
+          // Arrow keys for autocomplete navigation
+          if (this._autocompleteSuggestions?.length > 0) {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              this._autocompleteIndex = Math.min(this._autocompleteIndex + 1, this._autocompleteSuggestions.length - 1);
+              this._updateAutocompleteSelection();
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              this._autocompleteIndex = Math.max(this._autocompleteIndex - 1, 0);
+              this._updateAutocompleteSelection();
+            } else if (e.key === 'Enter' && this._autocompleteIndex >= 0) {
+              e.preventDefault();
+              this._insertAutocomplete(this._autocompleteIndex);
+            } else if (e.key === 'Escape') {
+              this._hideAutocomplete();
+            }
+          }
+        });
+
+        // Hide autocomplete on blur
+        editor.addEventListener('blur', () => {
+          setTimeout(() => this._hideAutocomplete(), 150);
         });
       }
 
@@ -3960,6 +4516,118 @@ class QueryBuilderUI {
         this._parseQuery();
       });
     }
+  }
+
+  /**
+   * Update autocomplete selection highlight
+   */
+  _updateAutocompleteSelection() {
+    const dropdown = this.container?.querySelector('#qb-autocomplete');
+    if (!dropdown) return;
+
+    dropdown.querySelectorAll('.autocomplete-item').forEach((item, i) => {
+      item.classList.toggle('selected', i === this._autocompleteIndex);
+    });
+  }
+
+  /**
+   * Attach event listeners for join UI
+   */
+  _attachJoinEventListeners() {
+    // Add join button
+    this.container.querySelector('#qb-add-join')?.addEventListener('click', () => {
+      this._addJoin();
+    });
+
+    // Join source selection
+    this.container.querySelectorAll('.join-source').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const index = parseInt(e.target.dataset.joinIndex);
+        this._updateJoinSource(index, e.target.value);
+      });
+    });
+
+    // Join type selection
+    this.container.querySelectorAll('.join-type').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const index = parseInt(e.target.dataset.joinIndex);
+        this._joins[index].type = e.target.value;
+        this._onWizardChange();
+      });
+    });
+
+    // Remove join buttons
+    this.container.querySelectorAll('.join-remove-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.target.closest('.join-remove-btn').dataset.joinIndex);
+        this._removeJoin(index);
+      });
+    });
+
+    // Left field selection
+    this.container.querySelectorAll('.join-left-field').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const joinIndex = parseInt(e.target.dataset.joinIndex);
+        const condIndex = parseInt(e.target.dataset.condIndex);
+        this._joins[joinIndex].conditions[condIndex].left = e.target.value;
+        this._onWizardChange();
+      });
+    });
+
+    // Right field selection
+    this.container.querySelectorAll('.join-right-field').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const joinIndex = parseInt(e.target.dataset.joinIndex);
+        const condIndex = parseInt(e.target.dataset.condIndex);
+        this._joins[joinIndex].conditions[condIndex].right = e.target.value;
+        this._onWizardChange();
+      });
+    });
+
+    // Conflict policy selection
+    this.container.querySelectorAll('.join-conflict-policy').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const index = parseInt(e.target.dataset.joinIndex);
+        this._joins[index].conflict = e.target.value;
+        this._onWizardChange();
+      });
+    });
+
+    // Add condition buttons
+    this.container.querySelectorAll('.add-condition-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.target.dataset.joinIndex);
+        this._joins[index].conditions.push({ left: '', right: '' });
+        this._updateJoinsUI();
+        this._onWizardChange();
+      });
+    });
+
+    // Remove condition buttons
+    this.container.querySelectorAll('.join-cond-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const joinIndex = parseInt(e.target.closest('.join-cond-remove').dataset.joinIndex);
+        const condIndex = parseInt(e.target.closest('.join-cond-remove').dataset.condIndex);
+        this._joins[joinIndex].conditions.splice(condIndex, 1);
+        this._updateJoinsUI();
+        this._onWizardChange();
+      });
+    });
+  }
+
+  /**
+   * Attach event listeners for column chips
+   */
+  _attachColumnChipListeners() {
+    this.container.querySelectorAll('.column-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const index = parseInt(chip.dataset.index);
+        this._selectedFields[index].include = !this._selectedFields[index].include;
+        chip.classList.toggle('selected');
+        chip.querySelector('i').className = this._selectedFields[index].include ? 'ph ph-check' : 'ph ph-plus';
+        this._onWizardChange();
+      });
+    });
   }
 
   _escapeHtml(text) {
