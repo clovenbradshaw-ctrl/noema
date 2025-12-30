@@ -11423,6 +11423,125 @@ body.has-picked-up .browser-tab:hover {
   color: var(--text-muted);
 }
 
+/* View Mode Toggle */
+.source-view-mode-toggle {
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.source-view-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.source-view-mode-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.source-view-mode-btn.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.source-view-mode-btn i {
+  font-size: 14px;
+}
+
+/* Column Group Header (for multi-record unified view) */
+.source-col-group-header th {
+  padding: 6px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: none;
+}
+
+.source-col-group {
+  text-align: center;
+}
+
+.source-col-group.common {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.source-col-group.typed {
+  color: var(--text-secondary);
+}
+
+.source-col-group-count {
+  font-size: 10px;
+  font-weight: 400;
+  margin-left: 6px;
+  opacity: 0.7;
+}
+
+/* Split Tables View */
+.source-split-tables {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px;
+}
+
+.source-split-table-section {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.source-split-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 2px solid;
+}
+
+.source-split-table-type {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.source-split-table-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.source-split-table {
+  width: 100%;
+}
+
+.source-split-table thead {
+  position: static; /* Don't stick within split sections */
+}
+
+.source-split-table-section .source-more-records {
+  border-top: 1px solid var(--border-color);
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 12px;
+}
+
 /* Data Table */
 .source-data-table-container {
   grid-column: 1;

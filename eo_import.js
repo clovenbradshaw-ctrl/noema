@@ -1220,6 +1220,22 @@ class ImportOrchestrator {
         // Derived sets tracking
         derivedSetIds: [],
 
+        // Multi-record type analysis (for sources with multiple record types)
+        multiRecordAnalysis: options.schemaDivergence ? {
+          typeField: options.schemaDivergence.typeField,
+          types: options.schemaDivergence.types.map(t => ({
+            value: t.type,
+            label: t.type,
+            count: t.count,
+            specificFields: t.specificFields || []
+          })),
+          commonFields: options.schemaDivergence.commonFields || [],
+          divergenceScore: options.schemaDivergence.divergenceScore
+        } : null,
+
+        // View preference for multi-record sources
+        sourceViewMode: 'unified',
+
         // Status
         status: 'active'
       };
@@ -3550,7 +3566,8 @@ function initImportHandlers() {
           // Import as single Source (default)
           result = await orchestrator.importToSource(currentFile, {
             provenance,
-            originalSource: rawFileContent
+            originalSource: rawFileContent,
+            schemaDivergence: analysisData?.schemaDivergence
           });
 
           window.removeEventListener('eo-import-progress', progressHandler);
