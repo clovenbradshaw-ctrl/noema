@@ -14737,25 +14737,56 @@ class EODataWorkbench {
     const allRecords = [];
     const timestamp = new Date().toISOString();
 
+    // Create a name-to-fieldId mapping for value remapping
+    const nameToFieldId = new Map();
+    fieldMap.forEach((fieldObj, fieldNameLower) => {
+      nameToFieldId.set(fieldNameLower, fieldObj.id);
+    });
+
     sources.forEach(source => {
       const records = source.records || [];
       const sourceName = source.name;
+      const sourceFields = source.schema?.fields || [];
+
+      // Create source field name mapping (original name -> lowercase for lookup)
+      const sourceFieldNames = new Map();
+      sourceFields.forEach(f => {
+        sourceFieldNames.set(f.name, f.name.toLowerCase());
+      });
 
       records.forEach(record => {
+        // Remap record values from field names to field IDs
+        const remappedValues = {};
+
+        Object.entries(record).forEach(([key, value]) => {
+          // Try to find the field by name (case-insensitive)
+          const keyLower = key.toLowerCase();
+          const fieldId = nameToFieldId.get(keyLower);
+          if (fieldId) {
+            remappedValues[fieldId] = value;
+          }
+        });
+
         const newRecord = {
           id: `rec_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`,
           setId: null,
-          values: { ...record },
+          values: remappedValues,
           createdAt: timestamp,
           updatedAt: timestamp
         };
 
         if (config.splitTypes) {
-          newRecord.values['_recordType'] = sourceName;
+          const rtFieldId = nameToFieldId.get('_recordtype');
+          if (rtFieldId) {
+            newRecord.values[rtFieldId] = sourceName;
+          }
         }
 
         if (config.includeSource) {
-          newRecord.values['_sourceId'] = source.id;
+          const sidFieldId = nameToFieldId.get('_sourceid');
+          if (sidFieldId) {
+            newRecord.values[sidFieldId] = source.id;
+          }
         }
 
         allRecords.push(newRecord);
@@ -14896,6 +14927,41 @@ class EODataWorkbench {
     const combinedFields = Array.from(fieldMap.values());
     const timestamp = new Date().toISOString();
 
+    // Create name-to-fieldId mappings for value remapping
+    // For left fields: original name -> field ID
+    const leftNameToFieldId = new Map();
+    leftFields.forEach(f => {
+      const fieldObj = fieldMap.get(f.name.toLowerCase());
+      if (fieldObj) {
+        leftNameToFieldId.set(f.name.toLowerCase(), fieldObj.id);
+      }
+    });
+
+    // For right fields: need to handle prefixed names for conflicts
+    const rightNameToFieldId = new Map();
+    rightFields.forEach(f => {
+      const baseName = f.name.toLowerCase();
+      // Check if this field was renamed due to conflict
+      if (fieldMap.has(baseName) && fieldMap.get(baseName).sourceTable === 'left') {
+        // Conflict - use prefixed name
+        const prefixedName = `${rightSource.name}_${f.name}`.toLowerCase();
+        const fieldObj = fieldMap.get(prefixedName);
+        if (fieldObj) {
+          rightNameToFieldId.set(f.name.toLowerCase(), fieldObj.id);
+        }
+      } else {
+        const fieldObj = fieldMap.get(baseName);
+        if (fieldObj) {
+          rightNameToFieldId.set(f.name.toLowerCase(), fieldObj.id);
+        }
+      }
+    });
+
+    // Get field IDs for special fields
+    const recordTypeFieldId = fieldMap.get('_recordtype')?.id;
+    const leftSourceIdFieldId = fieldMap.get('_leftsourceid')?.id;
+    const rightSourceIdFieldId = fieldMap.get('_rightsourceid')?.id;
+
     // Execute join
     const joinedRecords = [];
     const matchedRightIndices = new Set();
@@ -14912,29 +14978,29 @@ class EODataWorkbench {
 
           const values = {};
 
-          // Add left values
+          // Add left values with field ID keys
           Object.entries(leftRecord).forEach(([key, val]) => {
-            values[key] = val;
-          });
-
-          // Add right values (with renaming for conflicts)
-          Object.entries(rightRecord).forEach(([key, val]) => {
-            const baseName = key.toLowerCase();
-            if (fieldMap.has(baseName) && fieldMap.get(baseName).sourceTable === 'left') {
-              // Conflict - use prefixed name
-              values[`${rightSource.name}_${key}`] = val;
-            } else {
-              values[key] = val;
+            const fieldId = leftNameToFieldId.get(key.toLowerCase());
+            if (fieldId) {
+              values[fieldId] = val;
             }
           });
 
-          if (config.splitTypes) {
-            values['_recordType'] = 'matched';
+          // Add right values with field ID keys
+          Object.entries(rightRecord).forEach(([key, val]) => {
+            const fieldId = rightNameToFieldId.get(key.toLowerCase());
+            if (fieldId) {
+              values[fieldId] = val;
+            }
+          });
+
+          if (config.splitTypes && recordTypeFieldId) {
+            values[recordTypeFieldId] = 'matched';
           }
 
           if (config.includeSource) {
-            values['_leftSourceId'] = leftSource.id;
-            values['_rightSourceId'] = rightSource.id;
+            if (leftSourceIdFieldId) values[leftSourceIdFieldId] = leftSource.id;
+            if (rightSourceIdFieldId) values[rightSourceIdFieldId] = rightSource.id;
           }
 
           joinedRecords.push({
@@ -14949,25 +15015,28 @@ class EODataWorkbench {
         });
       } else if (config.joinType === 'left' || config.joinType === 'full') {
         // No match - include left only
-        const values = { ...leftRecord };
+        const values = {};
 
-        // Null out right fields
-        rightFields.forEach(field => {
-          const baseName = field.name.toLowerCase();
-          if (fieldMap.has(baseName) && fieldMap.get(baseName).sourceTable === 'left') {
-            values[`${rightSource.name}_${field.name}`] = null;
-          } else {
-            values[field.name] = null;
+        // Add left values with field ID keys
+        Object.entries(leftRecord).forEach(([key, val]) => {
+          const fieldId = leftNameToFieldId.get(key.toLowerCase());
+          if (fieldId) {
+            values[fieldId] = val;
           }
         });
 
-        if (config.splitTypes) {
-          values['_recordType'] = `${leftSource.name}_only`;
+        // Null out right fields using field IDs
+        rightNameToFieldId.forEach((fieldId) => {
+          values[fieldId] = null;
+        });
+
+        if (config.splitTypes && recordTypeFieldId) {
+          values[recordTypeFieldId] = `${leftSource.name}_only`;
         }
 
         if (config.includeSource) {
-          values['_leftSourceId'] = leftSource.id;
-          values['_rightSourceId'] = null;
+          if (leftSourceIdFieldId) values[leftSourceIdFieldId] = leftSource.id;
+          if (rightSourceIdFieldId) values[rightSourceIdFieldId] = null;
         }
 
         joinedRecords.push({
@@ -14988,28 +15057,26 @@ class EODataWorkbench {
         if (!matchedRightIndices.has(rightIdx)) {
           const values = {};
 
-          // Null out left fields
-          leftFields.forEach(field => {
-            values[field.name] = null;
+          // Null out left fields using field IDs
+          leftNameToFieldId.forEach((fieldId) => {
+            values[fieldId] = null;
           });
 
-          // Add right values
+          // Add right values with field ID keys
           Object.entries(rightRecord).forEach(([key, val]) => {
-            const baseName = key.toLowerCase();
-            if (fieldMap.has(baseName) && fieldMap.get(baseName).sourceTable === 'left') {
-              values[`${rightSource.name}_${key}`] = val;
-            } else {
-              values[key] = val;
+            const fieldId = rightNameToFieldId.get(key.toLowerCase());
+            if (fieldId) {
+              values[fieldId] = val;
             }
           });
 
-          if (config.splitTypes) {
-            values['_recordType'] = `${rightSource.name}_only`;
+          if (config.splitTypes && recordTypeFieldId) {
+            values[recordTypeFieldId] = `${rightSource.name}_only`;
           }
 
           if (config.includeSource) {
-            values['_leftSourceId'] = null;
-            values['_rightSourceId'] = rightSource.id;
+            if (leftSourceIdFieldId) values[leftSourceIdFieldId] = null;
+            if (rightSourceIdFieldId) values[rightSourceIdFieldId] = rightSource.id;
           }
 
           joinedRecords.push({
