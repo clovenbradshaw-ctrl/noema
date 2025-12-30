@@ -20072,6 +20072,11 @@ class EODataWorkbench {
                 const displayValue = this._formatProvenanceValue(value);
                 const hasValue = this._hasProvenanceValue(value);
 
+                // Source field is read-only - it comes from imports
+                const isSourceField = el.key === 'source';
+                const isEditable = !isSourceField;
+                const placeholderText = isSourceField ? 'From import' : 'Click to add';
+
                 return `
                   <div class="provenance-field" data-prov-key="${el.key}" data-record-id="${record.id}"
                        style="display: flex; align-items: flex-start; gap: 8px; padding: 4px 0;">
@@ -20081,12 +20086,12 @@ class EODataWorkbench {
                         ${el.label}
                         ${inherited ? '<span style="font-size: 10px; opacity: 0.7;">(inherited)</span>' : ''}
                       </div>
-                      <div class="provenance-value editable ${isRef ? 'is-ref' : ''}"
+                      <div class="provenance-value ${isEditable ? 'editable' : ''} ${isRef ? 'is-ref' : ''}"
                            data-prov-key="${el.key}"
                            data-record-id="${record.id}"
                            title="${el.hint}"
-                           style="font-size: 12px; color: ${hasValue ? 'var(--text-primary)' : 'var(--text-muted)'}; cursor: pointer;">
-                        ${displayValue || '<span style="opacity: 0.5;">Click to add</span>'}
+                           style="font-size: 12px; color: ${hasValue ? 'var(--text-primary)' : 'var(--text-muted)'}; ${isEditable ? 'cursor: pointer;' : ''}">
+                        ${displayValue || `<span style="opacity: 0.5;">${placeholderText}</span>`}
                       </div>
                     </div>
                   </div>
