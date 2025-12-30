@@ -7273,8 +7273,8 @@ class EODataWorkbench {
   }
 
   /**
-   * Show the SetFromSourceUI modal for creating a Set from a Source
-   * Simplified to use this.sources as the primary data source
+   * Show the DataPipelineUI modal for creating a Set from Source(s)
+   * Uses a visual pipeline flow: Sources → Transforms → Output
    */
   _showSetFromSourceUI(sourceId) {
     // Find the source from this.sources (single source of truth)
@@ -7285,7 +7285,7 @@ class EODataWorkbench {
       return;
     }
 
-    // Ensure sourceStore has this source (for SetFromSourceUI compatibility)
+    // Ensure sourceStore has this source (for compatibility)
     if (!this.sourceStore) {
       this._initSourceStore();
     }
@@ -7300,17 +7300,15 @@ class EODataWorkbench {
       this._setCreator = new SetCreator(this.sourceStore, this.eoApp?.eventStore);
     }
 
-    // Create container for the modal if it doesn't exist
-    let container = document.getElementById('set-from-source-container');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'set-from-source-container';
-      document.body.appendChild(container);
-    }
+    // Create and show the DataPipelineUI
+    const ui = new DataPipelineUI({
+      sourceStore: this.sourceStore,
+      setCreator: this._setCreator
+    });
 
-    // Create and show the UI
-    const ui = new SetFromSourceUI(this._setCreator, container);
-    ui.show(sourceId, {
+    ui.show({
+      sourceId: sourceId,
+      allSources: this.sources || [],
       onComplete: (result) => {
         // Add the new set to our sets array
         this.sets.push(result.set);

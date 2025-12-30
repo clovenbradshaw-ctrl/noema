@@ -6288,6 +6288,912 @@ class SetJoinFilterCreator {
 
 
 // ============================================================================
+// DataPipelineUI - Visual pipeline for creating Sets from Sources
+// ============================================================================
+
+/**
+ * DataPipelineUI - A 3-panel visual interface for creating Sets from Sources
+ *
+ * Layout: Sources Panel → Transforms Panel → Output Panel
+ *
+ * This replaces SetFromSourceUI with a clearer visual flow that:
+ * - Shows source integration clearly
+ * - Makes multiple source combination easy
+ * - Visualizes the transformation pipeline
+ * - Shows provenance chain from Source → Set
+ */
+class DataPipelineUI {
+  constructor(options = {}) {
+    this.sourceStore = options.sourceStore;
+    this.setCreator = options.setCreator;
+    this.container = null;
+    this._onComplete = null;
+    this._onCancel = null;
+
+    // Pipeline state
+    this._sources = [];          // Array of { id, source } - selected sources
+    this._transforms = [];       // Array of { type, config } - transforms to apply
+    this._outputName = '';
+    this._selectedFields = [];   // Fields to include in output
+    this._filterBuilder = null;
+    this._previewData = null;
+
+    // Available sources from sourceStore
+    this._availableSources = [];
+
+    // All sources from the workbench (passed via show())
+    this._allSources = [];
+  }
+
+  /**
+   * Show the pipeline UI
+   * @param {Object} options - Configuration options
+   * @param {string} options.sourceId - Initial source ID to add
+   * @param {Array} options.allSources - All available sources
+   * @param {Function} options.onComplete - Called with result when set is created
+   * @param {Function} options.onCancel - Called when cancelled
+   */
+  show(options = {}) {
+    this._onComplete = options.onComplete;
+    this._onCancel = options.onCancel;
+    this._allSources = options.allSources || [];
+
+    // Initialize with provided source
+    if (options.sourceId) {
+      const source = this._allSources.find(s => s.id === options.sourceId);
+      if (source) {
+        this._sources = [{ id: source.id, source }];
+        this._outputName = source.name.replace(/\.[^/.]+$/, '');
+        this._initFieldsFromSources();
+      }
+    }
+
+    // Create container
+    this._createContainer();
+    this._render();
+    this._attachEventListeners();
+  }
+
+  hide() {
+    if (this.container) {
+      this.container.remove();
+      this.container = null;
+    }
+    this._filterBuilder = null;
+  }
+
+  _createContainer() {
+    // Remove any existing container
+    const existing = document.getElementById('data-pipeline-container');
+    if (existing) existing.remove();
+
+    this.container = document.createElement('div');
+    this.container.id = 'data-pipeline-container';
+    document.body.appendChild(this.container);
+  }
+
+  _initFieldsFromSources() {
+    this._selectedFields = [];
+    for (const { source } of this._sources) {
+      if (source.schema?.fields) {
+        for (const field of source.schema.fields) {
+          this._selectedFields.push({
+            sourceId: source.id,
+            sourceName: source.name,
+            name: field.name,
+            type: field.type,
+            rename: null,
+            include: true
+          });
+        }
+      }
+    }
+  }
+
+  _render() {
+    const sourcesCount = this._sources.length;
+    const transformsCount = this._transforms.length;
+    const outputRecords = this._getOutputRecordCount();
+    const outputFields = this._selectedFields.filter(f => f.include).length;
+
+    this.container.innerHTML = `
+      <div class="data-pipeline-overlay">
+        <div class="data-pipeline-modal">
+          <div class="data-pipeline-header">
+            <h2><i class="ph ph-flow-arrow"></i> Create Set from Data</h2>
+            <button class="data-pipeline-close" id="pipeline-close-btn">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+
+          <div class="data-pipeline-body">
+            <!-- Sources Panel -->
+            <div class="data-pipeline-panel data-pipeline-sources">
+              <div class="panel-header">
+                <h3><i class="ph ph-database"></i> Sources</h3>
+                <span class="panel-badge">${sourcesCount}</span>
+              </div>
+              <div class="panel-content">
+                <div class="source-list" id="pipeline-source-list">
+                  ${this._renderSourceCards()}
+                </div>
+                <button class="add-source-btn" id="add-source-btn">
+                  <i class="ph ph-plus"></i> Add Source
+                </button>
+              </div>
+            </div>
+
+            <!-- Flow Arrow -->
+            <div class="data-pipeline-arrow">
+              <i class="ph ph-arrow-right"></i>
+            </div>
+
+            <!-- Transforms Panel -->
+            <div class="data-pipeline-panel data-pipeline-transforms">
+              <div class="panel-header">
+                <h3><i class="ph ph-funnel-simple"></i> Pipeline</h3>
+                <span class="panel-badge">${transformsCount > 0 ? transformsCount : 'pass-through'}</span>
+              </div>
+              <div class="panel-content">
+                ${this._renderTransforms()}
+                <div class="transform-actions">
+                  ${sourcesCount > 1 ? `
+                    <button class="add-transform-btn" id="add-join-btn">
+                      <i class="ph ph-git-merge"></i> Configure Join
+                    </button>
+                  ` : ''}
+                  <button class="add-transform-btn" id="add-filter-btn">
+                    <i class="ph ph-funnel"></i> Add Filter
+                  </button>
+                  <button class="add-transform-btn" id="configure-fields-btn">
+                    <i class="ph ph-columns"></i> Select Fields
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Flow Arrow -->
+            <div class="data-pipeline-arrow">
+              <i class="ph ph-arrow-right"></i>
+            </div>
+
+            <!-- Output Panel -->
+            <div class="data-pipeline-panel data-pipeline-output">
+              <div class="panel-header">
+                <h3><i class="ph ph-table"></i> Output Set</h3>
+              </div>
+              <div class="panel-content">
+                <div class="output-name-section">
+                  <label>Set Name</label>
+                  <input type="text" id="pipeline-set-name" class="output-name-input"
+                         placeholder="Enter set name..."
+                         value="${this._escapeHtml(this._outputName)}">
+                </div>
+                <div class="output-stats">
+                  <div class="stat">
+                    <span class="stat-value">${outputRecords}</span>
+                    <span class="stat-label">records</span>
+                  </div>
+                  <div class="stat">
+                    <span class="stat-value">${outputFields}</span>
+                    <span class="stat-label">fields</span>
+                  </div>
+                </div>
+                <div class="output-preview">
+                  <button class="preview-btn" id="pipeline-preview-btn">
+                    <i class="ph ph-eye"></i> Preview
+                  </button>
+                  <div class="preview-results" id="pipeline-preview-results"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="data-pipeline-footer">
+            <div class="footer-info">
+              <span class="provenance-info">
+                <i class="ph ph-git-branch"></i>
+                Derived from ${sourcesCount} source${sourcesCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div class="footer-actions">
+              <button class="btn btn-secondary" id="pipeline-cancel-btn">Cancel</button>
+              <button class="btn btn-primary" id="pipeline-create-btn" ${sourcesCount === 0 ? 'disabled' : ''}>
+                <i class="ph ph-table"></i> Create Set
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderSourceCards() {
+    if (this._sources.length === 0) {
+      return `
+        <div class="source-empty">
+          <i class="ph ph-database"></i>
+          <p>No sources added</p>
+          <p class="hint">Add a source to begin</p>
+        </div>
+      `;
+    }
+
+    return this._sources.map(({ id, source }, index) => `
+      <div class="source-card" data-source-id="${id}">
+        <div class="source-card-header">
+          <i class="ph ph-file"></i>
+          <span class="source-name">${this._escapeHtml(source.name)}</span>
+          ${this._sources.length > 1 ? `
+            <button class="source-remove-btn" data-index="${index}" title="Remove source">
+              <i class="ph ph-x"></i>
+            </button>
+          ` : ''}
+        </div>
+        <div class="source-card-stats">
+          <span>${source.recordCount || source.records?.length || 0} records</span>
+          <span>${source.schema?.fields?.length || 0} fields</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  _renderTransforms() {
+    const items = [];
+
+    // Always show base data flow
+    if (this._sources.length === 1) {
+      items.push(`
+        <div class="transform-card transform-passthrough">
+          <i class="ph ph-arrow-right"></i>
+          <span>All Records</span>
+          <span class="transform-detail">${this._getSourceRecordCount()} rows</span>
+        </div>
+      `);
+    } else if (this._sources.length > 1) {
+      const joinTransform = this._transforms.find(t => t.type === 'join');
+      if (joinTransform) {
+        items.push(`
+          <div class="transform-card transform-join">
+            <i class="ph ph-git-merge"></i>
+            <span>${joinTransform.config.joinType.toUpperCase()} JOIN</span>
+            <span class="transform-detail">on ${joinTransform.config.leftField} = ${joinTransform.config.rightField}</span>
+          </div>
+        `);
+      } else {
+        items.push(`
+          <div class="transform-card transform-warning">
+            <i class="ph ph-warning"></i>
+            <span>Multiple Sources</span>
+            <span class="transform-detail">Configure join to combine</span>
+          </div>
+        `);
+      }
+    }
+
+    // Show filter if configured
+    const filterTransform = this._transforms.find(t => t.type === 'filter');
+    if (filterTransform) {
+      const conditionCount = this._countFilterConditions(filterTransform.config);
+      items.push(`
+        <div class="transform-card transform-filter">
+          <i class="ph ph-funnel"></i>
+          <span>Filter</span>
+          <span class="transform-detail">${conditionCount} condition${conditionCount !== 1 ? 's' : ''}</span>
+          <button class="transform-remove-btn" data-transform-type="filter" title="Remove filter">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+      `);
+    }
+
+    // Show field selection summary
+    const selectedCount = this._selectedFields.filter(f => f.include).length;
+    const totalCount = this._selectedFields.length;
+    if (selectedCount < totalCount) {
+      items.push(`
+        <div class="transform-card transform-select">
+          <i class="ph ph-columns"></i>
+          <span>Select Fields</span>
+          <span class="transform-detail">${selectedCount} of ${totalCount}</span>
+        </div>
+      `);
+    }
+
+    if (items.length === 0) {
+      return `
+        <div class="transforms-empty">
+          <i class="ph ph-empty"></i>
+          <p>No transforms</p>
+        </div>
+      `;
+    }
+
+    return `<div class="transform-list">${items.join('')}</div>`;
+  }
+
+  _countFilterConditions(filterConfig) {
+    if (!filterConfig) return 0;
+    if (filterConfig.conditions) return filterConfig.conditions.length;
+    return 1;
+  }
+
+  _getSourceRecordCount() {
+    if (this._sources.length === 0) return 0;
+    return this._sources.reduce((sum, { source }) => {
+      return sum + (source.recordCount || source.records?.length || 0);
+    }, 0);
+  }
+
+  _getOutputRecordCount() {
+    // For now, simple pass-through count
+    // TODO: Apply filters and joins to get actual count
+    const baseCount = this._getSourceRecordCount();
+    const filterTransform = this._transforms.find(t => t.type === 'filter');
+    if (filterTransform && this._sources.length > 0) {
+      return this._applyFiltersAndCount();
+    }
+    return baseCount;
+  }
+
+  _applyFiltersAndCount() {
+    if (this._sources.length === 0) return 0;
+    const source = this._sources[0].source;
+    const filterTransform = this._transforms.find(t => t.type === 'filter');
+
+    if (!filterTransform || !source.records) {
+      return source.records?.length || 0;
+    }
+
+    let count = 0;
+    for (const record of source.records) {
+      if (AdvancedFilterBuilder.evaluateRecord(record, filterTransform.config, source)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  _attachEventListeners() {
+    // Close/Cancel
+    this.container.querySelector('#pipeline-close-btn')?.addEventListener('click', () => {
+      this.hide();
+      this._onCancel?.();
+    });
+
+    this.container.querySelector('#pipeline-cancel-btn')?.addEventListener('click', () => {
+      this.hide();
+      this._onCancel?.();
+    });
+
+    // Add Source
+    this.container.querySelector('#add-source-btn')?.addEventListener('click', () => {
+      this._showAddSourcePicker();
+    });
+
+    // Remove Source
+    this.container.querySelectorAll('.source-remove-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.currentTarget.dataset.index);
+        this._sources.splice(index, 1);
+        this._initFieldsFromSources();
+        this._render();
+        this._attachEventListeners();
+      });
+    });
+
+    // Add Filter
+    this.container.querySelector('#add-filter-btn')?.addEventListener('click', () => {
+      this._showFilterBuilder();
+    });
+
+    // Configure Join
+    this.container.querySelector('#add-join-btn')?.addEventListener('click', () => {
+      this._showJoinConfig();
+    });
+
+    // Configure Fields
+    this.container.querySelector('#configure-fields-btn')?.addEventListener('click', () => {
+      this._showFieldSelector();
+    });
+
+    // Remove transforms
+    this.container.querySelectorAll('.transform-remove-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const type = e.currentTarget.dataset.transformType;
+        this._transforms = this._transforms.filter(t => t.type !== type);
+        this._render();
+        this._attachEventListeners();
+      });
+    });
+
+    // Set name input
+    this.container.querySelector('#pipeline-set-name')?.addEventListener('input', (e) => {
+      this._outputName = e.target.value;
+    });
+
+    // Preview
+    this.container.querySelector('#pipeline-preview-btn')?.addEventListener('click', () => {
+      this._showPreview();
+    });
+
+    // Create
+    this.container.querySelector('#pipeline-create-btn')?.addEventListener('click', () => {
+      this._createSet();
+    });
+  }
+
+  _showAddSourcePicker() {
+    // Get sources not already added
+    const availableSources = this._allSources.filter(s =>
+      !this._sources.some(added => added.id === s.id)
+    );
+
+    if (availableSources.length === 0) {
+      alert('No additional sources available. Import more files to add sources.');
+      return;
+    }
+
+    // Create picker modal
+    const picker = document.createElement('div');
+    picker.className = 'source-picker-overlay';
+    picker.innerHTML = `
+      <div class="source-picker-modal">
+        <div class="source-picker-header">
+          <h3><i class="ph ph-database"></i> Add Source</h3>
+          <button class="source-picker-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="source-picker-list">
+          ${availableSources.map(s => `
+            <div class="source-picker-item" data-source-id="${s.id}">
+              <i class="ph ph-file"></i>
+              <div class="source-picker-info">
+                <span class="source-picker-name">${this._escapeHtml(s.name)}</span>
+                <span class="source-picker-stats">${s.recordCount || s.records?.length || 0} records · ${s.schema?.fields?.length || 0} fields</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(picker);
+
+    // Event handlers
+    picker.querySelector('.source-picker-close').addEventListener('click', () => {
+      picker.remove();
+    });
+
+    picker.querySelectorAll('.source-picker-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const sourceId = item.dataset.sourceId;
+        const source = availableSources.find(s => s.id === sourceId);
+        if (source) {
+          this._sources.push({ id: sourceId, source });
+          this._initFieldsFromSources();
+          this._render();
+          this._attachEventListeners();
+        }
+        picker.remove();
+      });
+    });
+
+    picker.addEventListener('click', (e) => {
+      if (e.target === picker) picker.remove();
+    });
+  }
+
+  _showFilterBuilder() {
+    if (this._sources.length === 0) {
+      alert('Add a source first');
+      return;
+    }
+
+    // Create a combined source for filtering
+    const source = this._sources[0].source;
+
+    // Create filter modal
+    const modal = document.createElement('div');
+    modal.className = 'filter-modal-overlay';
+    modal.innerHTML = `
+      <div class="filter-modal">
+        <div class="filter-modal-header">
+          <h3><i class="ph ph-funnel"></i> Configure Filters</h3>
+          <button class="filter-modal-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="filter-modal-body" id="filter-builder-target"></div>
+        <div class="filter-modal-footer">
+          <button class="btn btn-secondary filter-cancel-btn">Cancel</button>
+          <button class="btn btn-primary filter-apply-btn">Apply Filters</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Initialize filter builder
+    const existingFilter = this._transforms.find(t => t.type === 'filter');
+    this._filterBuilder = new AdvancedFilterBuilder({
+      source,
+      provenanceEnabled: false,
+      initialFilters: existingFilter?.config || null
+    });
+
+    this._filterBuilder.render(modal.querySelector('#filter-builder-target'));
+
+    // Event handlers
+    modal.querySelector('.filter-modal-close').addEventListener('click', () => {
+      modal.remove();
+    });
+
+    modal.querySelector('.filter-cancel-btn').addEventListener('click', () => {
+      modal.remove();
+    });
+
+    modal.querySelector('.filter-apply-btn').addEventListener('click', () => {
+      const filters = this._filterBuilder.getFilters();
+
+      // Remove existing filter transform
+      this._transforms = this._transforms.filter(t => t.type !== 'filter');
+
+      // Add new filter transform if there are conditions
+      if (filters.conditions && filters.conditions.length > 0) {
+        this._transforms.push({ type: 'filter', config: filters });
+      }
+
+      modal.remove();
+      this._render();
+      this._attachEventListeners();
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+  }
+
+  _showJoinConfig() {
+    if (this._sources.length < 2) {
+      alert('Add at least two sources to configure a join');
+      return;
+    }
+
+    const leftSource = this._sources[0].source;
+    const rightSource = this._sources[1].source;
+    const existingJoin = this._transforms.find(t => t.type === 'join');
+
+    const modal = document.createElement('div');
+    modal.className = 'join-modal-overlay';
+    modal.innerHTML = `
+      <div class="join-modal">
+        <div class="join-modal-header">
+          <h3><i class="ph ph-git-merge"></i> Configure Join</h3>
+          <button class="join-modal-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="join-modal-body">
+          <div class="join-sources">
+            <div class="join-source">
+              <span class="join-source-label">Left</span>
+              <span class="join-source-name">${this._escapeHtml(leftSource.name)}</span>
+            </div>
+            <div class="join-type-select">
+              <select id="join-type">
+                <option value="inner" ${existingJoin?.config?.joinType === 'inner' ? 'selected' : ''}>INNER JOIN</option>
+                <option value="left" ${existingJoin?.config?.joinType === 'left' || !existingJoin ? 'selected' : ''}>LEFT JOIN</option>
+                <option value="right" ${existingJoin?.config?.joinType === 'right' ? 'selected' : ''}>RIGHT JOIN</option>
+                <option value="full" ${existingJoin?.config?.joinType === 'full' ? 'selected' : ''}>FULL JOIN</option>
+              </select>
+            </div>
+            <div class="join-source">
+              <span class="join-source-label">Right</span>
+              <span class="join-source-name">${this._escapeHtml(rightSource.name)}</span>
+            </div>
+          </div>
+          <div class="join-condition">
+            <label>Join On:</label>
+            <div class="join-fields">
+              <select id="join-left-field">
+                ${leftSource.schema.fields.map(f => `
+                  <option value="${f.name}" ${existingJoin?.config?.leftField === f.name ? 'selected' : ''}>${f.name}</option>
+                `).join('')}
+              </select>
+              <span>=</span>
+              <select id="join-right-field">
+                ${rightSource.schema.fields.map(f => `
+                  <option value="${f.name}" ${existingJoin?.config?.rightField === f.name ? 'selected' : ''}>${f.name}</option>
+                `).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="join-modal-footer">
+          <button class="btn btn-secondary join-cancel-btn">Cancel</button>
+          <button class="btn btn-primary join-apply-btn">Apply Join</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Event handlers
+    modal.querySelector('.join-modal-close').addEventListener('click', () => modal.remove());
+    modal.querySelector('.join-cancel-btn').addEventListener('click', () => modal.remove());
+
+    modal.querySelector('.join-apply-btn').addEventListener('click', () => {
+      const joinType = modal.querySelector('#join-type').value;
+      const leftField = modal.querySelector('#join-left-field').value;
+      const rightField = modal.querySelector('#join-right-field').value;
+
+      // Remove existing join
+      this._transforms = this._transforms.filter(t => t.type !== 'join');
+
+      // Add new join
+      this._transforms.unshift({
+        type: 'join',
+        config: { joinType, leftField, rightField }
+      });
+
+      modal.remove();
+      this._render();
+      this._attachEventListeners();
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+  }
+
+  _showFieldSelector() {
+    if (this._selectedFields.length === 0) {
+      alert('Add a source first');
+      return;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'field-selector-overlay';
+    modal.innerHTML = `
+      <div class="field-selector-modal">
+        <div class="field-selector-header">
+          <h3><i class="ph ph-columns"></i> Select Fields</h3>
+          <button class="field-selector-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="field-selector-actions">
+          <button class="btn btn-sm" id="select-all-fields">Select All</button>
+          <button class="btn btn-sm" id="deselect-all-fields">Deselect All</button>
+        </div>
+        <div class="field-selector-list">
+          ${this._selectedFields.map((f, i) => `
+            <div class="field-selector-row">
+              <input type="checkbox" id="field-${i}" ${f.include ? 'checked' : ''} data-index="${i}">
+              <label for="field-${i}">
+                <span class="field-name">${this._escapeHtml(f.name)}</span>
+                <span class="field-source">${this._escapeHtml(f.sourceName)}</span>
+                <span class="field-type">${f.type}</span>
+              </label>
+              <input type="text" class="field-rename" placeholder="Rename..." value="${f.rename || ''}" data-index="${i}">
+            </div>
+          `).join('')}
+        </div>
+        <div class="field-selector-footer">
+          <button class="btn btn-secondary field-cancel-btn">Cancel</button>
+          <button class="btn btn-primary field-apply-btn">Apply</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Event handlers
+    modal.querySelector('.field-selector-close').addEventListener('click', () => modal.remove());
+    modal.querySelector('.field-cancel-btn').addEventListener('click', () => modal.remove());
+
+    modal.querySelector('#select-all-fields').addEventListener('click', () => {
+      modal.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+    });
+
+    modal.querySelector('#deselect-all-fields').addEventListener('click', () => {
+      modal.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+    });
+
+    modal.querySelector('.field-apply-btn').addEventListener('click', () => {
+      // Update field selections
+      modal.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        const index = parseInt(cb.dataset.index);
+        this._selectedFields[index].include = cb.checked;
+      });
+
+      modal.querySelectorAll('.field-rename').forEach(input => {
+        const index = parseInt(input.dataset.index);
+        this._selectedFields[index].rename = input.value || null;
+      });
+
+      modal.remove();
+      this._render();
+      this._attachEventListeners();
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+  }
+
+  _showPreview() {
+    const previewEl = this.container.querySelector('#pipeline-preview-results');
+    if (!previewEl) return;
+
+    if (this._sources.length === 0) {
+      previewEl.innerHTML = '<div class="preview-empty">Add a source to preview</div>';
+      return;
+    }
+
+    const selectedFields = this._selectedFields.filter(f => f.include);
+    if (selectedFields.length === 0) {
+      previewEl.innerHTML = '<div class="preview-error">Select at least one field</div>';
+      return;
+    }
+
+    try {
+      // Get records from first source (join handling would go here)
+      const source = this._sources[0].source;
+      let records = [...(source.records || [])];
+
+      // Apply filter
+      const filterTransform = this._transforms.find(t => t.type === 'filter');
+      if (filterTransform) {
+        records = records.filter(record =>
+          AdvancedFilterBuilder.evaluateRecord(record, filterTransform.config, source)
+        );
+      }
+
+      const sampleRecords = records.slice(0, 10);
+      const headers = selectedFields.map(f => f.rename || f.name);
+
+      previewEl.innerHTML = `
+        <div class="preview-stats">
+          <span><strong>${records.length}</strong> records</span>
+          <span>${selectedFields.length} fields</span>
+        </div>
+        <div class="preview-table-wrapper">
+          <table class="preview-table">
+            <thead>
+              <tr>
+                ${headers.map(h => `<th>${this._escapeHtml(h)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${sampleRecords.map(row => `
+                <tr>
+                  ${selectedFields.map(f => `<td>${this._escapeHtml(String(row[f.name] ?? ''))}</td>`).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ${records.length > 10 ? `
+          <div class="preview-more">Showing first 10 of ${records.length} records</div>
+        ` : ''}
+      `;
+    } catch (error) {
+      previewEl.innerHTML = `<div class="preview-error">${error.message}</div>`;
+    }
+  }
+
+  _createSet() {
+    const setName = this._outputName.trim();
+
+    if (!setName) {
+      alert('Please enter a set name');
+      return;
+    }
+
+    if (this._sources.length === 0) {
+      alert('Add at least one source');
+      return;
+    }
+
+    const selectedFields = this._selectedFields.filter(f => f.include);
+    if (selectedFields.length === 0) {
+      alert('Select at least one field');
+      return;
+    }
+
+    try {
+      // Get records from source(s)
+      const source = this._sources[0].source;
+      let records = [...(source.records || [])];
+
+      // Apply filter
+      const filterTransform = this._transforms.find(t => t.type === 'filter');
+      if (filterTransform) {
+        records = records.filter(record =>
+          AdvancedFilterBuilder.evaluateRecord(record, filterTransform.config, source)
+        );
+      }
+
+      // Build fields for the set
+      const fields = selectedFields.map((f, i) => ({
+        id: `fld_${Date.now().toString(36)}_${i}`,
+        name: f.rename || f.name,
+        type: this._mapFieldType(f.type)
+      }));
+
+      // Build records with field ID keys
+      const setRecords = records.map((row, i) => {
+        const values = {};
+        selectedFields.forEach((f, fi) => {
+          values[fields[fi].id] = row[f.name];
+        });
+        return {
+          id: `rec_${Date.now().toString(36)}_${i}`,
+          values
+        };
+      });
+
+      // Build derivation info
+      const derivation = {
+        strategy: this._sources.length > 1 ? 'con' : 'seg',
+        sources: this._sources.map(s => ({
+          id: s.id,
+          name: s.source.name
+        })),
+        transforms: this._transforms,
+        derivedAt: new Date().toISOString()
+      };
+
+      // Create the set
+      const newSet = {
+        id: `set_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`,
+        name: setName,
+        icon: 'table',
+        fields,
+        records: setRecords,
+        views: [{
+          id: `view_${Date.now().toString(36)}`,
+          name: 'Default',
+          type: 'table',
+          config: {}
+        }],
+        derivation,
+        datasetProvenance: {
+          sourceIds: this._sources.map(s => s.id)
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      this.hide();
+      this._onComplete?.({ set: newSet });
+    } catch (error) {
+      alert(`Failed to create set: ${error.message}`);
+    }
+  }
+
+  _mapFieldType(type) {
+    const mapping = {
+      'text': 'TEXT',
+      'string': 'TEXT',
+      'number': 'NUMBER',
+      'integer': 'NUMBER',
+      'float': 'NUMBER',
+      'date': 'DATE',
+      'datetime': 'DATE',
+      'boolean': 'CHECKBOX',
+      'bool': 'CHECKBOX',
+      'select': 'SELECT',
+      'email': 'EMAIL',
+      'url': 'URL'
+    };
+    return mapping[type?.toLowerCase()] || 'TEXT';
+  }
+
+  _escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+}
+
+
+// ============================================================================
 // Exports
 // ============================================================================
 
@@ -6297,6 +7203,7 @@ if (typeof window !== 'undefined') {
   window.JoinBuilder = JoinBuilder;
   window.JoinBuilderUI = JoinBuilderUI;
   window.SetFromSourceUI = SetFromSourceUI;
+  window.DataPipelineUI = DataPipelineUI;
   window.FolderStore = FolderStore;
   window.AdvancedFilterBuilder = AdvancedFilterBuilder;
   window.SetJoinFilterCreator = SetJoinFilterCreator;
@@ -6309,6 +7216,7 @@ if (typeof module !== 'undefined' && module.exports) {
     JoinBuilder,
     JoinBuilderUI,
     SetFromSourceUI,
+    DataPipelineUI,
     FolderStore,
     AdvancedFilterBuilder,
     SetJoinFilterCreator
