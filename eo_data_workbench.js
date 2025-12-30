@@ -3643,55 +3643,26 @@ class EODataWorkbench {
             <i class="ph ph-magnifying-glass"></i>
             <input type="text" id="source-search-input" placeholder="Search records... (read-only view)">
           </div>
+          ${source.multiRecordAnalysis ? `
+            <div class="source-view-mode-toggle">
+              <button class="source-view-mode-btn ${source.sourceViewMode !== 'split' ? 'active' : ''}" data-mode="unified" title="View all records in one table">
+                <i class="ph ph-table"></i>
+                <span>Unified</span>
+              </button>
+              <button class="source-view-mode-btn ${source.sourceViewMode === 'split' ? 'active' : ''}" data-mode="split" title="View records split by type">
+                <i class="ph ph-rows"></i>
+                <span>By Type</span>
+              </button>
+            </div>
+          ` : ''}
           <div class="source-record-count">
             Showing ${Math.min(records.length, 100)} of ${source.recordCount || records.length} records
           </div>
         </div>
 
-        <!-- Data Table -->
-        <div class="source-data-table-container">
-          ${records.length > 0 ? `
-            <table class="source-data-table">
-              <thead>
-                <tr>
-                  <th class="source-row-num">#</th>
-                  ${fields.map(field => `
-                    <th>
-                      <div class="source-col-header">
-                        <span class="source-col-name">${this._escapeHtml(field.name)}</span>
-                        <span class="source-col-type">${field.type || 'text'}</span>
-                      </div>
-                    </th>
-                  `).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${records.slice(0, 100).map((record, index) => `
-                  <tr>
-                    <td class="source-row-num">${index + 1}</td>
-                    ${fields.map(field => {
-                      const value = record.values?.[field.id];
-                      const cellClass = this._getSourceCellClass(value);
-                      const displayValue = this._formatSourceCellValue(value);
-                      const titleValue = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '');
-                      return `<td class="${cellClass}" title="${this._escapeHtml(titleValue)}">${displayValue}</td>`;
-                    }).join('')}
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            ${records.length > 100 ? `
-              <div class="source-more-records">
-                <i class="ph ph-info"></i>
-                Showing first 100 of ${records.length} records. Export or create a Set to work with all data.
-              </div>
-            ` : ''}
-          ` : `
-            <div class="source-empty-state">
-              <i class="ph ph-file-dashed"></i>
-              <p>No records found in this source</p>
-            </div>
-          `}
+        <!-- Data Table Container -->
+        <div class="source-data-table-container" id="source-data-table-container">
+          ${this._renderSourceTableContent(source, fields, records)}
         </div>
 
         <!-- Provenance Panel -->
@@ -3805,6 +3776,311 @@ class EODataWorkbench {
         toggle.querySelector('.ph-caret-down, .ph-caret-up')?.classList.toggle('ph-caret-up', isHidden);
       }
     });
+
+    // View mode toggle buttons
+    document.querySelectorAll('.source-view-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        if (mode && source.sourceViewMode !== mode) {
+          source.sourceViewMode = mode;
+          this._saveData();
+
+          // Update button states
+          document.querySelectorAll('.source-view-mode-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.mode === mode);
+          });
+
+          // Re-render just the table container
+          const container = document.getElementById('source-data-table-container');
+          if (container) {
+            // Rebuild fields and records for re-render
+            const rawRecords = source.records || [];
+            let fields = [];
+            if (source.schema?.fields && source.schema.fields.length > 0) {
+              fields = source.schema.fields.map(f => ({
+                id: f.name || f.sourceColumn,
+                name: f.name || f.sourceColumn,
+                type: f.type || 'text'
+              }));
+            } else if (rawRecords.length > 0) {
+              const fieldSet = new Set();
+              const fieldOrder = [];
+              for (const key of Object.keys(rawRecords[0])) {
+                fieldOrder.push(key);
+                fieldSet.add(key);
+              }
+              for (let i = 1; i < rawRecords.length; i++) {
+                for (const key of Object.keys(rawRecords[i])) {
+                  if (!fieldSet.has(key)) {
+                    fieldOrder.push(key);
+                    fieldSet.add(key);
+                  }
+                }
+              }
+              fields = fieldOrder.map(key => ensureValidField({
+                id: key,
+                name: key,
+                type: this._inferFieldType(rawRecords, key)
+              }));
+            }
+            const records = rawRecords.map((record, index) => ({
+              id: `rec_${index}`,
+              values: record
+            }));
+            container.innerHTML = this._renderSourceTableContent(source, fields, records);
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * Render source table content based on view mode (unified or split)
+   */
+  _renderSourceTableContent(source, fields, records) {
+    if (records.length === 0) {
+      return `
+        <div class="source-empty-state">
+          <i class="ph ph-file-dashed"></i>
+          <p>No records found in this source</p>
+        </div>
+      `;
+    }
+
+    const viewMode = source.sourceViewMode || 'unified';
+    const multiRecord = source.multiRecordAnalysis;
+
+    if (viewMode === 'split' && multiRecord) {
+      return this._renderSourceSplitTables(source, fields, records, multiRecord);
+    } else {
+      return this._renderSourceUnifiedTable(source, fields, records, multiRecord);
+    }
+  }
+
+  /**
+   * Render unified table view with column shading for different record types
+   */
+  _renderSourceUnifiedTable(source, fields, records, multiRecord) {
+    // Define colors for record types
+    const typeColors = [
+      { bg: 'var(--type-color-1-bg, rgba(59, 130, 246, 0.08))', border: 'var(--type-color-1-border, rgba(59, 130, 246, 0.2))' },  // blue
+      { bg: 'var(--type-color-2-bg, rgba(16, 185, 129, 0.08))', border: 'var(--type-color-2-border, rgba(16, 185, 129, 0.2))' },  // green
+      { bg: 'var(--type-color-3-bg, rgba(245, 158, 11, 0.08))', border: 'var(--type-color-3-border, rgba(245, 158, 11, 0.2))' },  // amber
+      { bg: 'var(--type-color-4-bg, rgba(139, 92, 246, 0.08))', border: 'var(--type-color-4-border, rgba(139, 92, 246, 0.2))' },  // purple
+      { bg: 'var(--type-color-5-bg, rgba(236, 72, 153, 0.08))', border: 'var(--type-color-5-border, rgba(236, 72, 153, 0.2))' },  // pink
+    ];
+
+    // Build field-to-type mapping
+    const fieldTypeMap = {};
+    if (multiRecord) {
+      const commonFields = new Set(multiRecord.commonFields || []);
+      multiRecord.types.forEach((typeInfo, index) => {
+        const color = typeColors[index % typeColors.length];
+        (typeInfo.specificFields || []).forEach(fieldName => {
+          fieldTypeMap[fieldName] = {
+            type: typeInfo.value,
+            label: typeInfo.label,
+            color: color,
+            index: index
+          };
+        });
+      });
+    }
+
+    // Group fields by ownership for header row
+    const groupedFields = { common: [], typed: {} };
+    fields.forEach(field => {
+      const typeOwner = fieldTypeMap[field.name];
+      if (typeOwner) {
+        if (!groupedFields.typed[typeOwner.type]) {
+          groupedFields.typed[typeOwner.type] = {
+            fields: [],
+            color: typeOwner.color,
+            label: typeOwner.label,
+            index: typeOwner.index
+          };
+        }
+        groupedFields.typed[typeOwner.type].fields.push(field);
+      } else {
+        groupedFields.common.push(field);
+      }
+    });
+
+    // Build column group header if we have typed fields
+    const hasTypedFields = Object.keys(groupedFields.typed).length > 0;
+    let colGroupHeader = '';
+    if (hasTypedFields && multiRecord) {
+      const sortedTypes = Object.entries(groupedFields.typed)
+        .sort((a, b) => a[1].index - b[1].index);
+
+      colGroupHeader = `
+        <tr class="source-col-group-header">
+          <th class="source-row-num"></th>
+          ${groupedFields.common.length > 0 ? `
+            <th colspan="${groupedFields.common.length}" class="source-col-group common">
+              <span>Common</span>
+            </th>
+          ` : ''}
+          ${sortedTypes.map(([typeName, info]) => `
+            <th colspan="${info.fields.length}" class="source-col-group typed" style="background: ${info.color.bg}; border-bottom: 2px solid ${info.color.border};">
+              <span>${this._escapeHtml(info.label)}</span>
+              <span class="source-col-group-count">${info.fields.length} field${info.fields.length !== 1 ? 's' : ''}</span>
+            </th>
+          `).join('')}
+        </tr>
+      `;
+    }
+
+    // Reorder fields: common first, then typed groups
+    const orderedFields = [...groupedFields.common];
+    Object.entries(groupedFields.typed)
+      .sort((a, b) => a[1].index - b[1].index)
+      .forEach(([_, info]) => {
+        orderedFields.push(...info.fields);
+      });
+
+    return `
+      <table class="source-data-table ${multiRecord ? 'multi-record' : ''}">
+        <thead>
+          ${colGroupHeader}
+          <tr>
+            <th class="source-row-num">#</th>
+            ${orderedFields.map(field => {
+              const typeOwner = fieldTypeMap[field.name];
+              const style = typeOwner ? `background: ${typeOwner.color.bg};` : '';
+              return `
+                <th style="${style}">
+                  <div class="source-col-header">
+                    <span class="source-col-name">${this._escapeHtml(field.name)}</span>
+                    <span class="source-col-type">${field.type || 'text'}</span>
+                  </div>
+                </th>
+              `;
+            }).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${records.slice(0, 100).map((record, index) => `
+            <tr>
+              <td class="source-row-num">${index + 1}</td>
+              ${orderedFields.map(field => {
+                const value = record.values?.[field.id];
+                const typeOwner = fieldTypeMap[field.name];
+                const bgStyle = typeOwner ? `background: ${typeOwner.color.bg};` : '';
+                const cellClass = this._getSourceCellClass(value);
+                const displayValue = this._formatSourceCellValue(value);
+                const titleValue = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '');
+                return `<td class="${cellClass}" style="${bgStyle}" title="${this._escapeHtml(titleValue)}">${displayValue}</td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ${records.length > 100 ? `
+        <div class="source-more-records">
+          <i class="ph ph-info"></i>
+          Showing first 100 of ${records.length} records. Export or create a Set to work with all data.
+        </div>
+      ` : ''}
+    `;
+  }
+
+  /**
+   * Render split sub-tables view, one table per record type
+   */
+  _renderSourceSplitTables(source, fields, records, multiRecord) {
+    const typeField = multiRecord.typeField;
+    const typeColors = [
+      { bg: 'var(--type-color-1-bg, rgba(59, 130, 246, 0.08))', border: 'var(--type-color-1-border, rgba(59, 130, 246, 0.3))', text: 'var(--type-color-1-text, #3b82f6)' },
+      { bg: 'var(--type-color-2-bg, rgba(16, 185, 129, 0.08))', border: 'var(--type-color-2-border, rgba(16, 185, 129, 0.3))', text: 'var(--type-color-2-text, #10b981)' },
+      { bg: 'var(--type-color-3-bg, rgba(245, 158, 11, 0.08))', border: 'var(--type-color-3-border, rgba(245, 158, 11, 0.3))', text: 'var(--type-color-3-text, #f59e0b)' },
+      { bg: 'var(--type-color-4-bg, rgba(139, 92, 246, 0.08))', border: 'var(--type-color-4-border, rgba(139, 92, 246, 0.3))', text: 'var(--type-color-4-text, #8b5cf6)' },
+      { bg: 'var(--type-color-5-bg, rgba(236, 72, 153, 0.08))', border: 'var(--type-color-5-border, rgba(236, 72, 153, 0.3))', text: 'var(--type-color-5-text, #ec4899)' },
+    ];
+
+    // Group records by type
+    const recordsByType = {};
+    records.forEach(record => {
+      const typeValue = record.values?.[typeField] || '_untyped';
+      if (!recordsByType[typeValue]) {
+        recordsByType[typeValue] = [];
+      }
+      recordsByType[typeValue].push(record);
+    });
+
+    // Build field sets per type (common + type-specific)
+    const commonFieldNames = new Set(multiRecord.commonFields || []);
+    const typeFieldSets = {};
+
+    multiRecord.types.forEach(typeInfo => {
+      const specificFields = new Set(typeInfo.specificFields || []);
+      // Get fields that have values for this type
+      typeFieldSets[typeInfo.value] = fields.filter(f =>
+        commonFieldNames.has(f.name) || specificFields.has(f.name) || f.name === typeField
+      );
+    });
+
+    // Sort types by the order they appear in multiRecordAnalysis
+    const sortedTypes = multiRecord.types.map((t, i) => ({ ...t, index: i }));
+
+    return `
+      <div class="source-split-tables">
+        ${sortedTypes.map((typeInfo, idx) => {
+          const typeValue = typeInfo.value;
+          const typeRecords = recordsByType[typeValue] || [];
+          const typeFields = typeFieldSets[typeValue] || fields;
+          const color = typeColors[idx % typeColors.length];
+
+          if (typeRecords.length === 0) return '';
+
+          return `
+            <div class="source-split-table-section" style="border-color: ${color.border};">
+              <div class="source-split-table-header" style="background: ${color.bg}; border-bottom-color: ${color.border};">
+                <span class="source-split-table-type" style="color: ${color.text};">
+                  ${this._escapeHtml(typeInfo.label || typeValue)}
+                </span>
+                <span class="source-split-table-count">${typeRecords.length} record${typeRecords.length !== 1 ? 's' : ''}</span>
+              </div>
+              <table class="source-data-table source-split-table">
+                <thead>
+                  <tr>
+                    <th class="source-row-num">#</th>
+                    ${typeFields.filter(f => f.name !== typeField).map(field => `
+                      <th>
+                        <div class="source-col-header">
+                          <span class="source-col-name">${this._escapeHtml(field.name)}</span>
+                          <span class="source-col-type">${field.type || 'text'}</span>
+                        </div>
+                      </th>
+                    `).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${typeRecords.slice(0, 50).map((record, index) => `
+                    <tr>
+                      <td class="source-row-num">${index + 1}</td>
+                      ${typeFields.filter(f => f.name !== typeField).map(field => {
+                        const value = record.values?.[field.id];
+                        const cellClass = this._getSourceCellClass(value);
+                        const displayValue = this._formatSourceCellValue(value);
+                        const titleValue = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '');
+                        return `<td class="${cellClass}" title="${this._escapeHtml(titleValue)}">${displayValue}</td>`;
+                      }).join('')}
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              ${typeRecords.length > 50 ? `
+                <div class="source-more-records">
+                  <i class="ph ph-info"></i>
+                  Showing first 50 of ${typeRecords.length} ${this._escapeHtml(typeInfo.label || typeValue)} records.
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
   }
 
   /**
