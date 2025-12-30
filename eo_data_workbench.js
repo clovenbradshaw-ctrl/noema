@@ -1698,6 +1698,7 @@ class EODataWorkbench {
    * FIX #2: Sets show derivation strategy and operator badges
    * Sets are MEANT events - interpretive schema definitions
    * Views are disclosed under each set when expanded
+   * Supports grouped sets (parent sets with child sets)
    */
   _renderSetsNavFlat() {
     const container = document.getElementById('sets-nav');
@@ -1711,7 +1712,18 @@ class EODataWorkbench {
       );
     }
 
-    if (filteredSets.length === 0) {
+    // Separate parent (top-level) sets from child sets
+    // Top-level sets: no parentSetId OR are group containers
+    const topLevelSets = filteredSets.filter(set => !set.parentSetId);
+    const childSetMap = new Map();
+    filteredSets.filter(set => set.parentSetId).forEach(set => {
+      if (!childSetMap.has(set.parentSetId)) {
+        childSetMap.set(set.parentSetId, []);
+      }
+      childSetMap.get(set.parentSetId).push(set);
+    });
+
+    if (topLevelSets.length === 0) {
       container.innerHTML = `
         <div class="nav-empty-state">
           <i class="ph ph-funnel"></i>
@@ -1745,12 +1757,16 @@ class EODataWorkbench {
     // Don't show any set as active when viewing a source
     const isViewingSource = !!this.currentSourceId;
 
-    container.innerHTML = filteredSets.map(set => {
+    // Helper function to render a single set item
+    const renderSetItem = (set, isChild = false) => {
       const recordCount = set.records?.length || 0;
       const fieldCount = set.fields?.length || 0;
       const isExpanded = this.expandedSets[set.id] || set.id === this.currentSetId;
       const isActiveSet = !isViewingSource && set.id === this.currentSetId;
       const views = set.views || [];
+      const childSets = childSetMap.get(set.id) || [];
+      const hasChildren = childSets.length > 0;
+      const isGroupContainer = set.isGroup || hasChildren;
 
       // Determine derivation strategy for operator badge
       const derivation = this._getSetDerivationInfo(set);
@@ -1775,8 +1791,11 @@ class EODataWorkbench {
         `;
       }).join('');
 
+      // Render child sets (if this is a group container)
+      const childSetsHtml = childSets.map(childSet => renderSetItem(childSet, true)).join('');
+
       return `
-        <div class="set-item-container ${isExpanded ? 'expanded' : ''} ${stabilityClass}" data-set-id="${set.id}">
+        <div class="set-item-container ${isExpanded ? 'expanded' : ''} ${stabilityClass} ${isChild ? 'child-set' : ''} ${isGroupContainer ? 'group-container' : ''}" data-set-id="${set.id}">
           <div class="set-item-header ${isActiveSet ? 'active' : ''}"
                data-set-id="${set.id}"
                title="${derivation.description}\n${fieldCount} fields · ${recordCount} records">
@@ -1786,23 +1805,30 @@ class EODataWorkbench {
             ${operatorBadge}
             <i class="set-item-icon ${set.icon || 'ph ph-table'}"></i>
             <span class="set-item-name">${this._escapeHtml(set.name)}</span>
-            <span class="set-item-count">${recordCount}</span>
+            <span class="set-item-count">${isGroupContainer && hasChildren ? childSets.reduce((sum, c) => sum + (c.records?.length || 0), 0) : recordCount}</span>
             <div class="set-item-actions">
-              <button class="set-item-action-btn add-view-btn" data-set-id="${set.id}" title="Add view">
-                <i class="ph ph-plus"></i>
-              </button>
+              ${!isGroupContainer ? `
+                <button class="set-item-action-btn add-view-btn" data-set-id="${set.id}" title="Add view">
+                  <i class="ph ph-plus"></i>
+                </button>
+              ` : ''}
             </div>
           </div>
           <div class="set-views-list">
+            ${childSetsHtml}
             ${viewsHtml}
-            <button class="set-add-view-btn" data-set-id="${set.id}">
-              <i class="ph ph-plus"></i>
-              <span>Add view</span>
-            </button>
+            ${!isGroupContainer ? `
+              <button class="set-add-view-btn" data-set-id="${set.id}">
+                <i class="ph ph-plus"></i>
+                <span>Add view</span>
+              </button>
+            ` : ''}
           </div>
         </div>
       `;
-    }).join('');
+    };
+
+    container.innerHTML = topLevelSets.map(set => renderSetItem(set)).join('');
 
     // Attach event handlers
     this._attachSetNavEventHandlers(container);
@@ -3657,11 +3683,11 @@ class EODataWorkbench {
           </div>
           ${source.multiRecordAnalysis ? `
             <div class="source-view-mode-toggle">
-              <button class="source-view-mode-btn ${source.sourceViewMode !== 'split' ? 'active' : ''}" data-mode="unified" title="View all records in one table">
+              <button class="source-view-mode-btn ${source.sourceViewMode === 'unified' ? 'active' : ''}" data-mode="unified" title="View all records in one table">
                 <i class="ph ph-table"></i>
                 <span>Unified</span>
               </button>
-              <button class="source-view-mode-btn ${source.sourceViewMode === 'split' ? 'active' : ''}" data-mode="split" title="View records split by type">
+              <button class="source-view-mode-btn ${source.sourceViewMode !== 'unified' ? 'active' : ''}" data-mode="split" title="View records split by type">
                 <i class="ph ph-rows"></i>
                 <span>By Type</span>
               </button>
@@ -3878,7 +3904,7 @@ class EODataWorkbench {
       `;
     }
 
-    const viewMode = source.sourceViewMode || 'unified';
+    const viewMode = source.sourceViewMode || (source.multiRecordAnalysis ? 'split' : 'unified');
     const multiRecord = source.multiRecordAnalysis;
 
     if (viewMode === 'split' && multiRecord) {
@@ -7017,7 +7043,7 @@ class EODataWorkbench {
 
   /**
    * Show the SetFromSourceUI modal for creating a Set from a Source
-   * Simplified to use this.sources as the primary data source
+   * For multi-type sources, offers to create grouped sets
    */
   _showSetFromSourceUI(sourceId) {
     // Find the source from this.sources (single source of truth)
@@ -7028,14 +7054,147 @@ class EODataWorkbench {
       return;
     }
 
+    // Check if this is a multi-type source
+    if (source.multiRecordAnalysis && source.multiRecordAnalysis.types?.length > 1) {
+      this._showMultiTypeSetCreationUI(source);
+      return;
+    }
+
+    // Single type source - use standard flow
+    this._showSingleTypeSetCreationUI(source);
+  }
+
+  /**
+   * Show UI for creating sets from multi-type source
+   */
+  _showMultiTypeSetCreationUI(source) {
+    const multiRecord = source.multiRecordAnalysis;
+    const types = multiRecord.types || [];
+    const typeField = multiRecord.typeField || 'type';
+    const baseName = source.name.replace(/\.[^/.]+$/, '');
+
+    const html = `
+      <div class="multi-type-set-creation">
+        <p class="form-hint" style="margin-bottom: 16px;">
+          This source contains <strong>${types.length} record types</strong>.
+          Create separate sets for each type, grouped under a parent set.
+        </p>
+        <div class="form-group">
+          <label>Parent Set Name</label>
+          <input type="text" id="multi-type-parent-name" class="form-input" value="${this._escapeHtml(baseName)}">
+        </div>
+        <div class="form-group">
+          <label>Record Types to Import</label>
+          <div class="checkbox-list multi-type-checklist">
+            ${types.map((typeInfo, i) => `
+              <label class="checkbox-item">
+                <input type="checkbox" name="type-select" value="${this._escapeHtml(typeInfo.value)}" checked>
+                <span class="type-info">
+                  <span class="type-name">${this._escapeHtml(typeInfo.label || typeInfo.value)}</span>
+                  <span class="type-count">${typeInfo.count} records · ${(typeInfo.specificFields || []).length} specific fields</span>
+                </span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    this._showModal('Create Sets from Multi-Type Source', html, () => {
+      const parentName = document.getElementById('multi-type-parent-name')?.value?.trim() || baseName;
+      const checkboxes = document.querySelectorAll('input[name="type-select"]:checked');
+      const selectedTypes = Array.from(checkboxes).map(cb => cb.value);
+
+      if (selectedTypes.length === 0) {
+        this._showToast('Please select at least one type', 'warning');
+        return;
+      }
+
+      // Create parent set (container)
+      const parentSet = createSet(parentName);
+      parentSet.icon = 'ph ph-folder-open';
+      parentSet.isGroup = true;
+      parentSet.childSetIds = [];
+      parentSet.datasetProvenance = {
+        sourceId: source.id,
+        originalFilename: source.name,
+        importedAt: source.importedAt,
+        provenance: source.provenance
+      };
+      // Parent set doesn't have records - it's a grouping container
+      parentSet.records = [];
+      parentSet.fields = [];
+
+      this.sets.push(parentSet);
+
+      // Create child sets for each selected type
+      const rawRecords = source.records || [];
+      const createdSets = [];
+
+      selectedTypes.forEach(typeValue => {
+        const typeInfo = types.find(t => t.value === typeValue);
+        if (!typeInfo) return;
+
+        // Filter records for this type
+        const typeRecords = rawRecords.filter(r => r[typeField] === typeValue);
+
+        // Build fields for this type (common + specific)
+        const commonFields = multiRecord.commonFields || [];
+        const specificFields = typeInfo.specificFields || [];
+        const allFieldNames = [...commonFields, ...specificFields];
+
+        const fields = allFieldNames.map(fieldName => ensureValidField({
+          id: fieldName,
+          name: fieldName,
+          type: this._inferFieldType(typeRecords, fieldName)
+        }));
+
+        // Create the child set
+        const childSet = createSet(`${parentName}: ${typeInfo.label || typeValue}`);
+        childSet.icon = 'ph ph-table';
+        childSet.parentSetId = parentSet.id;
+        childSet.fields = fields;
+        childSet.records = typeRecords.map((record, index) => ({
+          id: `rec_${index}`,
+          values: record
+        }));
+        childSet.datasetProvenance = {
+          sourceId: source.id,
+          originalFilename: source.name,
+          importedAt: source.importedAt,
+          provenance: source.provenance,
+          recordType: typeValue
+        };
+
+        this.sets.push(childSet);
+        parentSet.childSetIds.push(childSet.id);
+        createdSets.push(childSet);
+      });
+
+      this._saveData();
+      this._renderSidebar();
+
+      // Select the first child set
+      if (createdSets.length > 0) {
+        this._selectSet(createdSets[0].id);
+      }
+
+      this._showToast(`Created ${createdSets.length} sets grouped under "${parentName}"`, 'success');
+    }, 'Create Sets');
+  }
+
+  /**
+   * Show standard set creation UI for single-type sources
+   */
+  _showSingleTypeSetCreationUI(source) {
     // Ensure sourceStore has this source (for SetFromSourceUI compatibility)
     if (!this.sourceStore) {
       this._initSourceStore();
     }
 
     // Add source to sourceStore if not already there
-    if (!this.sourceStore.get(sourceId)) {
-      this.sourceStore.sources.set(sourceId, source);
+    if (!this.sourceStore.get(source.id)) {
+      this.sourceStore.sources.set(source.id, source);
     }
 
     // Get or create the SetCreator
@@ -7053,7 +7212,7 @@ class EODataWorkbench {
 
     // Create and show the UI
     const ui = new SetFromSourceUI(this._setCreator, container);
-    ui.show(sourceId, {
+    ui.show(source.id, {
       onComplete: (result) => {
         // Add the new set to our sets array
         this.sets.push(result.set);

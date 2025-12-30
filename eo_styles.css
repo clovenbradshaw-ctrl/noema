@@ -1196,6 +1196,27 @@ html, body {
   margin-bottom: 2px;
 }
 
+/* Group container (parent set with children) */
+.set-item-container.group-container > .set-views-list {
+  padding-left: 8px;
+  border-left: 2px solid var(--border-color);
+  margin-left: 12px;
+}
+
+/* Child sets nested under parent */
+.set-item-container.child-set {
+  margin-left: 0;
+  margin-bottom: 2px;
+}
+
+.set-item-container.child-set > .set-item-header {
+  padding-left: 4px;
+}
+
+.set-item-container.child-set .set-item-icon {
+  color: var(--text-muted);
+}
+
 .set-item-header {
   display: flex;
   align-items: center;
@@ -10636,6 +10657,35 @@ body.has-picked-up .browser-tab:hover {
 
 .checkbox-item input {
   accent-color: var(--primary-500);
+}
+
+/* Multi-type checklist for set creation */
+.multi-type-checklist .checkbox-item {
+  align-items: flex-start;
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.multi-type-checklist .checkbox-item:hover {
+  background: var(--bg-hover);
+}
+
+.multi-type-checklist .type-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.multi-type-checklist .type-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.multi-type-checklist .type-count {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* Empty Hint */
