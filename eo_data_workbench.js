@@ -3702,13 +3702,17 @@ class EODataWorkbench {
           </div>
           ${source.multiRecordAnalysis ? `
             <div class="source-view-mode-toggle">
-              <button class="source-view-mode-btn ${source.sourceViewMode !== 'split' ? 'active' : ''}" data-mode="unified" title="View all records in one table">
+              <button class="source-view-mode-btn ${!source.sourceViewMode || source.sourceViewMode === 'unified' ? 'active' : ''}" data-mode="unified" title="View all records in one table">
                 <i class="ph ph-table"></i>
                 <span>Unified</span>
               </button>
               <button class="source-view-mode-btn ${source.sourceViewMode === 'split' ? 'active' : ''}" data-mode="split" title="View records split by type">
                 <i class="ph ph-rows"></i>
                 <span>By Type</span>
+              </button>
+              <button class="source-view-mode-btn ${source.sourceViewMode === 'cards' ? 'active' : ''}" data-mode="cards" title="View record types as cards">
+                <i class="ph ph-cards"></i>
+                <span>Cards</span>
               </button>
             </div>
           ` : ''}
@@ -3911,7 +3915,7 @@ class EODataWorkbench {
   }
 
   /**
-   * Render source table content based on view mode (unified or split)
+   * Render source table content based on view mode (unified, split, or cards)
    */
   _renderSourceTableContent(source, fields, records) {
     if (records.length === 0) {
@@ -3928,6 +3932,8 @@ class EODataWorkbench {
 
     if (viewMode === 'split' && multiRecord) {
       return this._renderSourceSplitTables(source, fields, records, multiRecord);
+    } else if (viewMode === 'cards' && multiRecord) {
+      return this._renderSourceCardsView(source, fields, records, multiRecord);
     } else {
       return this._renderSourceUnifiedTable(source, fields, records, multiRecord);
     }
@@ -4155,6 +4161,128 @@ class EODataWorkbench {
             </div>
           `;
         }).join('')}
+      </div>
+    `;
+  }
+
+  /**
+   * Render cards view showing record types as visual cards with key stats
+   */
+  _renderSourceCardsView(source, fields, records, multiRecord) {
+    const typeField = multiRecord.typeField;
+    const typeColors = [
+      { bg: 'var(--type-color-1-bg, rgba(59, 130, 246, 0.08))', border: 'var(--type-color-1-border, rgba(59, 130, 246, 0.3))', text: 'var(--type-color-1-text, #3b82f6)', solid: '#3b82f6' },
+      { bg: 'var(--type-color-2-bg, rgba(16, 185, 129, 0.08))', border: 'var(--type-color-2-border, rgba(16, 185, 129, 0.3))', text: 'var(--type-color-2-text, #10b981)', solid: '#10b981' },
+      { bg: 'var(--type-color-3-bg, rgba(245, 158, 11, 0.08))', border: 'var(--type-color-3-border, rgba(245, 158, 11, 0.3))', text: 'var(--type-color-3-text, #f59e0b)', solid: '#f59e0b' },
+      { bg: 'var(--type-color-4-bg, rgba(139, 92, 246, 0.08))', border: 'var(--type-color-4-border, rgba(139, 92, 246, 0.3))', text: 'var(--type-color-4-text, #8b5cf6)', solid: '#8b5cf6' },
+      { bg: 'var(--type-color-5-bg, rgba(236, 72, 153, 0.08))', border: 'var(--type-color-5-border, rgba(236, 72, 153, 0.3))', text: 'var(--type-color-5-text, #ec4899)', solid: '#ec4899' },
+    ];
+
+    // Group records by type
+    const recordsByType = {};
+    records.forEach(record => {
+      const typeValue = record.values?.[typeField] || '_untyped';
+      if (!recordsByType[typeValue]) {
+        recordsByType[typeValue] = [];
+      }
+      recordsByType[typeValue].push(record);
+    });
+
+    // Build common and specific field sets
+    const commonFieldNames = new Set(multiRecord.commonFields || []);
+    const typeFieldSets = {};
+
+    multiRecord.types.forEach(typeInfo => {
+      const specificFields = new Set(typeInfo.specificFields || []);
+      typeFieldSets[typeInfo.value] = {
+        common: fields.filter(f => commonFieldNames.has(f.name)),
+        specific: fields.filter(f => specificFields.has(f.name))
+      };
+    });
+
+    // Sort types by the order they appear in multiRecordAnalysis
+    const sortedTypes = multiRecord.types.map((t, i) => ({ ...t, index: i }));
+    const totalRecords = records.length;
+
+    return `
+      <div class="source-cards-view">
+        <div class="source-cards-grid">
+          ${sortedTypes.map((typeInfo, idx) => {
+            const typeValue = typeInfo.value;
+            const typeRecords = recordsByType[typeValue] || [];
+            const color = typeColors[idx % typeColors.length];
+            const fieldSet = typeFieldSets[typeValue] || { common: [], specific: [] };
+            const percentage = totalRecords > 0 ? ((typeRecords.length / totalRecords) * 100).toFixed(1) : 0;
+
+            if (typeRecords.length === 0) return '';
+
+            return `
+              <div class="source-type-card" style="border-color: ${color.border};">
+                <div class="source-type-card-header" style="background: ${color.bg}; border-bottom-color: ${color.border};">
+                  <div class="source-type-card-icon" style="background: ${color.solid};">
+                    <i class="ph ph-database"></i>
+                  </div>
+                  <div class="source-type-card-title">
+                    <span class="source-type-card-name" style="color: ${color.text};">
+                      ${this._escapeHtml(typeInfo.label || typeValue)}
+                    </span>
+                    <span class="source-type-card-badge">${percentage}%</span>
+                  </div>
+                </div>
+                <div class="source-type-card-body">
+                  <div class="source-type-card-stat source-type-card-stat-primary">
+                    <span class="source-type-card-stat-value">${typeRecords.length.toLocaleString()}</span>
+                    <span class="source-type-card-stat-label">Records</span>
+                  </div>
+                  <div class="source-type-card-stats-row">
+                    <div class="source-type-card-stat">
+                      <span class="source-type-card-stat-value">${fieldSet.common.length}</span>
+                      <span class="source-type-card-stat-label">Common Fields</span>
+                    </div>
+                    <div class="source-type-card-stat">
+                      <span class="source-type-card-stat-value">${fieldSet.specific.length}</span>
+                      <span class="source-type-card-stat-label">Specific Fields</span>
+                    </div>
+                  </div>
+                  ${fieldSet.specific.length > 0 ? `
+                    <div class="source-type-card-fields">
+                      <span class="source-type-card-fields-label">Unique fields:</span>
+                      <div class="source-type-card-fields-list">
+                        ${fieldSet.specific.slice(0, 6).map(f => `
+                          <span class="source-type-card-field-tag" style="background: ${color.bg}; border-color: ${color.border}; color: ${color.text};">
+                            ${this._escapeHtml(f.name)}
+                          </span>
+                        `).join('')}
+                        ${fieldSet.specific.length > 6 ? `
+                          <span class="source-type-card-field-more">+${fieldSet.specific.length - 6} more</span>
+                        ` : ''}
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+                <div class="source-type-card-footer" style="border-top-color: ${color.border};">
+                  <div class="source-type-card-progress">
+                    <div class="source-type-card-progress-bar" style="width: ${percentage}%; background: ${color.solid};"></div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="source-cards-summary">
+          <div class="source-cards-summary-item">
+            <i class="ph ph-stack"></i>
+            <span>${sortedTypes.length} record types</span>
+          </div>
+          <div class="source-cards-summary-item">
+            <i class="ph ph-rows"></i>
+            <span>${totalRecords.toLocaleString()} total records</span>
+          </div>
+          <div class="source-cards-summary-item">
+            <i class="ph ph-columns"></i>
+            <span>${multiRecord.commonFields?.length || 0} common fields</span>
+          </div>
+        </div>
       </div>
     `;
   }
