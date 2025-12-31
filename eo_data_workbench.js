@@ -715,6 +715,32 @@ class EODataWorkbench {
 
     const timestamp = new Date().toISOString();
 
+    // Create a "Sample" project to hold the sample data
+    // This is created directly without UI side effects during initialization
+    const sampleProject = {
+      id: 'proj_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9),
+      name: 'Sample',
+      description: 'Sample project with demo data',
+      icon: 'ph-flask',
+      color: '#8B5CF6', // Purple color for sample
+      sourceIds: [],
+      setIds: [],
+      definitionIds: [],
+      exportIds: [],
+      settings: {
+        isDefault: false // Not the default project
+      },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      status: 'active',
+      getItemCount() {
+        return (this.sourceIds?.length || 0) + (this.setIds?.length || 0) +
+               (this.definitionIds?.length || 0) + (this.exportIds?.length || 0);
+      }
+    };
+    if (!this.projects) this.projects = [];
+    this.projects.push(sampleProject);
+
     // Initialize sourceStore if needed
     if (!this.sourceStore) {
       this._initSourceStore();
@@ -983,6 +1009,11 @@ class EODataWorkbench {
     source.derivedSetIds.push(set.id);
 
     this.sets.push(set);
+
+    // Associate source and set with the Sample project
+    sampleProject.sourceIds.push(sourceId);
+    sampleProject.setIds.push(set.id);
+
     this._saveData();
   }
 
