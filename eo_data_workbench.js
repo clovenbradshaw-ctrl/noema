@@ -11958,109 +11958,138 @@ class EODataWorkbench {
           </div>
         </div>
 
-        <!-- INPUT SECTION -->
-        <div class="set-detail-section set-detail-input">
-          <div class="set-detail-section-header">
-            <div class="set-detail-section-title">
+        <!-- HORIZONTAL FLOW LAYOUT -->
+        <div class="set-detail-flow">
+          <!-- INPUT COLUMN -->
+          <div class="set-detail-column set-detail-column-input">
+            <div class="set-detail-column-header">
               <i class="ph ph-download-simple"></i>
               <span>Input</span>
             </div>
-            <span class="set-detail-section-subtitle">Where this data comes from</span>
-          </div>
-          <div class="set-detail-section-content">
-            ${inputSources.length > 0 ? `
-              <div class="set-detail-sources-list">
-                ${inputSources.map(source => `
-                  <div class="set-detail-source-item" data-source-id="${source.id || ''}" data-set-id="${source.setId || ''}">
-                    <i class="ph ${source.icon}"></i>
-                    <div class="set-detail-source-info">
-                      <div class="set-detail-source-name">${this._escapeHtml(source.name)}</div>
-                      <div class="set-detail-source-meta">${source.meta}</div>
+            <div class="set-detail-column-subtitle">Where this data comes from</div>
+            <div class="set-detail-column-content">
+              ${inputSources.length > 0 ? `
+                <div class="set-detail-sources-list">
+                  ${inputSources.map(source => `
+                    <div class="set-detail-source-item" data-source-id="${source.id || ''}" data-set-id="${source.setId || ''}">
+                      <i class="ph ${source.icon}"></i>
+                      <div class="set-detail-source-info">
+                        <div class="set-detail-source-name">${this._escapeHtml(source.name)}</div>
+                        <div class="set-detail-source-meta">${source.meta}</div>
+                      </div>
+                      ${source.canView ? `
+                        <button class="set-detail-source-action" title="View source">
+                          <i class="ph ph-arrow-square-out"></i>
+                        </button>
+                      ` : ''}
                     </div>
-                    ${source.canView ? `
-                      <button class="set-detail-source-action" title="View source">
-                        <i class="ph ph-arrow-square-out"></i>
-                      </button>
+                  `).join('')}
+                </div>
+              ` : `
+                <div class="set-detail-empty-state">
+                  <i class="ph ph-file-dashed"></i>
+                  <span>No source tracked</span>
+                </div>
+              `}
+              <button class="set-detail-add-btn" id="set-detail-add-source">
+                <i class="ph ph-plus"></i>
+                <span>Add Source</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- FLOW ARROW -->
+          <div class="set-detail-flow-arrow horizontal">
+            <i class="ph ph-arrow-right"></i>
+          </div>
+
+          <!-- PROCESSING COLUMN (Transformation + Record Types) -->
+          <div class="set-detail-column set-detail-column-process">
+            <div class="set-detail-column-header">
+              <i class="ph ph-gear"></i>
+              <span>Processing</span>
+            </div>
+            <div class="set-detail-column-subtitle">How the data is shaped</div>
+            <div class="set-detail-column-content">
+              <!-- Transformation -->
+              <div class="set-detail-subsection">
+                <div class="set-detail-subsection-label">
+                  <i class="ph ph-funnel"></i> Transformation
+                </div>
+                ${transformations.length > 0 ? `
+                  <div class="set-detail-transforms-list">
+                    ${transformations.map(t => `
+                      <div class="set-detail-transform-item ${t.type}">
+                        <div class="set-detail-transform-badge">${t.badge}</div>
+                        <div class="set-detail-transform-info">
+                          <div class="set-detail-transform-name">${this._escapeHtml(t.name)}</div>
+                          <div class="set-detail-transform-desc">${this._escapeHtml(t.description)}</div>
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : `
+                  <div class="set-detail-inline-empty">Direct import</div>
+                `}
+              </div>
+
+              <!-- Schema -->
+              <div class="set-detail-subsection">
+                <div class="set-detail-subsection-label">
+                  <i class="ph ph-columns"></i> Schema
+                </div>
+                <div class="set-detail-schema-compact">
+                  <span>${fields.length} fields</span>
+                  <button class="set-detail-link-btn" id="set-detail-view-fields">
+                    View <i class="ph ph-arrow-right"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Record Types (if detected) -->
+              ${recordTypeAnalysis ? `
+                <div class="set-detail-subsection">
+                  <div class="set-detail-subsection-label">
+                    <i class="ph ph-stack"></i> Record Types
+                    <span class="set-detail-type-count">${recordTypeAnalysis.types.length}</span>
+                  </div>
+                  <div class="set-detail-record-types-compact">
+                    ${recordTypeAnalysis.types.slice(0, 4).map(type => `
+                      <div class="set-detail-type-chip" data-type-value="${this._escapeHtml(type.value)}" title="${type.count} records">
+                        <span class="set-detail-type-chip-name">${this._escapeHtml(type.label)}</span>
+                        <span class="set-detail-type-chip-count">${type.count}</span>
+                      </div>
+                    `).join('')}
+                    ${recordTypeAnalysis.types.length > 4 ? `
+                      <div class="set-detail-type-more">+${recordTypeAnalysis.types.length - 4} more</div>
                     ` : ''}
                   </div>
-                `).join('')}
-              </div>
-            ` : `
-              <div class="set-detail-empty-state">
-                <i class="ph ph-file-dashed"></i>
-                <span>No source tracked</span>
-              </div>
-            `}
-            <button class="set-detail-add-btn" id="set-detail-add-source">
-              <i class="ph ph-plus"></i>
-              <span>Add Source</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- FLOW ARROW -->
-        <div class="set-detail-flow-arrow">
-          <i class="ph ph-arrow-down"></i>
-        </div>
-
-        <!-- TRANSFORMATION SECTION -->
-        <div class="set-detail-section set-detail-transform">
-          <div class="set-detail-section-header">
-            <div class="set-detail-section-title">
-              <i class="ph ph-gear"></i>
-              <span>Transformation</span>
-            </div>
-            <span class="set-detail-section-subtitle">How the data is shaped</span>
-          </div>
-          <div class="set-detail-section-content">
-            ${transformations.length > 0 ? `
-              <div class="set-detail-transforms-list">
-                ${transformations.map(t => `
-                  <div class="set-detail-transform-item ${t.type}">
-                    <div class="set-detail-transform-badge">${t.badge}</div>
-                    <div class="set-detail-transform-info">
-                      <div class="set-detail-transform-name">${this._escapeHtml(t.name)}</div>
-                      <div class="set-detail-transform-desc">${this._escapeHtml(t.description)}</div>
-                    </div>
+                  <div class="set-detail-type-actions">
+                    <button class="set-detail-link-btn" id="set-detail-split-all-types">
+                      <i class="ph ph-arrows-split"></i> Create Views
+                    </button>
                   </div>
-                `).join('')}
-              </div>
-            ` : `
-              <div class="set-detail-empty-state">
-                <i class="ph ph-equals"></i>
-                <span>Direct import (no transformations)</span>
-              </div>
-            `}
-            <div class="set-detail-schema-summary">
-              <div class="set-detail-schema-header">
-                <span>Schema: ${fields.length} fields</span>
-                <button class="set-detail-link-btn" id="set-detail-view-fields">
-                  View Fields <i class="ph ph-arrow-right"></i>
-                </button>
-              </div>
+                </div>
+              ` : ''}
             </div>
           </div>
-        </div>
 
-        <!-- FLOW ARROW -->
-        <div class="set-detail-flow-arrow">
-          <i class="ph ph-arrow-down"></i>
-        </div>
+          <!-- FLOW ARROW -->
+          <div class="set-detail-flow-arrow horizontal">
+            <i class="ph ph-arrow-right"></i>
+          </div>
 
-        <!-- OUTPUT SECTION -->
-        <div class="set-detail-section set-detail-output">
-          <div class="set-detail-section-header">
-            <div class="set-detail-section-title">
+          <!-- OUTPUT COLUMN -->
+          <div class="set-detail-column set-detail-column-output">
+            <div class="set-detail-column-header">
               <i class="ph ph-upload-simple"></i>
               <span>Output</span>
             </div>
-            <span class="set-detail-section-subtitle">Where this data goes</span>
-          </div>
-          <div class="set-detail-section-content">
-            <div class="set-detail-output-grid">
+            <div class="set-detail-column-subtitle">Where this data goes</div>
+            <div class="set-detail-column-content">
               <!-- Exports -->
-              <div class="set-detail-output-column">
-                <div class="set-detail-output-label">
+              <div class="set-detail-subsection">
+                <div class="set-detail-subsection-label">
                   <i class="ph ph-export"></i> Exports
                 </div>
                 ${outputs.exports.length > 0 ? `
@@ -12074,17 +12103,17 @@ class EODataWorkbench {
                     `).join('')}
                   </div>
                 ` : `
-                  <div class="set-detail-output-empty">No exports yet</div>
+                  <div class="set-detail-inline-empty">No exports yet</div>
                 `}
-                <button class="set-detail-add-btn" id="set-detail-export-now">
+                <button class="set-detail-add-btn compact" id="set-detail-export-now">
                   <i class="ph ph-export"></i>
                   <span>Export Now</span>
                 </button>
               </div>
 
               <!-- Derived Sets -->
-              <div class="set-detail-output-column">
-                <div class="set-detail-output-label">
+              <div class="set-detail-subsection">
+                <div class="set-detail-subsection-label">
                   <i class="ph ph-git-branch"></i> Derived Sets
                 </div>
                 ${outputs.derivedSets.length > 0 ? `
@@ -12100,9 +12129,9 @@ class EODataWorkbench {
                     `).join('')}
                   </div>
                 ` : `
-                  <div class="set-detail-output-empty">No derived sets</div>
+                  <div class="set-detail-inline-empty">No derived sets</div>
                 `}
-                <button class="set-detail-add-btn" id="set-detail-create-derived">
+                <button class="set-detail-add-btn compact" id="set-detail-create-derived">
                   <i class="ph ph-git-branch"></i>
                   <span>Create Derived Set</span>
                 </button>
@@ -12110,47 +12139,6 @@ class EODataWorkbench {
             </div>
           </div>
         </div>
-
-        <!-- RECORD TYPES SECTION (if multiple types detected) -->
-        ${recordTypeAnalysis ? `
-          <div class="set-detail-section set-detail-record-types">
-            <div class="set-detail-section-header">
-              <div class="set-detail-section-title">
-                <i class="ph ph-stack"></i>
-                <span>Record Types</span>
-              </div>
-              <span class="set-detail-section-subtitle">Split into views by type</span>
-            </div>
-            <div class="set-detail-section-content">
-              <div class="set-detail-record-types-info">
-                <p>This set contains <strong>${recordTypeAnalysis.types.length}</strong> different record types
-                   based on the <code>${this._escapeHtml(recordTypeAnalysis.typeField)}</code> field.</p>
-              </div>
-              <div class="set-detail-record-types-list">
-                ${recordTypeAnalysis.types.map(type => `
-                  <div class="set-detail-record-type-item" data-type-value="${this._escapeHtml(type.value)}">
-                    <div class="set-detail-record-type-info">
-                      <span class="set-detail-record-type-name">${this._escapeHtml(type.label)}</span>
-                      <span class="set-detail-record-type-count">${type.count} records</span>
-                      ${type.specificFields.length > 0 ? `
-                        <span class="set-detail-record-type-fields">${type.specificFields.length} specific fields</span>
-                      ` : ''}
-                    </div>
-                    <button class="set-detail-split-btn" data-type-value="${this._escapeHtml(type.value)}"
-                            title="Create view for this record type">
-                      <i class="ph ph-arrows-split"></i>
-                      <span>Create View</span>
-                    </button>
-                  </div>
-                `).join('')}
-              </div>
-              <button class="set-detail-add-btn" id="set-detail-split-all-types">
-                <i class="ph ph-arrows-split"></i>
-                <span>Create Views for All Types</span>
-              </button>
-            </div>
-          </div>
-        ` : ''}
       </div>
     `;
 

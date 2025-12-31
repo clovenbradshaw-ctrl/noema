@@ -1466,14 +1466,14 @@ html, body {
    ======================================== */
 
 .set-detail-container {
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   padding: 24px;
 }
 
 .set-detail-header {
-  margin-bottom: 32px;
-  padding-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--border-primary);
 }
 
@@ -1548,7 +1548,198 @@ html, body {
   border-color: var(--danger-500);
 }
 
-/* Section styling */
+/* Horizontal Flow Layout */
+.set-detail-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.set-detail-column {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.set-detail-column-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.set-detail-column-header i {
+  font-size: 16px;
+}
+
+.set-detail-column-input .set-detail-column-header i {
+  color: var(--success-500);
+}
+
+.set-detail-column-process .set-detail-column-header i {
+  color: var(--warning-500);
+}
+
+.set-detail-column-output .set-detail-column-header i {
+  color: var(--primary-500);
+}
+
+.set-detail-column-subtitle {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.set-detail-column-content {
+  padding: 12px;
+}
+
+/* Subsections within columns */
+.set-detail-subsection {
+  padding: 10px 12px;
+  background: var(--surface-secondary);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.set-detail-subsection:last-child {
+  margin-bottom: 0;
+}
+
+.set-detail-subsection-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.set-detail-subsection-label i {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* Inline empty state (compact) */
+.set-detail-inline-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 8px;
+  background: var(--surface-primary);
+  border-radius: 4px;
+  text-align: center;
+}
+
+/* Horizontal flow arrow */
+.set-detail-flow-arrow.horizontal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  align-self: center;
+}
+
+.set-detail-flow-arrow.horizontal i {
+  font-size: 18px;
+  color: var(--text-tertiary);
+}
+
+/* Schema compact view */
+.set-detail-schema-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: var(--surface-primary);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Record types compact view */
+.set-detail-type-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+  border-radius: 9px;
+  margin-left: auto;
+}
+
+.set-detail-record-types-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.set-detail-type-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 14px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.set-detail-type-chip:hover {
+  border-color: var(--primary-500);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.set-detail-type-chip-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.set-detail-type-chip-count {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.set-detail-type-more {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.set-detail-type-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Compact add button */
+.set-detail-add-btn.compact {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+/* Section styling (legacy, kept for compatibility) */
 .set-detail-section {
   background: var(--surface-primary);
   border: 1px solid var(--border-primary);
@@ -1595,18 +1786,18 @@ html, body {
 .set-detail-sources-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .set-detail-source-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--surface-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1627,7 +1818,7 @@ html, body {
 }
 
 .set-detail-source-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -1636,7 +1827,7 @@ html, body {
 }
 
 .set-detail-source-meta {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary);
 }
 
@@ -1662,17 +1853,17 @@ html, body {
 .set-detail-transforms-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 0;
 }
 
 .set-detail-transform-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--surface-secondary);
-  border-radius: 6px;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface-primary);
+  border-radius: 4px;
 }
 
 .set-detail-transform-badge {
@@ -1681,17 +1872,24 @@ html, body {
 
 .set-detail-transform-info {
   flex: 1;
+  min-width: 0;
 }
 
 .set-detail-transform-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .set-detail-transform-desc {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .set-detail-schema-summary {
@@ -1713,9 +1911,9 @@ html, body {
 .set-detail-link-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  font-size: 12px;
+  gap: 3px;
+  padding: 4px 8px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--primary-500);
   background: transparent;
@@ -1771,7 +1969,7 @@ html, body {
 .set-detail-derived-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 8px;
 }
 
@@ -1779,11 +1977,11 @@ html, body {
 .set-detail-derived-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--surface-secondary);
-  border-radius: 6px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--surface-primary);
+  border-radius: 4px;
+  font-size: 11px;
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s ease;
@@ -1910,15 +2108,15 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  padding: 10px;
-  font-size: 12px;
+  padding: 8px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
   border: 1px dashed var(--border-primary);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1929,7 +2127,7 @@ html, body {
   background: rgba(59, 130, 246, 0.05);
 }
 
-/* Flow arrow between sections */
+/* Flow arrow between sections (vertical - legacy) */
 .set-detail-flow-arrow {
   display: flex;
   justify-content: center;
@@ -1944,16 +2142,19 @@ html, body {
 /* Empty states */
 .set-detail-empty-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 20px;
+  gap: 6px;
+  padding: 16px;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: 12px;
+  text-align: center;
 }
 
 .set-detail-empty-state i {
-  font-size: 18px;
+  font-size: 24px;
+  opacity: 0.5;
 }
 
 /* Operator badges */
