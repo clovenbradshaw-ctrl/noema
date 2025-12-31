@@ -1827,22 +1827,9 @@ class EODataWorkbench {
         `;
       }).join('');
 
-      // Fields item at top of views list (like Airtable's "Manage Fields")
-      const isFieldsActive = isActiveSet && this.showingSetFields;
-      const fieldsItem = `
-        <div class="set-view-item set-fields-item ${isFieldsActive ? 'active' : ''}"
-             data-set-id="${set.id}"
-             data-action="fields"
-             title="Manage all fields in this set">
-          <i class="ph ph-columns"></i>
-          <span>Fields</span>
-          <span class="view-item-count">${fieldCount}</span>
-        </div>
-      `;
-
       return `
         <div class="set-item-container ${isExpanded ? 'expanded' : ''} ${stabilityClass}" data-set-id="${set.id}">
-          <div class="set-item-header ${isActiveSet && !this.showingSetFields ? 'active' : ''}"
+          <div class="set-item-header ${isActiveSet ? 'active' : ''}"
                data-set-id="${set.id}"
                title="${derivation.description}\n${fieldCount} fields · ${recordCount} records">
             <div class="set-item-expand">
@@ -1859,7 +1846,6 @@ class EODataWorkbench {
             </div>
           </div>
           <div class="set-views-list">
-            ${fieldsItem}
             ${viewsHtml}
             <button class="set-add-view-btn" data-set-id="${set.id}">
               <i class="ph ph-plus"></i>
@@ -1909,13 +1895,12 @@ class EODataWorkbench {
       });
     });
 
-    // View item click - select view (or Fields panel)
+    // View item click - select view
     container.querySelectorAll('.set-view-item').forEach(item => {
       item.addEventListener('click', (e) => {
         e.stopPropagation();
         const setId = item.dataset.setId;
         const viewId = item.dataset.viewId;
-        const action = item.dataset.action;
 
         // Select set first if not already selected
         if (this.currentSetId !== setId) {
@@ -1925,20 +1910,12 @@ class EODataWorkbench {
           }
         }
 
-        // Handle special "Fields" action
-        if (action === 'fields') {
-          this._selectSet(setId, true); // true = show fields panel
-          return;
-        }
-
-        // Otherwise select the view
+        // Select the view
         this._selectView(viewId);
       });
 
       item.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        // Don't show context menu for Fields item
-        if (item.dataset.action === 'fields') return;
         this._showViewContextMenu(e, item.dataset.viewId, item.dataset.setId);
       });
     });
@@ -10305,7 +10282,7 @@ class EODataWorkbench {
     }
   }
 
-  _selectSet(setId, showFieldsPanel = true) {
+  _selectSet(setId, showFieldsPanel = false) {
     this.currentSetId = setId;
 
     // Clear source selection when switching to a set
@@ -10321,7 +10298,7 @@ class EODataWorkbench {
 
     const set = this.getCurrentSet();
 
-    // When clicking on set header, show fields panel by default (like Airtable)
+    // Show fields panel if explicitly requested, otherwise show a view
     if (showFieldsPanel) {
       this.showingSetFields = true;
       this.currentViewId = null; // No view selected when showing fields
@@ -10924,6 +10901,9 @@ class EODataWorkbench {
       </div>
     `;
 
+    // Inject view tabs header at the top (so Fields tab is visible)
+    this._injectViewTabsHeader();
+
     // Attach event handlers
     this._attachFieldsPanelEventHandlers();
   }
@@ -11084,8 +11064,20 @@ class EODataWorkbench {
       'timeline': 'ph-clock-countdown'
     };
 
+    // Fields tab (like Airtable's "Fields" tab when clicking on a set)
+    const isFieldsActive = this.showingSetFields;
+    const fieldsTab = `
+      <button class="view-tab view-tab-fields ${isFieldsActive ? 'active' : ''}"
+              data-action="fields"
+              title="Manage all fields in this set">
+        <i class="ph ph-columns"></i>
+        <span class="view-tab-name">Fields</span>
+        <span class="view-tab-count">${(set.fields || []).length}</span>
+      </button>
+    `;
+
     const viewTabs = views.map(view => {
-      const isActive = view.id === currentViewId;
+      const isActive = !this.showingSetFields && view.id === currentViewId;
       const icon = viewTypeIcons[view.type] || 'ph-table';
       return `
         <button class="view-tab ${isActive ? 'active' : ''}"
@@ -11100,6 +11092,7 @@ class EODataWorkbench {
     return `
       <div class="view-tabs-header">
         <div class="view-tabs-scroll">
+          ${fieldsTab}
           ${viewTabs}
         </div>
         <button class="view-tabs-add" id="view-tabs-add-btn" title="Add view">
@@ -11161,11 +11154,25 @@ class EODataWorkbench {
     const header = this.elements.contentArea?.querySelector('.view-tabs-header');
     if (!header) return;
 
-    // View tab clicks
+    // View tab clicks (including Fields tab)
     header.querySelectorAll('.view-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
+        const action = tab.dataset.action;
         const viewId = tab.dataset.viewId;
-        if (viewId && viewId !== this.currentViewId) {
+
+        // Handle Fields tab
+        if (action === 'fields') {
+          if (!this.showingSetFields) {
+            this.showingSetFields = true;
+            this.currentViewId = null;
+            this._renderView();
+            this._injectViewTabsHeader(); // Re-render tabs to update active state
+          }
+          return;
+        }
+
+        // Handle regular view tabs
+        if (viewId && (viewId !== this.currentViewId || this.showingSetFields)) {
           this._selectView(viewId);
         }
       });
