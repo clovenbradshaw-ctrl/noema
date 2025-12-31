@@ -28,7 +28,617 @@ const DefinitionAPIConfig = {
 };
 
 // ============================================================================
-// SECTION II: Concept URI APIs
+// SECTION II: URI Sources Registry
+// ============================================================================
+
+/**
+ * Authentication types for URI sources
+ * @typedef {'none'|'username'|'api_key'|'api_key_optional'|'account'} AuthType
+ */
+
+/**
+ * URI Source metadata
+ * @typedef {Object} URISource
+ * @property {string} id - Unique identifier
+ * @property {string} name - Display name
+ * @property {string} category - Category (knowledge, government, geographic, organization, academic, legal)
+ * @property {number} tier - Tier level (1=core, 2=extended, 3=specialized)
+ * @property {AuthType} auth - Authentication requirement
+ * @property {string} authNote - Additional auth info
+ * @property {string} rateLimit - Rate limit description
+ * @property {Object} endpoints - API endpoints
+ * @property {string} docs - Documentation URL
+ */
+
+const URISources = {
+  // =========================================================================
+  // TIER 1 - Core Sources
+  // =========================================================================
+
+  wikidata: {
+    id: 'wikidata',
+    name: 'Wikidata',
+    category: 'knowledge',
+    tier: 1,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Generous',
+    endpoints: {
+      search: 'https://www.wikidata.org/w/api.php?action=wbsearchentities&search={query}&language=en&format=json',
+      entity: 'https://www.wikidata.org/w/api.php?action=wbgetentities&ids={QID}&format=json',
+      sparql: 'https://query.wikidata.org/sparql?query={SPARQL}'
+    },
+    docs: 'https://www.wikidata.org/wiki/Wikidata:Data_access'
+  },
+
+  dbpedia: {
+    id: 'dbpedia',
+    name: 'DBpedia',
+    category: 'knowledge',
+    tier: 1,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Moderate',
+    endpoints: {
+      search: 'https://lookup.dbpedia.org/api/search?query={query}&format=json&maxResults=10',
+      sparql: 'https://dbpedia.org/sparql?query={SPARQL}'
+    },
+    docs: 'https://www.dbpedia.org/resources/lookup'
+  },
+
+  ecfr: {
+    id: 'ecfr',
+    name: 'eCFR (Federal Regulations)',
+    category: 'government',
+    tier: 1,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Unknown',
+    endpoints: {
+      search: 'https://www.ecfr.gov/api/search/v1/results?query={query}&per_page=20',
+      titles: 'https://www.ecfr.gov/api/versioner/v1/titles',
+      structure: 'https://www.ecfr.gov/api/versioner/v1/structure/{date}/title-{num}.json',
+      fullText: 'https://www.ecfr.gov/api/versioner/v1/full/{date}/title-{num}.xml'
+    },
+    docs: 'https://www.ecfr.gov/developers/documentation/api/v1'
+  },
+
+  federalRegister: {
+    id: 'federalRegister',
+    name: 'Federal Register',
+    category: 'government',
+    tier: 1,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Generous',
+    endpoints: {
+      search: 'https://www.federalregister.gov/api/v1/documents.json?conditions[term]={query}',
+      document: 'https://www.federalregister.gov/api/v1/documents/{doc_number}',
+      agencies: 'https://www.federalregister.gov/api/v1/agencies'
+    },
+    docs: 'https://www.federalregister.gov/developers/documentation/api/v1'
+  },
+
+  geonames: {
+    id: 'geonames',
+    name: 'GeoNames',
+    category: 'geographic',
+    tier: 1,
+    auth: 'username',
+    authNote: 'Free account required, 1000 req/day',
+    rateLimit: '1000/day free',
+    endpoints: {
+      search: 'http://api.geonames.org/searchJSON?q={query}&username={user}',
+      get: 'http://api.geonames.org/getJSON?geonameId={id}&username={user}',
+      hierarchy: 'http://api.geonames.org/hierarchyJSON?geonameId={id}&username={user}'
+    },
+    docs: 'https://www.geonames.org/export/web-services.html'
+  },
+
+  openCorporates: {
+    id: 'openCorporates',
+    name: 'OpenCorporates',
+    category: 'organization',
+    tier: 1,
+    auth: 'api_key_optional',
+    authNote: 'Free tier limited, API key for more',
+    rateLimit: '500/month free',
+    endpoints: {
+      search: 'https://api.opencorporates.com/v0.4/companies/search?q={query}',
+      company: 'https://api.opencorporates.com/v0.4/companies/{jurisdiction}/{number}',
+      officers: 'https://api.opencorporates.com/v0.4/companies/{jurisdiction}/{number}/officers'
+    },
+    docs: 'https://api.opencorporates.com/documentation/API-Reference'
+  },
+
+  census: {
+    id: 'census',
+    name: 'US Census',
+    category: 'government',
+    tier: 1,
+    auth: 'api_key_optional',
+    authNote: 'Free, API key recommended',
+    rateLimit: 'Generous',
+    endpoints: {
+      geocoder: 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address={addr}&benchmark=Public_AR_Current&format=json',
+      geography: 'https://api.census.gov/data/{year}/acs/acs5?get={vars}&for={geo}',
+      tiger: 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/'
+    },
+    docs: 'https://www.census.gov/data/developers/data-sets.html'
+  },
+
+  // =========================================================================
+  // TIER 2 - Government & Business
+  // =========================================================================
+
+  samGov: {
+    id: 'samGov',
+    name: 'SAM.gov',
+    category: 'government',
+    tier: 2,
+    auth: 'api_key',
+    authNote: 'Free API key required from SAM.gov',
+    rateLimit: '10,000/day',
+    endpoints: {
+      entity: 'https://api.sam.gov/entity-information/v3/entities?api_key={key}&ueiSAM={uei}',
+      search: 'https://api.sam.gov/entity-information/v3/entities?api_key={key}&legalBusinessName={name}',
+      exclusions: 'https://api.sam.gov/entity-information/v3/exclusions?api_key={key}'
+    },
+    docs: 'https://open.gsa.gov/api/entity-api/'
+  },
+
+  usaSpending: {
+    id: 'usaSpending',
+    name: 'USAspending',
+    category: 'government',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Generous',
+    endpoints: {
+      search: 'https://api.usaspending.gov/api/v2/search/spending_by_award/',
+      recipient: 'https://api.usaspending.gov/api/v2/recipient/duns/{duns}/',
+      awards: 'https://api.usaspending.gov/api/v2/awards/{award_id}/'
+    },
+    docs: 'https://api.usaspending.gov/docs/endpoints'
+  },
+
+  congressGov: {
+    id: 'congressGov',
+    name: 'Congress.gov',
+    category: 'government',
+    tier: 2,
+    auth: 'api_key',
+    authNote: 'Free API key required',
+    rateLimit: '5000/hour',
+    endpoints: {
+      bills: 'https://api.congress.gov/v3/bill?api_key={key}',
+      bill: 'https://api.congress.gov/v3/bill/{congress}/{type}/{number}?api_key={key}',
+      laws: 'https://api.congress.gov/v3/law/{congress}?api_key={key}'
+    },
+    docs: 'https://api.congress.gov/'
+  },
+
+  secEdgar: {
+    id: 'secEdgar',
+    name: 'SEC EDGAR',
+    category: 'government',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: '10/sec',
+    endpoints: {
+      search: 'https://efts.sec.gov/LATEST/search-index?q={query}',
+      company: 'https://data.sec.gov/submissions/CIK{cik}.json',
+      filings: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type={type}&output=atom'
+    },
+    docs: 'https://www.sec.gov/developer'
+  },
+
+  lov: {
+    id: 'lov',
+    name: 'LOV (Linked Open Vocabularies)',
+    category: 'knowledge',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Unknown',
+    endpoints: {
+      search: 'https://lov.linkeddata.es/dataset/lov/api/v2/term/search?q={query}',
+      vocab: 'https://lov.linkeddata.es/dataset/lov/api/v2/vocabulary/info?vocab={prefix}',
+      list: 'https://lov.linkeddata.es/dataset/lov/api/v2/vocabulary/list'
+    },
+    docs: 'https://lov.linkeddata.es/dataset/lov/api'
+  },
+
+  proPublica990: {
+    id: 'proPublica990',
+    name: 'IRS 990 (ProPublica)',
+    category: 'government',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Generous',
+    endpoints: {
+      search: 'https://projects.propublica.org/nonprofits/api/v2/search.json?q={query}',
+      org: 'https://projects.propublica.org/nonprofits/api/v2/organizations/{ein}.json',
+      filing: 'https://projects.propublica.org/nonprofits/api/v2/organizations/{ein}/filings/{year}.json'
+    },
+    docs: 'https://projects.propublica.org/nonprofits/api'
+  },
+
+  // =========================================================================
+  // TIER 2 - Geographic
+  // =========================================================================
+
+  nominatim: {
+    id: 'nominatim',
+    name: 'Nominatim (OpenStreetMap)',
+    category: 'geographic',
+    tier: 2,
+    auth: 'none',
+    authNote: 'Requires user-agent header',
+    rateLimit: '1/sec',
+    endpoints: {
+      search: 'https://nominatim.openstreetmap.org/search?q={query}&format=json',
+      reverse: 'https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json',
+      lookup: 'https://nominatim.openstreetmap.org/lookup?osm_ids={ids}&format=json'
+    },
+    docs: 'https://nominatim.org/release-docs/develop/api/Overview/'
+  },
+
+  nashvilleGis: {
+    id: 'nashvilleGis',
+    name: 'Nashville GIS',
+    category: 'geographic',
+    tier: 2,
+    auth: 'none',
+    authNote: 'Local metro data',
+    rateLimit: 'Unknown',
+    endpoints: {
+      rest: 'https://services2.arcgis.com/HdTo6HJqh92wn4D8/arcgis/rest/services/',
+      council: 'https://services2.arcgis.com/HdTo6HJqh92wn4D8/arcgis/rest/services/Council_Districts/'
+    },
+    docs: null
+  },
+
+  // =========================================================================
+  // TIER 2 - Organizations
+  // =========================================================================
+
+  ror: {
+    id: 'ror',
+    name: 'ROR (Research Organizations)',
+    category: 'organization',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Generous',
+    endpoints: {
+      search: 'https://api.ror.org/organizations?query={query}',
+      get: 'https://api.ror.org/organizations/{ror_id}'
+    },
+    docs: 'https://ror.readme.io/docs/rest-api'
+  },
+
+  gleif: {
+    id: 'gleif',
+    name: 'GLEIF (Legal Entity Identifiers)',
+    category: 'organization',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Generous',
+    endpoints: {
+      search: 'https://api.gleif.org/api/v1/lei-records?filter[entity.legalName]={name}',
+      get: 'https://api.gleif.org/api/v1/lei-records/{lei}'
+    },
+    docs: 'https://www.gleif.org/en/lei-data/gleif-api'
+  },
+
+  viaf: {
+    id: 'viaf',
+    name: 'VIAF (Name Authority)',
+    category: 'organization',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Unknown',
+    endpoints: {
+      search: 'https://viaf.org/viaf/search?query=cql.any+=+"{query}"&httpAccept=application/json',
+      get: 'https://viaf.org/viaf/{id}/viaf.json'
+    },
+    docs: 'https://www.oclc.org/developer/api/oclc-apis/viaf.en.html'
+  },
+
+  isni: {
+    id: 'isni',
+    name: 'ISNI',
+    category: 'organization',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: 'Unknown',
+    endpoints: {
+      search: 'https://isni.org/isni/{isni}',
+      sru: 'http://isni.oclc.org/sru/?query=pica.na={name}&operation=searchRetrieve'
+    },
+    docs: 'https://isni.org/page/technical-documentation/'
+  },
+
+  orcid: {
+    id: 'orcid',
+    name: 'ORCID',
+    category: 'organization',
+    tier: 2,
+    auth: 'none',
+    authNote: 'Free public API',
+    rateLimit: 'Unknown',
+    endpoints: {
+      search: 'https://pub.orcid.org/v3.0/search/?q={query}',
+      get: 'https://pub.orcid.org/v3.0/{orcid}'
+    },
+    docs: 'https://info.orcid.org/documentation/api-tutorials/'
+  },
+
+  // =========================================================================
+  // TIER 2 - Domain Specific
+  // =========================================================================
+
+  fred: {
+    id: 'fred',
+    name: 'FRED (Economic Data)',
+    category: 'government',
+    tier: 2,
+    auth: 'api_key',
+    authNote: 'Free API key required',
+    rateLimit: '120/min',
+    endpoints: {
+      search: 'https://api.stlouisfed.org/fred/series/search?search_text={query}&api_key={key}',
+      series: 'https://api.stlouisfed.org/fred/series?series_id={id}&api_key={key}',
+      data: 'https://api.stlouisfed.org/fred/series/observations?series_id={id}&api_key={key}'
+    },
+    docs: 'https://fred.stlouisfed.org/docs/api/fred/'
+  },
+
+  bls: {
+    id: 'bls',
+    name: 'BLS (Labor Statistics)',
+    category: 'government',
+    tier: 2,
+    auth: 'api_key_optional',
+    authNote: 'Free, key for higher limits',
+    rateLimit: 'Limited without key',
+    endpoints: {
+      series: 'https://api.bls.gov/publicAPI/v2/timeseries/data/{series_id}'
+    },
+    docs: 'https://www.bls.gov/developers/'
+  },
+
+  hud: {
+    id: 'hud',
+    name: 'HUD',
+    category: 'government',
+    tier: 2,
+    auth: 'api_key',
+    authNote: 'API key required',
+    rateLimit: 'Unknown',
+    endpoints: {
+      fairMarket: 'https://www.huduser.gov/hudapi/public/fmr/data/{entityid}',
+      income: 'https://www.huduser.gov/hudapi/public/il/data/{entityid}'
+    },
+    docs: 'https://www.huduser.gov/portal/dataset/fmr-api.html'
+  },
+
+  pubmed: {
+    id: 'pubmed',
+    name: 'PubMed',
+    category: 'academic',
+    tier: 2,
+    auth: 'api_key_optional',
+    authNote: 'Free, key for higher limits',
+    rateLimit: 'Limited without key',
+    endpoints: {
+      search: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={query}&retmode=json',
+      fetch: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}'
+    },
+    docs: 'https://www.ncbi.nlm.nih.gov/books/NBK25500/'
+  },
+
+  openAlex: {
+    id: 'openAlex',
+    name: 'OpenAlex (Academic)',
+    category: 'academic',
+    tier: 2,
+    auth: 'none',
+    authNote: null,
+    rateLimit: '100,000/day',
+    endpoints: {
+      search: 'https://api.openalex.org/works?search={query}',
+      entity: 'https://api.openalex.org/works/{id}',
+      authors: 'https://api.openalex.org/authors?search={name}'
+    },
+    docs: 'https://docs.openalex.org/'
+  },
+
+  crossRef: {
+    id: 'crossRef',
+    name: 'CrossRef (Publications)',
+    category: 'academic',
+    tier: 2,
+    auth: 'none',
+    authNote: 'Email for polite pool',
+    rateLimit: 'Generous with email',
+    endpoints: {
+      search: 'https://api.crossref.org/works?query={query}',
+      doi: 'https://api.crossref.org/works/{doi}'
+    },
+    docs: 'https://www.crossref.org/documentation/retrieve-metadata/rest-api/'
+  },
+
+  // =========================================================================
+  // TIER 3 - Court Records
+  // =========================================================================
+
+  courtListener: {
+    id: 'courtListener',
+    name: 'CourtListener (Free Law Project)',
+    category: 'legal',
+    tier: 3,
+    auth: 'account',
+    authNote: 'Free, account for higher limits',
+    rateLimit: 'Moderate',
+    endpoints: {
+      search: 'https://www.courtlistener.com/api/rest/v3/search/?q={query}',
+      opinion: 'https://www.courtlistener.com/api/rest/v3/opinions/{id}/',
+      docket: 'https://www.courtlistener.com/api/rest/v3/dockets/{id}/'
+    },
+    docs: 'https://www.courtlistener.com/api/rest-info/'
+  },
+
+  // =========================================================================
+  // Additional Knowledge Sources
+  // =========================================================================
+
+  schemaOrg: {
+    id: 'schemaOrg',
+    name: 'Schema.org',
+    category: 'knowledge',
+    tier: 1,
+    auth: 'none',
+    authNote: 'Static vocabulary, no API',
+    rateLimit: 'N/A (static)',
+    endpoints: {
+      base: 'https://schema.org/'
+    },
+    docs: 'https://schema.org/docs/documents.html'
+  }
+};
+
+/**
+ * Get all URI sources
+ * @returns {URISource[]}
+ */
+function getAllURISources() {
+  return Object.values(URISources);
+}
+
+/**
+ * Get URI sources filtered by authentication requirement
+ * @param {Object} options - Filter options
+ * @param {boolean} options.noAuth - Only sources with no auth required
+ * @param {boolean} options.freeAuth - Include sources with free auth (username or free API key)
+ * @param {string} options.category - Filter by category
+ * @param {number} options.tier - Filter by tier (1, 2, or 3)
+ * @returns {URISource[]}
+ */
+function filterURISources(options = {}) {
+  let sources = getAllURISources();
+
+  // Filter by authentication
+  if (options.noAuth) {
+    sources = sources.filter(s => s.auth === 'none');
+  } else if (options.freeAuth) {
+    // Include sources that are free to use (no auth, optional key, or free username)
+    sources = sources.filter(s =>
+      s.auth === 'none' ||
+      s.auth === 'api_key_optional' ||
+      s.auth === 'username'
+    );
+  }
+
+  // Filter by category
+  if (options.category) {
+    sources = sources.filter(s => s.category === options.category);
+  }
+
+  // Filter by tier
+  if (options.tier) {
+    sources = sources.filter(s => s.tier === options.tier);
+  }
+
+  return sources;
+}
+
+/**
+ * Get sources that work without any credentials (truly open APIs)
+ * @returns {URISource[]}
+ */
+function getOpenSources() {
+  return filterURISources({ noAuth: true });
+}
+
+/**
+ * Get sources grouped by category
+ * @param {Object} options - Filter options (same as filterURISources)
+ * @returns {Object<string, URISource[]>}
+ */
+function getSourcesByCategory(options = {}) {
+  const sources = filterURISources(options);
+  const grouped = {};
+
+  for (const source of sources) {
+    if (!grouped[source.category]) {
+      grouped[source.category] = [];
+    }
+    grouped[source.category].push(source);
+  }
+
+  return grouped;
+}
+
+/**
+ * Get sources grouped by tier
+ * @param {Object} options - Filter options (same as filterURISources)
+ * @returns {Object<number, URISource[]>}
+ */
+function getSourcesByTier(options = {}) {
+  const sources = filterURISources(options);
+  const grouped = { 1: [], 2: [], 3: [] };
+
+  for (const source of sources) {
+    grouped[source.tier].push(source);
+  }
+
+  return grouped;
+}
+
+/**
+ * Get a summary of available sources
+ * @returns {Object}
+ */
+function getSourcesSummary() {
+  const all = getAllURISources();
+  const open = getOpenSources();
+
+  return {
+    total: all.length,
+    openNoAuth: open.length,
+    byAuth: {
+      none: all.filter(s => s.auth === 'none').length,
+      username: all.filter(s => s.auth === 'username').length,
+      api_key: all.filter(s => s.auth === 'api_key').length,
+      api_key_optional: all.filter(s => s.auth === 'api_key_optional').length,
+      account: all.filter(s => s.auth === 'account').length
+    },
+    byCategory: {
+      knowledge: all.filter(s => s.category === 'knowledge').length,
+      government: all.filter(s => s.category === 'government').length,
+      geographic: all.filter(s => s.category === 'geographic').length,
+      organization: all.filter(s => s.category === 'organization').length,
+      academic: all.filter(s => s.category === 'academic').length,
+      legal: all.filter(s => s.category === 'legal').length
+    },
+    byTier: {
+      1: all.filter(s => s.tier === 1).length,
+      2: all.filter(s => s.tier === 2).length,
+      3: all.filter(s => s.tier === 3).length
+    }
+  };
+}
+
+// ============================================================================
+// SECTION III: Concept URI APIs
 // ============================================================================
 
 /**
@@ -867,7 +1477,7 @@ class DefinitionAPI {
   }
 
   /**
-   * Get available sources
+   * Get available sources (legacy format)
    */
   getSources() {
     return {
@@ -882,6 +1492,53 @@ class DefinitionAPI {
         type: RegulatoryAPIs[key].type
       }))
     };
+  }
+
+  /**
+   * Get all URI sources with full metadata including auth requirements
+   * @param {Object} options - Filter options
+   * @param {boolean} options.noAuth - Only sources with no auth required
+   * @param {boolean} options.freeAuth - Include sources with free auth
+   * @param {string} options.category - Filter by category
+   * @param {number} options.tier - Filter by tier (1, 2, or 3)
+   * @returns {URISource[]}
+   */
+  getURISources(options = {}) {
+    return filterURISources(options);
+  }
+
+  /**
+   * Get sources that work without any credentials
+   * @returns {URISource[]}
+   */
+  getOpenURISources() {
+    return getOpenSources();
+  }
+
+  /**
+   * Get sources grouped by category
+   * @param {Object} options - Filter options
+   * @returns {Object<string, URISource[]>}
+   */
+  getURISourcesByCategory(options = {}) {
+    return getSourcesByCategory(options);
+  }
+
+  /**
+   * Get sources grouped by tier
+   * @param {Object} options - Filter options
+   * @returns {Object<number, URISource[]>}
+   */
+  getURISourcesByTier(options = {}) {
+    return getSourcesByTier(options);
+  }
+
+  /**
+   * Get a summary of all URI sources
+   * @returns {Object}
+   */
+  getURISourcesSummary() {
+    return getSourcesSummary();
   }
 }
 
@@ -946,6 +1603,14 @@ if (typeof window !== 'undefined') {
   window.EO.ConceptAPIs = ConceptAPIs;
   window.EO.RegulatoryAPIs = RegulatoryAPIs;
   window.EO.DefinitionAPIConfig = DefinitionAPIConfig;
+  // URI Sources registry and helpers
+  window.EO.URISources = URISources;
+  window.EO.getAllURISources = getAllURISources;
+  window.EO.filterURISources = filterURISources;
+  window.EO.getOpenSources = getOpenSources;
+  window.EO.getSourcesByCategory = getSourcesByCategory;
+  window.EO.getSourcesByTier = getSourcesByTier;
+  window.EO.getSourcesSummary = getSourcesSummary;
 }
 
 // Export for Node.js/ES modules
@@ -955,6 +1620,14 @@ if (typeof module !== 'undefined' && module.exports) {
     getDefinitionAPI,
     ConceptAPIs,
     RegulatoryAPIs,
-    DefinitionAPIConfig
+    DefinitionAPIConfig,
+    // URI Sources registry and helpers
+    URISources,
+    getAllURISources,
+    filterURISources,
+    getOpenSources,
+    getSourcesByCategory,
+    getSourcesByTier,
+    getSourcesSummary
   };
 }

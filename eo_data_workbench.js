@@ -1289,7 +1289,116 @@ class EODataWorkbench {
     // Select the sample project so user is always in a project context
     this.currentProjectId = sampleProject.id;
 
+    // Trigger auto-import key definition suggestions for sample data
+    this._triggerKeySuggestions(source);
+
     this._saveData();
+  }
+
+  /**
+   * Trigger key definition suggestions for a source
+   * @param {Object} source - Source object with schema
+   * @private
+   */
+  _triggerKeySuggestions(source) {
+    if (!source || !window.EOKeySuggestions) return;
+
+    const { autoImportSuggestions, injectKeySuggestionStyles } = window.EOKeySuggestions;
+
+    // Inject styles
+    injectKeySuggestionStyles();
+
+    // Generate suggestions asynchronously
+    setTimeout(async () => {
+      try {
+        const suggestions = await autoImportSuggestions(source, {
+          showPanel: false, // Don't auto-show, we'll show via notification
+          workbench: this
+        });
+
+        if (suggestions && suggestions.length > 0) {
+          // Show notification banner after a brief delay
+          setTimeout(() => {
+            this._showKeySuggestionNotification(suggestions.length, source.id);
+          }, 1000);
+        }
+      } catch (error) {
+        console.warn('Key suggestion generation failed:', error);
+      }
+    }, 500);
+  }
+
+  /**
+   * Show notification for pending key suggestions
+   * @param {number} count - Number of pending suggestions
+   * @param {string} sourceId - Source ID
+   * @private
+   */
+  _showKeySuggestionNotification(count, sourceId) {
+    if (!window.EOKeySuggestions || count === 0) return;
+
+    const { createSuggestionBanner } = window.EOKeySuggestions;
+
+    const banner = createSuggestionBanner(count, () => {
+      this._showKeySuggestionPanel(sourceId);
+    });
+
+    if (banner) {
+      // Insert banner at top of content area
+      const contentArea = document.getElementById('content-area');
+      if (contentArea) {
+        const existingBanner = contentArea.querySelector('.suggestion-banner');
+        if (existingBanner) existingBanner.remove();
+        contentArea.insertBefore(banner, contentArea.firstChild);
+      }
+    }
+  }
+
+  /**
+   * Show the key suggestion panel
+   * @param {string} sourceId - Optional source ID to focus on
+   */
+  _showKeySuggestionPanel(sourceId = null) {
+    if (!window.EOKeySuggestions) return;
+
+    const { initKeySuggestionPanel, injectKeySuggestionStyles } = window.EOKeySuggestions;
+
+    // Inject styles
+    injectKeySuggestionStyles();
+
+    // Show the overlay
+    const overlay = document.getElementById('key-suggestion-overlay');
+    const container = document.getElementById('key-suggestion-container');
+
+    if (overlay && container) {
+      overlay.style.display = 'flex';
+
+      // Initialize the panel
+      const panel = initKeySuggestionPanel({
+        container: container,
+        workbench: this
+      });
+
+      // Override the hide method to also hide the overlay
+      const originalHide = panel.hide.bind(panel);
+      panel.hide = () => {
+        originalHide();
+        overlay.style.display = 'none';
+
+        // Remove any suggestion banners
+        const banner = document.querySelector('.suggestion-banner');
+        if (banner) banner.remove();
+      };
+
+      panel.show(sourceId);
+
+      // Close on overlay click (outside the panel)
+      overlay.onclick = (e) => {
+        if (e.target === overlay) {
+          panel.hide();
+        }
+      };
+    }
   }
 
   _bindElements() {
@@ -1382,10 +1491,23 @@ class EODataWorkbench {
       this._showExportsExplorer();
     });
 
-    // Definitions panel title click - show definitions panel
+    // Panel title click handlers - clicking panel names opens explorer views
+    // Projects panel title click - show projects explorer
+    const projectsPanel = document.querySelector('.projects-panel .nav-panel-title');
+    projectsPanel?.addEventListener('click', () => {
+      this._showProjectsExplorer();
+    });
+
+    // Sources panel title click - show file explorer
+    const sourcesPanel = document.querySelector('.sources-panel .nav-panel-title');
+    sourcesPanel?.addEventListener('click', () => {
+      this._showFileExplorer();
+    });
+
+    // Definitions panel title click - show definitions explorer
     const definitionsPanel = document.querySelector('.definitions-panel .nav-panel-title');
     definitionsPanel?.addEventListener('click', () => {
-      this._showDefinitionsPanel();
+      this._showDefinitionsExplorer();
     });
 
     // Sets panel title click - show sets table view
@@ -4886,6 +5008,238 @@ class EODataWorkbench {
   }
 
   /**
+   * Show projects as a table view in the main content area
+   * Each row represents a project with its metadata
+   */
+  _showProjectsExplorer() {
+    const contentArea = this.elements.contentArea;
+    if (!contentArea) return;
+
+    // Get all active projects
+    const activeProjects = (this.projects || []).filter(p => p.status !== 'archived');
+
+    // Sort by creation date (newest first)
+    const sortedProjects = activeProjects.sort((a, b) => {
+      if (!a.createdAt) return 1;
+      if (!b.createdAt) return -1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    // Clear other selections
+    this.currentSourceId = null;
+    this.currentDefinitionId = null;
+    this.currentSetId = null;
+    this.currentViewId = null;
+
+    // Clear selections in sidebar
+    document.querySelectorAll('.project-item, .source-item, .set-item').forEach(item => {
+      item.classList.remove('active');
+    });
+
+    // Update breadcrumb
+    this._updateBreadcrumb({
+      workspace: this._getCurrentWorkspaceName(),
+      set: 'Projects',
+      view: 'Explorer'
+    });
+
+    // Build the projects table HTML
+    contentArea.innerHTML = `
+      <div class="sources-table-view projects-table-view">
+        <!-- Header -->
+        <div class="sources-table-header">
+          <div class="sources-table-title">
+            <div class="sources-table-icon">
+              <i class="ph ph-folder-simple-dashed"></i>
+            </div>
+            <div class="sources-table-info">
+              <h2>
+                <span>Projects</span>
+                <span class="org-badge" style="margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--accent-gray, #6b7280); color: white;">
+                  ORG
+                </span>
+              </h2>
+              <div class="sources-table-meta">
+                ${sortedProjects.length} project${sortedProjects.length !== 1 ? 's' : ''} in workspace
+              </div>
+            </div>
+          </div>
+          <div class="sources-table-actions">
+            <button class="source-action-btn" id="projects-table-new-btn" title="Create new project">
+              <i class="ph ph-plus"></i>
+              <span>New Project</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="sources-table-toolbar">
+          <div class="sources-table-search">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="projects-table-search" placeholder="Search projects...">
+          </div>
+          <div class="sources-table-count">
+            ${sortedProjects.length} project${sortedProjects.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="sources-table-container">
+          ${sortedProjects.length > 0 ? `
+            <table class="sources-table projects-table">
+              <thead>
+                <tr>
+                  <th class="col-icon"></th>
+                  <th class="col-name">Name</th>
+                  <th class="col-sources">Sources</th>
+                  <th class="col-definitions">Definitions</th>
+                  <th class="col-sets">Sets</th>
+                  <th class="col-exports">Exports</th>
+                  <th class="col-created">Created</th>
+                  <th class="col-actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sortedProjects.map(project => {
+                  const icon = project.icon || 'ph-folder-simple-dashed';
+                  const color = project.color || '#6b7280';
+                  const sourceCount = project.sourceIds?.length || 0;
+                  const definitionCount = project.definitionIds?.length || 0;
+                  const setCount = project.setIds?.length || 0;
+                  const exportCount = project.exportIds?.length || 0;
+                  const createdDate = project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown';
+
+                  return `
+                    <tr class="sources-table-row projects-table-row" data-project-id="${project.id}">
+                      <td class="col-icon">
+                        <i class="ph ${icon}" style="color: ${color};"></i>
+                      </td>
+                      <td class="col-name">
+                        <span class="project-name-text" style="color: ${color}; font-weight: 600;">${this._escapeHtml(project.name)}</span>
+                      </td>
+                      <td class="col-sources">${sourceCount}</td>
+                      <td class="col-definitions">${definitionCount}</td>
+                      <td class="col-sets">${setCount}</td>
+                      <td class="col-exports">${exportCount}</td>
+                      <td class="col-created">${createdDate}</td>
+                      <td class="col-actions">
+                        <button class="sources-table-action-btn" data-action="select" title="Select project">
+                          <i class="ph ph-check"></i>
+                        </button>
+                        <button class="sources-table-action-btn" data-action="rename" title="Rename project">
+                          <i class="ph ph-pencil"></i>
+                        </button>
+                        <button class="sources-table-action-btn sources-table-delete-btn" data-action="delete" title="Delete project">
+                          <i class="ph ph-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          ` : `
+            <div class="sources-table-empty">
+              <i class="ph ph-folder-simple-dashed"></i>
+              <p>No projects created yet</p>
+              <button class="btn-primary" id="projects-table-first-create">
+                <i class="ph ph-plus"></i>
+                Create your first project
+              </button>
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+
+    // Attach event handlers
+    this._attachProjectsTableHandlers(sortedProjects);
+  }
+
+  /**
+   * Attach event handlers for projects table view
+   */
+  _attachProjectsTableHandlers(projects) {
+    // New project button
+    document.getElementById('projects-table-new-btn')?.addEventListener('click', () => {
+      this._createProject();
+    });
+
+    // First create button (empty state)
+    document.getElementById('projects-table-first-create')?.addEventListener('click', () => {
+      this._createProject();
+    });
+
+    // Search
+    const searchInput = document.getElementById('projects-table-search');
+    searchInput?.addEventListener('input', (e) => {
+      this._filterProjectsTable(e.target.value);
+    });
+
+    // Row click to select project
+    document.querySelectorAll('.projects-table-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        // Ignore if clicking action buttons
+        if (e.target.closest('.sources-table-action-btn')) return;
+
+        const projectId = row.dataset.projectId;
+        this._selectProject(projectId);
+      });
+
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this._showProjectContextMenu(e, row.dataset.projectId);
+      });
+    });
+
+    // Action buttons
+    document.querySelectorAll('.projects-table-row .sources-table-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = btn.closest('.projects-table-row');
+        const projectId = row.dataset.projectId;
+        const action = btn.dataset.action;
+
+        switch (action) {
+          case 'select':
+            this._selectProject(projectId);
+            break;
+          case 'rename':
+            this._renameProject(projectId);
+            break;
+          case 'delete':
+            if (confirm('Are you sure you want to delete this project?')) {
+              this._deleteProject(projectId);
+              this._showProjectsExplorer(); // Refresh
+            }
+            break;
+        }
+      });
+    });
+  }
+
+  /**
+   * Filter projects table by search term
+   */
+  _filterProjectsTable(searchTerm) {
+    const rows = document.querySelectorAll('.projects-table-row');
+    const term = searchTerm.toLowerCase();
+
+    rows.forEach(row => {
+      const name = row.querySelector('.project-name-text')?.textContent.toLowerCase() || '';
+      const visible = name.includes(term);
+      row.style.display = visible ? '' : 'none';
+    });
+
+    // Update count
+    const visibleRows = document.querySelectorAll('.projects-table-row:not([style*="display: none"])');
+    const countEl = document.querySelector('.projects-table-view .sources-table-count');
+    if (countEl) {
+      countEl.textContent = `${visibleRows.length} project${visibleRows.length !== 1 ? 's' : ''}`;
+    }
+  }
+
+  /**
    * Select a project (or null for "All Items")
    */
   _selectProject(projectId) {
@@ -5942,6 +6296,234 @@ class EODataWorkbench {
   }
 
   /**
+   * Get all set linkages for terms in a definition
+   */
+  _getTermSetLinkages(definition) {
+    const linkages = new Map(); // termId -> [{setId, setName, fieldId, fieldName}]
+    const sets = this.sets || [];
+    const terms = definition.terms || definition.properties || [];
+
+    terms.forEach(term => {
+      const termId = term.id || term.name;
+      linkages.set(termId, []);
+    });
+
+    sets.forEach(set => {
+      (set.fields || []).forEach(field => {
+        if (field.definitionRef?.definitionId === definition.id) {
+          const termId = field.definitionRef.termId;
+          if (linkages.has(termId)) {
+            linkages.get(termId).push({
+              setId: set.id,
+              setName: set.name,
+              fieldId: field.id,
+              fieldName: field.name
+            });
+          }
+        }
+      });
+    });
+
+    return linkages;
+  }
+
+  /**
+   * Get unique types from terms
+   */
+  _getUniqueTermTypes(terms) {
+    const types = new Set();
+    terms.forEach(term => {
+      const type = term.type || term.datatype || 'string';
+      types.add(type);
+    });
+    return Array.from(types).sort();
+  }
+
+  /**
+   * Get sets that have terms linked from this definition
+   */
+  _getLinkedSetsForDefinition(definition) {
+    const linkedSets = new Map(); // setId -> {set, fields: [{fieldId, fieldName, termId}]}
+    const sets = this.sets || [];
+
+    sets.forEach(set => {
+      const linkedFields = [];
+      (set.fields || []).forEach(field => {
+        if (field.definitionRef?.definitionId === definition.id) {
+          linkedFields.push({
+            fieldId: field.id,
+            fieldName: field.name,
+            termId: field.definitionRef.termId
+          });
+        }
+      });
+      if (linkedFields.length > 0) {
+        linkedSets.set(set.id, { set, fields: linkedFields });
+      }
+    });
+
+    return linkedSets;
+  }
+
+  /**
+   * Render terms table rows
+   */
+  _renderTermsTableRows(terms, termLinkages, definitionId) {
+    return terms.map(term => {
+      const termId = term.id || term.name;
+      const termName = term.name || term.label || termId;
+      const termLabel = term.label || term.altLabel || term.prefLabel || '';
+      const termType = term.type || term.datatype || 'string';
+      const termDesc = term.description || term.comment || '';
+      const termUri = term.uri || term['@id'] || '';
+      const linkages = termLinkages.get(termId) || [];
+
+      // Build searchable data attributes
+      const searchText = [termName, termLabel, termDesc, termUri].filter(Boolean).join(' ').toLowerCase();
+
+      return `
+        <tr class="definition-term-row"
+            data-term-id="${this._escapeHtml(termId)}"
+            data-definition-id="${this._escapeHtml(definitionId)}"
+            data-term-type="${this._escapeHtml(termType)}"
+            data-linked="${linkages.length > 0 ? 'true' : 'false'}"
+            data-search="${this._escapeHtml(searchText)}">
+          <td class="term-name-cell">
+            <div class="term-name-content">
+              <i class="ph ph-tag"></i>
+              <span class="term-id">${this._escapeHtml(termName)}</span>
+            </div>
+          </td>
+          <td class="term-label-cell">
+            ${termLabel && termLabel !== termName ? `
+              <span class="term-label">${this._escapeHtml(termLabel)}</span>
+            ` : '<span class="term-label-empty">—</span>'}
+          </td>
+          <td class="term-type-cell">
+            <span class="type-badge type-${this._escapeHtml(termType.toLowerCase().replace(/[^a-z0-9]/g, '-'))}">${this._escapeHtml(termType)}</span>
+          </td>
+          <td class="term-description-cell">
+            <span class="term-description" title="${this._escapeHtml(termDesc)}">${this._escapeHtml(termDesc || '—')}</span>
+          </td>
+          <td class="term-linked-cell">
+            ${linkages.length > 0 ? `
+              <div class="term-linkages">
+                ${linkages.slice(0, 2).map(link => `
+                  <span class="term-link-badge" title="${this._escapeHtml(link.setName)}.${this._escapeHtml(link.fieldName)}">
+                    <i class="ph ph-link"></i>
+                    ${this._escapeHtml(link.setName)}
+                  </span>
+                `).join('')}
+                ${linkages.length > 2 ? `<span class="term-link-more">+${linkages.length - 2} more</span>` : ''}
+              </div>
+            ` : '<span class="term-not-linked">—</span>'}
+          </td>
+          <td class="term-uri-cell">
+            ${termUri ? `
+              <a href="${this._escapeHtml(termUri)}" target="_blank" class="term-uri-link" title="${this._escapeHtml(termUri)}">
+                ${this._escapeHtml(this._truncateName(termUri, 25))}
+              </a>
+            ` : '<span class="term-no-uri">—</span>'}
+          </td>
+          <td class="term-actions-cell">
+            <button class="term-action-btn term-link-action-btn"
+                    data-term-id="${this._escapeHtml(termId)}"
+                    data-definition-id="${this._escapeHtml(definitionId)}"
+                    title="${linkages.length > 0 ? 'Manage links' : 'Link to field'}">
+              <i class="ph ${linkages.length > 0 ? 'ph-pencil-simple' : 'ph-arrow-right'}"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  /**
+   * Render grouped terms view
+   */
+  _renderGroupedTermsView(terms, termLinkages, definitionId, groupBy) {
+    if (groupBy === 'type') {
+      // Group by type
+      const grouped = new Map();
+      terms.forEach(term => {
+        const type = term.type || term.datatype || 'string';
+        if (!grouped.has(type)) {
+          grouped.set(type, []);
+        }
+        grouped.get(type).push(term);
+      });
+
+      let html = '';
+      grouped.forEach((groupTerms, type) => {
+        html += `
+          <div class="terms-group">
+            <div class="terms-group-header">
+              <span class="type-badge">${this._escapeHtml(type)}</span>
+              <span class="terms-group-count">${groupTerms.length} term${groupTerms.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="terms-group-table">
+              <table class="data-table terms-data-table compact">
+                <tbody>
+                  ${this._renderTermsTableRows(groupTerms, termLinkages, definitionId)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      });
+      return html;
+    } else if (groupBy === 'set') {
+      // Group by linked set
+      const grouped = new Map();
+      grouped.set('unlinked', { name: 'Not Linked', terms: [] });
+
+      terms.forEach(term => {
+        const termId = term.id || term.name;
+        const linkages = termLinkages.get(termId) || [];
+        if (linkages.length === 0) {
+          grouped.get('unlinked').terms.push(term);
+        } else {
+          linkages.forEach(link => {
+            if (!grouped.has(link.setId)) {
+              grouped.set(link.setId, { name: link.setName, terms: [] });
+            }
+            // Avoid duplicates
+            const existing = grouped.get(link.setId).terms.find(t => (t.id || t.name) === termId);
+            if (!existing) {
+              grouped.get(link.setId).terms.push(term);
+            }
+          });
+        }
+      });
+
+      let html = '';
+      grouped.forEach((group, setId) => {
+        if (group.terms.length > 0) {
+          html += `
+            <div class="terms-group" data-set-id="${setId}">
+              <div class="terms-group-header">
+                <i class="ph ${setId === 'unlinked' ? 'ph-link-break' : 'ph-table'}"></i>
+                <span class="terms-group-name">${this._escapeHtml(group.name)}</span>
+                <span class="terms-group-count">${group.terms.length} term${group.terms.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div class="terms-group-table">
+                <table class="data-table terms-data-table compact">
+                  <tbody>
+                    ${this._renderTermsTableRows(group.terms, termLinkages, definitionId)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
+      });
+      return html;
+    }
+
+    return '';
+  }
+
+  /**
    * Render definition detail view in main content area
    */
   _renderDefinitionDetailView(definition) {
@@ -5951,6 +6533,9 @@ class EODataWorkbench {
     const terms = definition.terms || definition.properties || [];
     const importDate = definition.importedAt ? new Date(definition.importedAt).toLocaleString() : 'Unknown';
     const defSource = definition.definitionSource;
+    const uniqueTypes = this._getUniqueTermTypes(terms);
+    const termLinkages = this._getTermSetLinkages(definition);
+    const linkedSets = this._getLinkedSetsForDefinition(definition);
 
     contentArea.innerHTML = `
       <div class="definition-detail-view">
@@ -5992,43 +6577,110 @@ class EODataWorkbench {
         ${defSource ? this._renderDefinitionSourceSection(defSource) : ''}
 
         <div class="definition-terms-section">
-          <h3><i class="ph ph-list"></i> Terms & Properties</h3>
+          <div class="definition-terms-header">
+            <h3><i class="ph ph-list"></i> Terms & Properties</h3>
+            <span class="terms-count">${terms.length} term${terms.length !== 1 ? 's' : ''}</span>
+          </div>
+
           ${terms.length === 0 ? `
             <div class="definition-empty-terms">
               <i class="ph ph-info"></i>
               <span>No terms defined. Add terms manually or re-import from URI.</span>
             </div>
           ` : `
-            <div class="definition-terms-table">
-              <table class="data-table">
+            <!-- Search and Filters Toolbar -->
+            <div class="terms-toolbar">
+              <div class="terms-search-box">
+                <i class="ph ph-magnifying-glass"></i>
+                <input type="text" id="terms-search-input" placeholder="Search terms by name, description, or URI..." />
+              </div>
+              <div class="terms-filters">
+                <div class="filter-group">
+                  <label>Type:</label>
+                  <select id="terms-type-filter">
+                    <option value="">All Types</option>
+                    ${uniqueTypes.map(type => `<option value="${this._escapeHtml(type)}">${this._escapeHtml(type)}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="filter-group">
+                  <label>Link Status:</label>
+                  <select id="terms-link-filter">
+                    <option value="">All</option>
+                    <option value="linked">Linked to Sets</option>
+                    <option value="unlinked">Not Linked</option>
+                  </select>
+                </div>
+                <div class="filter-group">
+                  <label>Group by:</label>
+                  <select id="terms-group-filter">
+                    <option value="none">None</option>
+                    <option value="type">Type</option>
+                    <option value="set">Linked Set</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Results Count -->
+            <div class="terms-results-info">
+              <span id="terms-results-count">Showing ${terms.length} terms</span>
+              <button id="terms-clear-filters" class="btn-link" style="display: none;">
+                <i class="ph ph-x"></i> Clear filters
+              </button>
+            </div>
+
+            <!-- Terms Table -->
+            <div class="definition-terms-table enhanced" id="terms-table-container">
+              <table class="data-table terms-data-table">
                 <thead>
                   <tr>
-                    <th style="width: 200px;">Name</th>
-                    <th style="width: 120px;">Type</th>
-                    <th>Description</th>
-                    <th style="width: 200px;">URI / IRI</th>
+                    <th class="col-name" style="width: 180px;">
+                      <div class="th-content">
+                        <span>Name</span>
+                        <button class="th-sort-btn" data-sort="name" title="Sort by name">
+                          <i class="ph ph-arrows-down-up"></i>
+                        </button>
+                      </div>
+                    </th>
+                    <th class="col-label" style="width: 180px;">
+                      <div class="th-content">
+                        <span>Label</span>
+                        <button class="th-sort-btn" data-sort="label" title="Sort by label">
+                          <i class="ph ph-arrows-down-up"></i>
+                        </button>
+                      </div>
+                    </th>
+                    <th class="col-type" style="width: 100px;">
+                      <div class="th-content">
+                        <span>Type</span>
+                      </div>
+                    </th>
+                    <th class="col-description">
+                      <div class="th-content">
+                        <span>Description</span>
+                      </div>
+                    </th>
+                    <th class="col-linked" style="width: 160px;">
+                      <div class="th-content">
+                        <span>Linked To</span>
+                      </div>
+                    </th>
+                    <th class="col-uri" style="width: 180px;">
+                      <div class="th-content">
+                        <span>URI / IRI</span>
+                      </div>
+                    </th>
+                    <th class="col-actions" style="width: 60px;"></th>
                   </tr>
                 </thead>
-                <tbody>
-                  ${terms.map(term => `
-                    <tr class="definition-term-row" data-term-id="${term.id || term.name}">
-                      <td class="term-name">
-                        <i class="ph ph-tag"></i>
-                        ${this._escapeHtml(term.name || term.label)}
-                      </td>
-                      <td class="term-type">
-                        <span class="type-badge">${this._escapeHtml(term.type || term.datatype || 'string')}</span>
-                      </td>
-                      <td class="term-description">${this._escapeHtml(term.description || term.comment || '—')}</td>
-                      <td class="term-uri">
-                        ${term.uri || term['@id'] ? `<a href="${this._escapeHtml(term.uri || term['@id'])}" target="_blank" class="term-uri-link">
-                          ${this._escapeHtml(this._truncateName(term.uri || term['@id'], 30))}
-                        </a>` : '—'}
-                      </td>
-                    </tr>
-                  `).join('')}
+                <tbody id="terms-table-body">
+                  ${this._renderTermsTableRows(terms, termLinkages, definition.id)}
                 </tbody>
               </table>
+            </div>
+
+            <!-- Grouped View Container (hidden by default) -->
+            <div class="terms-grouped-view" id="terms-grouped-container" style="display: none;">
             </div>
           `}
         </div>
@@ -6286,6 +6938,244 @@ class EODataWorkbench {
     contentArea.querySelector('#btn-add-term')?.addEventListener('click', () => {
       this._showAddTermModal(definition.id);
     });
+
+    // Terms table search and filter handlers
+    this._attachTermsTableHandlers(definition);
+  }
+
+  /**
+   * Attach event handlers for terms table search, filter, and sorting
+   */
+  _attachTermsTableHandlers(definition) {
+    const contentArea = this.elements.contentArea;
+    const terms = definition.terms || definition.properties || [];
+    const termLinkages = this._getTermSetLinkages(definition);
+
+    // Search input handler
+    const searchInput = contentArea.querySelector('#terms-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this._filterTermsTable(definition);
+      });
+    }
+
+    // Type filter handler
+    const typeFilter = contentArea.querySelector('#terms-type-filter');
+    if (typeFilter) {
+      typeFilter.addEventListener('change', () => {
+        this._filterTermsTable(definition);
+      });
+    }
+
+    // Link status filter handler
+    const linkFilter = contentArea.querySelector('#terms-link-filter');
+    if (linkFilter) {
+      linkFilter.addEventListener('change', () => {
+        this._filterTermsTable(definition);
+      });
+    }
+
+    // Group by handler
+    const groupFilter = contentArea.querySelector('#terms-group-filter');
+    if (groupFilter) {
+      groupFilter.addEventListener('change', (e) => {
+        this._updateTermsGrouping(definition, e.target.value);
+      });
+    }
+
+    // Clear filters button
+    const clearFiltersBtn = contentArea.querySelector('#terms-clear-filters');
+    if (clearFiltersBtn) {
+      clearFiltersBtn.addEventListener('click', () => {
+        this._clearTermsFilters(definition);
+      });
+    }
+
+    // Sort buttons
+    contentArea.querySelectorAll('.th-sort-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const sortKey = btn.dataset.sort;
+        this._sortTermsTable(definition, sortKey);
+      });
+    });
+
+    // Link action buttons
+    contentArea.querySelectorAll('.term-link-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const termId = btn.dataset.termId;
+        const definitionId = btn.dataset.definitionId;
+        this._showLinkTermToSetModal(definitionId, termId);
+      });
+    });
+  }
+
+  /**
+   * Filter terms table based on search and filters
+   */
+  _filterTermsTable(definition) {
+    const contentArea = this.elements.contentArea;
+    const searchInput = contentArea.querySelector('#terms-search-input');
+    const typeFilter = contentArea.querySelector('#terms-type-filter');
+    const linkFilter = contentArea.querySelector('#terms-link-filter');
+    const clearBtn = contentArea.querySelector('#terms-clear-filters');
+    const resultsCount = contentArea.querySelector('#terms-results-count');
+
+    const searchTerm = (searchInput?.value || '').toLowerCase().trim();
+    const typeValue = typeFilter?.value || '';
+    const linkValue = linkFilter?.value || '';
+
+    // Show/hide clear button
+    const hasFilters = searchTerm || typeValue || linkValue;
+    if (clearBtn) {
+      clearBtn.style.display = hasFilters ? '' : 'none';
+    }
+
+    const rows = contentArea.querySelectorAll('#terms-table-body .definition-term-row');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const searchData = row.dataset.search || '';
+      const termType = row.dataset.termType || '';
+      const isLinked = row.dataset.linked === 'true';
+
+      let matchesSearch = !searchTerm || searchData.includes(searchTerm);
+      let matchesType = !typeValue || termType === typeValue;
+      let matchesLink = !linkValue ||
+        (linkValue === 'linked' && isLinked) ||
+        (linkValue === 'unlinked' && !isLinked);
+
+      const visible = matchesSearch && matchesType && matchesLink;
+      row.style.display = visible ? '' : 'none';
+      if (visible) visibleCount++;
+    });
+
+    // Update results count
+    if (resultsCount) {
+      const totalTerms = (definition.terms || definition.properties || []).length;
+      if (hasFilters) {
+        resultsCount.textContent = `Showing ${visibleCount} of ${totalTerms} terms`;
+      } else {
+        resultsCount.textContent = `Showing ${totalTerms} terms`;
+      }
+    }
+  }
+
+  /**
+   * Update terms grouping view
+   */
+  _updateTermsGrouping(definition, groupBy) {
+    const contentArea = this.elements.contentArea;
+    const tableContainer = contentArea.querySelector('#terms-table-container');
+    const groupedContainer = contentArea.querySelector('#terms-grouped-container');
+
+    if (!tableContainer || !groupedContainer) return;
+
+    const terms = definition.terms || definition.properties || [];
+    const termLinkages = this._getTermSetLinkages(definition);
+
+    if (groupBy === 'none') {
+      tableContainer.style.display = '';
+      groupedContainer.style.display = 'none';
+    } else {
+      tableContainer.style.display = 'none';
+      groupedContainer.style.display = '';
+      groupedContainer.innerHTML = this._renderGroupedTermsView(terms, termLinkages, definition.id, groupBy);
+
+      // Re-attach link action handlers for grouped view
+      groupedContainer.querySelectorAll('.term-link-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const termId = btn.dataset.termId;
+          const definitionId = btn.dataset.definitionId;
+          this._showLinkTermToSetModal(definitionId, termId);
+        });
+      });
+    }
+  }
+
+  /**
+   * Clear all terms filters
+   */
+  _clearTermsFilters(definition) {
+    const contentArea = this.elements.contentArea;
+
+    const searchInput = contentArea.querySelector('#terms-search-input');
+    const typeFilter = contentArea.querySelector('#terms-type-filter');
+    const linkFilter = contentArea.querySelector('#terms-link-filter');
+    const groupFilter = contentArea.querySelector('#terms-group-filter');
+
+    if (searchInput) searchInput.value = '';
+    if (typeFilter) typeFilter.value = '';
+    if (linkFilter) linkFilter.value = '';
+    if (groupFilter) groupFilter.value = 'none';
+
+    this._filterTermsTable(definition);
+    this._updateTermsGrouping(definition, 'none');
+  }
+
+  /**
+   * Sort terms table
+   */
+  _sortTermsTable(definition, sortKey) {
+    const contentArea = this.elements.contentArea;
+    const tbody = contentArea.querySelector('#terms-table-body');
+    if (!tbody) return;
+
+    const terms = definition.terms || definition.properties || [];
+    const termLinkages = this._getTermSetLinkages(definition);
+
+    // Get current sort state
+    const currentSort = tbody.dataset.sortKey;
+    const currentDir = tbody.dataset.sortDir || 'asc';
+    let newDir = 'asc';
+
+    if (currentSort === sortKey) {
+      newDir = currentDir === 'asc' ? 'desc' : 'asc';
+    }
+
+    // Sort terms
+    const sortedTerms = [...terms].sort((a, b) => {
+      let aVal, bVal;
+      if (sortKey === 'name') {
+        aVal = (a.name || a.label || '').toLowerCase();
+        bVal = (b.name || b.label || '').toLowerCase();
+      } else if (sortKey === 'label') {
+        aVal = (a.label || a.altLabel || a.prefLabel || '').toLowerCase();
+        bVal = (b.label || b.altLabel || b.prefLabel || '').toLowerCase();
+      }
+
+      if (aVal < bVal) return newDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return newDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    // Update sort state
+    tbody.dataset.sortKey = sortKey;
+    tbody.dataset.sortDir = newDir;
+
+    // Update sort button icons
+    contentArea.querySelectorAll('.th-sort-btn').forEach(btn => {
+      const icon = btn.querySelector('i');
+      if (btn.dataset.sort === sortKey) {
+        icon.className = `ph ${newDir === 'asc' ? 'ph-sort-ascending' : 'ph-sort-descending'}`;
+      } else {
+        icon.className = 'ph ph-arrows-down-up';
+      }
+    });
+
+    // Re-render table body
+    tbody.innerHTML = this._renderTermsTableRows(sortedTerms, termLinkages, definition.id);
+
+    // Re-attach link handlers
+    tbody.querySelectorAll('.term-link-action-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const termId = btn.dataset.termId;
+        const definitionId = btn.dataset.definitionId;
+        this._showLinkTermToSetModal(definitionId, termId);
+      });
+    });
+
+    // Re-apply current filters
+    this._filterTermsTable(definition);
   }
 
   /**
