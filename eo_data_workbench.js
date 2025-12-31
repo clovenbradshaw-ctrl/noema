@@ -451,8 +451,8 @@ class EODataWorkbench {
     this.currentSetId = null;
     this.currentViewId = null;
     this.currentSourceId = null; // Track when viewing a source (GIVEN data)
-    this.currentDefinitionId = null; // Track when viewing a definition (DICT)
-    this.currentExportId = null; // Track when viewing an export (FROZEN)
+    this.currentDefinitionId = null; // Track when viewing a definition (TERMS)
+    this.currentExportId = null; // Track when viewing an export (SNAPSHOT)
     this.isViewingDefinitions = false; // Track when viewing definitions tab
     this.showingSetFields = false; // Track when showing set fields panel (like Airtable's "Manage Fields")
     this.showingSetDetail = false; // Track when showing set detail view (Input → Transformation → Output)
@@ -1673,7 +1673,7 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderSidebar() {
-    // Five-panel navigation: Projects / Sources (GIVEN) / Sets (SCHEMA) / Definitions (DICT) / Exports (FROZEN)
+    // Five-panel navigation: Projects / Sources (GIVEN) / Sets (SCHEMA) / Definitions (TERMS) / Exports (SNAPSHOT)
     // Projects are super objects that contain all other entities
     // Views are shown nested under sets in sidebar (Airtable-style)
     this._renderProjectsNav();
@@ -5043,7 +5043,7 @@ class EODataWorkbench {
               <span>${this._escapeHtml(exp.name)}</span>
               <span class="export-frozen-badge">
                 <i class="ph ph-snowflake"></i>
-                FROZEN
+                SNAPSHOT
               </span>
             </h2>
             <div class="export-detail-meta">
@@ -8023,7 +8023,7 @@ class EODataWorkbench {
             <div class="file-explorer-title">
               <i class="ph ph-book-open"></i>
               <span>Definitions Explorer</span>
-              <span class="file-explorer-badge dictionary-badge">DICT</span>
+              <span class="file-explorer-badge dictionary-badge">TERMS</span>
             </div>
           </div>
           <div class="file-explorer-toolbar-center">
@@ -8154,7 +8154,7 @@ class EODataWorkbench {
                 <span>Definitions</span>
                 <span class="dict-badge">
                   <i class="ph ph-book-bookmark"></i>
-                  DICT
+                  TERMS
                 </span>
               </h2>
               <div class="definitions-explorer-meta">
@@ -8565,7 +8565,7 @@ class EODataWorkbench {
             <div class="file-explorer-title">
               <i class="ph ph-export"></i>
               <span>Exports Explorer</span>
-              <span class="file-explorer-badge export-badge">FROZEN</span>
+              <span class="file-explorer-badge export-badge">SNAPSHOT</span>
             </div>
           </div>
           <div class="file-explorer-toolbar-center">
@@ -8757,7 +8757,7 @@ class EODataWorkbench {
               <h2>
                 <span>Definitions</span>
                 <span class="dictionary-badge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(168, 85, 247, 0.15); color: rgb(168, 85, 247);">
-                  DICT
+                  TERMS
                 </span>
               </h2>
               <div class="sources-table-meta">
@@ -8856,7 +8856,7 @@ class EODataWorkbench {
                 <span>Exports</span>
                 <span class="export-badge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94);">
                   <i class="ph ph-snowflake"></i>
-                  FROZEN
+                  SNAPSHOT
                 </span>
               </h2>
               <div class="sources-table-meta">
@@ -15637,7 +15637,7 @@ class EODataWorkbench {
         <div class="definition-link-empty">
           <i class="ph ph-books"></i>
           <p>No definitions available</p>
-          <p style="font-size: 12px; margin-top: 4px;">Import a definition from the DICT panel first</p>
+          <p style="font-size: 12px; margin-top: 4px;">Import a definition from the TERMS panel first</p>
         </div>
       `;
       return;
