@@ -517,17 +517,44 @@ class SetConfig {
       return { success: false, error: 'Field not found', fieldId };
     }
 
+    const timestamp = new Date().toISOString();
+    const previousBinding = field.semanticBinding;
+
     field.semanticBinding = {
       definitionId,
       termId,
-      boundAt: new Date().toISOString(),
+      boundAt: timestamp,
       boundBy: actor,
       method,
       reason
     };
-    this.updatedAt = new Date().toISOString();
+    this.updatedAt = timestamp;
 
-    return { success: true, field };
+    // CORE_ARCHITECTURE.md: Return event data for semantic_binding_created
+    // Callers can use this to emit the proper event to the event store
+    const eventData = {
+      id: generateViewId('bind'),
+      type: 'meant',
+      category: 'semantic_binding_created',
+      timestamp,
+      actor,
+      payload: {
+        setId: this.id,
+        fieldId,
+        fieldName: field.name,
+        definitionId,
+        termId,
+        previousBinding
+      },
+      provenance: [this.id, definitionId].filter(Boolean),
+      frame: {
+        purpose: 'field_semantic_grounding',
+        method,
+        reason
+      }
+    };
+
+    return { success: true, field, eventData };
   }
 
   /**
@@ -549,11 +576,32 @@ class SetConfig {
       return { success: false, error: 'Field not found', fieldId };
     }
 
+    const timestamp = new Date().toISOString();
     const previousBinding = field.semanticBinding;
     field.semanticBinding = null;
-    this.updatedAt = new Date().toISOString();
+    this.updatedAt = timestamp;
 
-    return { success: true, field, previousBinding };
+    // CORE_ARCHITECTURE.md: Return event data for semantic_binding_removed
+    const eventData = {
+      id: generateViewId('unbind'),
+      type: 'meant',
+      category: 'semantic_binding_removed',
+      timestamp,
+      actor,
+      payload: {
+        setId: this.id,
+        fieldId,
+        fieldName: field.name,
+        previousBinding
+      },
+      provenance: [this.id],
+      frame: {
+        purpose: 'field_semantic_ungrounding',
+        reason
+      }
+    };
+
+    return { success: true, field, previousBinding, eventData };
   }
 
   /**
@@ -2224,6 +2272,314 @@ function initViewRegistry(horizonGate = null, eventStore = null) {
 }
 
 // ============================================================================
+// CORE_ARCHITECTURE.md Factory Methods
+// ============================================================================
+
+/**
+ * Create a complete CORE_ARCHITECTURE.md compliant hierarchy from a null source.
+ *
+ * Per CORE_ARCHITECTURE.md "New Table" flow:
+ * 1. NULL SOURCE created (sourceType: 'null')
+ * 2. SET created (bound to null source via sourceBindings)
+ * 3. DEFAULT LENS created (isDefault: true, pivot: null)
+ * 4. GRID VIEW created (viewType: 'grid')
+ *
+ * @param {Object} options
+ * @param {string} options.name - Name for the Set (Source will be "${name} Source")
+ * @param {Object[]} options.fields - Initial field definitions (optional)
+ * @param {string} options.actor - Who is creating this (default: 'system')
+ * @param {string} options.projectId - Parent project ID (optional)
+ * @returns {Object} { source, set, lens, view } - Complete hierarchy
+ */
+function createCompliantHierarchyFromScratch(options = {}) {
+  const {
+    name = 'Untitled Set',
+    fields = [],
+    actor = 'system',
+    projectId = null
+  } = options;
+
+  const timestamp = new Date().toISOString();
+  const sourceId = generateViewId('src');
+  const setId = generateViewId('set');
+  const lensId = generateViewId('lens');
+  const viewId = generateViewId('view');
+
+  // 1. Create null source (GIVEN - but sourceType: 'null' for manual entry)
+  const source = {
+    id: sourceId,
+    type: 'given',
+    category: 'source_created',
+    timestamp,
+    actor,
+    payload: {
+      name: `${name} Source`,
+      sourceType: 'null',  // CORE_ARCHITECTURE.md compliant
+      locator: null,
+      rawSchema: {
+        columns: fields.map(f => f.name),
+        rowCount: 0
+      }
+    },
+    provenance: []
+  };
+
+  // 2. Create Set with sourceBindings (MEANT - schema interpretation)
+  const set = new SetConfig({
+    id: setId,
+    name,
+    sourceBindings: [{ sourceId, mapping: 'direct' }],
+    schema: {
+      fields: fields.map(f => ({
+        id: generateViewId('fld'),
+        name: f.name,
+        type: f.type || 'text',
+        isPrimary: f.isPrimary || false,
+        semanticBinding: null
+      }))
+    },
+    provenance: { derivedFrom: [sourceId], createdAt: timestamp, createdBy: actor }
+  });
+
+  // 3. Create default Lens (MEANT - data slice)
+  const lens = new LensConfig({
+    id: lensId,
+    name: `All ${name}`,
+    setId,
+    isDefault: true,
+    pivot: null,  // Default = entire Set
+    includedFields: 'all',
+    provenance: { derivedFromSet: setId, purpose: 'default_data_slice' }
+  });
+
+  // 4. Create default Grid View (MEANT - visualization)
+  const view = new ViewConfig({
+    id: viewId,
+    name: `${name} Grid`,
+    lensId,
+    viewType: 'grid',
+    config: {
+      visibleFields: set.schema.fields.map(f => f.id),
+      rowHeight: 'medium'
+    },
+    provenance: { derivedFromLens: lensId, purpose: 'default_visualization' }
+  });
+
+  // Link the hierarchy
+  set.lensIds.push(lensId);
+  lens.viewIds.push(viewId);
+
+  return {
+    source,
+    set,
+    lens,
+    view,
+    // Event data for each creation (can be emitted to event store)
+    events: [
+      source,
+      {
+        id: generateViewId('evt'),
+        type: 'meant',
+        category: 'set_created',
+        timestamp,
+        actor,
+        payload: set.toJSON(),
+        provenance: [sourceId]
+      },
+      {
+        id: generateViewId('evt'),
+        type: 'meant',
+        category: 'lens_created',
+        timestamp,
+        actor,
+        payload: lens.toJSON(),
+        provenance: [setId]
+      },
+      {
+        id: generateViewId('evt'),
+        type: 'meant',
+        category: 'view_created',
+        timestamp,
+        actor,
+        payload: view.toJSON(),
+        provenance: [lensId]
+      }
+    ]
+  };
+}
+
+/**
+ * Create a CORE_ARCHITECTURE.md compliant Set with default Lens and View.
+ *
+ * Use this when you already have a Source and want to create a Set from it.
+ *
+ * @param {Object} options
+ * @param {string} options.sourceId - ID of the Source to bind to
+ * @param {string} options.name - Name for the Set
+ * @param {Object[]} options.fields - Field definitions from the Source
+ * @param {string} options.actor - Who is creating this
+ * @returns {Object} { set, lens, view }
+ */
+function createSetWithDefaultLensAndView(options = {}) {
+  const {
+    sourceId,
+    name = 'Untitled Set',
+    fields = [],
+    actor = 'system'
+  } = options;
+
+  if (!sourceId) {
+    throw new ViewHierarchyError(7, 'Set requires sourceId for provenance');
+  }
+
+  const setId = generateViewId('set');
+  const lensId = generateViewId('lens');
+  const viewId = generateViewId('view');
+
+  // Create Set with sourceBindings
+  const set = new SetConfig({
+    id: setId,
+    name,
+    sourceBindings: [{ sourceId, mapping: 'direct' }],
+    schema: {
+      fields: fields.map(f => ({
+        id: f.id || generateViewId('fld'),
+        name: f.name,
+        type: f.type || 'text',
+        isPrimary: f.isPrimary || false,
+        semanticBinding: f.semanticBinding || null
+      }))
+    },
+    provenance: { derivedFrom: [sourceId] }
+  });
+
+  // Create default Lens
+  const lens = new LensConfig({
+    id: lensId,
+    name: `All ${name}`,
+    setId,
+    isDefault: true,
+    pivot: null,
+    includedFields: 'all',
+    provenance: { derivedFromSet: setId }
+  });
+
+  // Create default Grid View
+  const view = new ViewConfig({
+    id: viewId,
+    name: `${name} Grid`,
+    lensId,
+    viewType: 'grid',
+    config: {
+      visibleFields: set.schema.fields.map(f => f.id)
+    },
+    provenance: { derivedFromLens: lensId }
+  });
+
+  // Link the hierarchy
+  set.lensIds.push(lensId);
+  lens.viewIds.push(viewId);
+
+  return { set, lens, view };
+}
+
+/**
+ * Create a pivoted Lens with a default View.
+ *
+ * Per CORE_ARCHITECTURE.md, a Lens can be:
+ * - Default (null pivot): Pass-through of entire Set
+ * - Pivoted: Filtered, grouped, or extracted subset
+ *
+ * @param {Object} options
+ * @param {string} options.setId - Parent Set ID
+ * @param {string} options.name - Lens name
+ * @param {Object} options.pivot - Pivot configuration { type: 'filter'|'group'|'extract', ... }
+ * @param {string[]|'all'} options.includedFields - Which fields to include
+ * @param {string} options.viewType - Default view type (default: 'grid')
+ * @returns {Object} { lens, view }
+ */
+function createPivotedLensWithView(options = {}) {
+  const {
+    setId,
+    name = 'Filtered View',
+    pivot = null,
+    includedFields = 'all',
+    viewType = 'grid'
+  } = options;
+
+  if (!setId) {
+    throw new ViewHierarchyError(7, 'Lens requires setId for provenance');
+  }
+
+  const lensId = generateViewId('lens');
+  const viewId = generateViewId('view');
+
+  // Create pivoted Lens
+  const lens = new LensConfig({
+    id: lensId,
+    name,
+    setId,
+    isDefault: false,
+    pivot,
+    includedFields,
+    provenance: { derivedFromSet: setId, purpose: pivot?.type || 'custom_slice' }
+  });
+
+  // Create View for this Lens
+  const view = new ViewConfig({
+    id: viewId,
+    name: `${name} ${viewType.charAt(0).toUpperCase() + viewType.slice(1)}`,
+    lensId,
+    viewType,
+    provenance: { derivedFromLens: lensId }
+  });
+
+  // Link
+  lens.viewIds.push(viewId);
+
+  return { lens, view };
+}
+
+/**
+ * Validate that a view type is CORE_ARCHITECTURE.md compliant.
+ *
+ * Valid types: grid, cards, kanban, calendar, graph, timeline
+ *
+ * @param {string} viewType - The view type to validate
+ * @returns {boolean} True if valid
+ */
+function isValidViewType(viewType) {
+  const validTypes = ['grid', 'cards', 'kanban', 'calendar', 'graph', 'timeline'];
+  return validTypes.includes(viewType);
+}
+
+/**
+ * Validate that a source type is CORE_ARCHITECTURE.md compliant.
+ *
+ * Valid types: file, api, scrape, null
+ *
+ * @param {string} sourceType - The source type to validate
+ * @returns {boolean} True if valid
+ */
+function isValidSourceType(sourceType) {
+  const validTypes = ['file', 'api', 'scrape', 'null'];
+  return validTypes.includes(sourceType);
+}
+
+/**
+ * Validate that a pivot type is CORE_ARCHITECTURE.md compliant.
+ *
+ * Valid types: null (default), filter, group, extract
+ *
+ * @param {string|null} pivotType - The pivot type to validate
+ * @returns {boolean} True if valid
+ */
+function isValidPivotType(pivotType) {
+  const validTypes = [null, 'filter', 'group', 'extract'];
+  return validTypes.includes(pivotType);
+}
+
+// ============================================================================
 // Exports
 // ============================================================================
 
@@ -2256,7 +2612,17 @@ if (typeof module !== 'undefined' && module.exports) {
     // Registry
     ViewRegistry,
     getViewRegistry,
-    initViewRegistry
+    initViewRegistry,
+
+    // CORE_ARCHITECTURE.md Factory Methods
+    createCompliantHierarchyFromScratch,
+    createSetWithDefaultLensAndView,
+    createPivotedLensWithView,
+
+    // Validation helpers
+    isValidViewType,
+    isValidSourceType,
+    isValidPivotType
   };
 }
 
@@ -2289,4 +2655,14 @@ if (typeof window !== 'undefined') {
   window.ViewRegistry = ViewRegistry;
   window.getViewRegistry = getViewRegistry;
   window.initViewRegistry = initViewRegistry;
+
+  // CORE_ARCHITECTURE.md Factory Methods
+  window.createCompliantHierarchyFromScratch = createCompliantHierarchyFromScratch;
+  window.createSetWithDefaultLensAndView = createSetWithDefaultLensAndView;
+  window.createPivotedLensWithView = createPivotedLensWithView;
+
+  // Validation helpers
+  window.isValidViewType = isValidViewType;
+  window.isValidSourceType = isValidSourceType;
+  window.isValidPivotType = isValidPivotType;
 }
