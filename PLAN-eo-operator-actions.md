@@ -1,482 +1,471 @@
-# Plan: Convert Activity Store Actions to EO Operator Compliance
+# Plan: Simplified Activity Storage
 
-## Current State
+## Design Principle
 
-The codebase has **two patterns** for recording actions:
-
-### Pattern A: Activity Store Convenience Methods (eo_activity.js)
-```javascript
-// Current - hides the operator semantics
-ActivityPatterns.create(store, 'record', 'rec_123', 'John Doe', context)
-ActivityPatterns.updateField(store, 'rec_123', 'name', 'John', 'Jane', context)
-ActivityPatterns.delete(store, 'rec_123', 'record', context)
-GhostActivities.ghost(entityId, entityType, actor, reason)
-```
-
-### Pattern B: Nine Operators invoke() (eo_nine_operators.js)
-```javascript
-// Clean operator semantics
-invoke('INS', { type: 'record', id: 'rec_123' }, context)
-invoke('ALT', { type: 'field', id: 'rec_123', field: 'name', previousValue: 'John', newValue: 'Jane' }, context)
-invoke('NUL', { type: 'record', id: 'rec_123' }, context)
-```
-
-**Problem**: These don't integrate. Activities recorded via Pattern A don't automatically create invocations. The `ActionOperatorMapping` in eo_nine_operators.js is comprehensive but disconnected from the activity store.
+**Store simple. Expand when needed. Reference context only when it exists.**
 
 ---
 
-## Proposed Solution
+## New Activity Format
 
-Unify on a single pattern: **`operator(target, context, [frame])`**
-
-All actions flow through a single entry point that:
-1. Creates the operator invocation(s)
-2. Records to activity store
-3. Optionally bridges to event store
-
-### New Unified API
+### Core Record (what gets stored)
 
 ```javascript
-// Single entry point for all operations
-const result = await EOAction.execute('update_record', {
-  recordId: 'rec_123',
-  fieldId: 'name',
-  oldValue: 'John',
-  newValue: 'Jane',
-  userId: 'user_456'
-});
+{
+  id: "act_m5x8a1",
+  ts: 1735643460,           // unix timestamp (not ISO string)
+  op: "ALT",                // operator
+  actor: "user_789",        // who (pulled out of context - it's always needed)
+  target: "rec_123",        // entity ID
+  field: "name",            // field ID (if applicable, else null)
+  delta: ["John", "Jane"],  // [prev, next] for changes, null otherwise
+  method: "inline_edit",    // how (optional, common)
+  source: null,             // from where (optional, rare)
+  seq: null,                // sequence ID (if compound action)
+  ctx: null                 // context ref (only if rich context needed)
+}
+```
 
-// Returns the full operator trace
+**Size: ~150-200 bytes** vs current ~800+ bytes
+
+### When Rich Context is Needed
+
+For legal/compliance scenarios, reference a context record:
+
+```javascript
+// Activity with rich context
+{
+  id: "act_legal_123",
+  ts: 1735643460,
+  op: "NUL",
+  actor: "system",
+  target: "rec_789",
+  method: "expectation_check",
+  ctx: "ctx_metro_rule"  // ← reference
+}
+
+// Context record (stored separately)
+{
+  id: "ctx_metro_rule",
+  jurisdiction: "Metro County Court",
+  definition: "Per Metro Court Rule 12.4",
+  term: "filing_deadline",
+  background: "Annual compliance audit"
+}
 ```
 
 ---
 
-## What It Looks Like Stored (API Response)
+## Schema
 
-### Example 1: Create Record
+### activities table
 
-**API Request:**
+| Field | Type | Notes |
+|-------|------|-------|
+| id | string | Primary key, `act_<ts36>_<rand>` |
+| ts | integer | Unix timestamp (seconds or ms) |
+| op | string | One of: INS, DES, SEG, CON, SYN, ALT, SUP, REC, NUL |
+| actor | string | User/system ID |
+| target | string | Entity ID |
+| field | string? | Field ID if field-level operation |
+| delta | [any, any]? | [previousValue, newValue] for changes |
+| method | string? | How the action was performed |
+| source | string? | External source reference |
+| seq | string? | Sequence ID for compound actions |
+| ctx | string? | Reference to contexts table |
+
+### contexts table (sparse, only when needed)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | string | Primary key |
+| term | string? | Semantic term |
+| definition | string? | What it means |
+| jurisdiction | string? | Legal/org scope |
+| scale | string? | Operation scale |
+| background | string? | Why/reasoning |
+
+### sequences table (for compound actions)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | string | Primary key, `seq_<ts36>_<rand>` |
+| ts | integer | When sequence started |
+| name | string | Human name ("Join Sources") |
+| ops | string[] | ["INS", "CON", "DES"] |
+| actor | string | Who initiated |
+| ctx | string? | Shared context ref |
+
+---
+
+## Module Changes
+
+### eo_activity.js
+
+**Before:**
+```javascript
+function createActivityAtom(params, options = {}) {
+  const { operator, target, context } = params;
+  return {
+    id: generateActivityId(),
+    type: 'activity_atom',
+    operator,
+    target: normalizeTarget(target),
+    context: normalizeContext(context),  // Always 9-element structure
+    timestamp: new Date().toISOString(),
+    // ... 10+ more fields
+  };
+}
+```
+
+**After:**
+```javascript
+function createActivity(op, target, actor, options = {}) {
+  return {
+    id: genId('act'),
+    ts: Date.now(),
+    op,
+    actor,
+    target: typeof target === 'string' ? target : target.id,
+    field: target.field || null,
+    delta: options.delta || null,
+    method: options.method || null,
+    source: options.source || null,
+    seq: options.seq || null,
+    ctx: options.ctx || null
+  };
+}
+
+// Expansion for consumers that need full structure
+function expand(activity) {
+  return {
+    id: activity.id,
+    type: 'activity_atom',
+    operator: activity.op,
+    target: {
+      id: activity.target,
+      fieldId: activity.field,
+      previousValue: activity.delta?.[0],
+      newValue: activity.delta?.[1]
+    },
+    context: activity.ctx
+      ? loadContext(activity.ctx)
+      : { epistemic: { agent: activity.actor, method: activity.method, source: activity.source }},
+    timestamp: new Date(activity.ts).toISOString()
+  };
+}
+```
+
+**Convenience wrappers become thin:**
+```javascript
+const Activity = {
+  insert: (target, actor, opts) => createActivity('INS', target, actor, opts),
+  update: (target, actor, delta, opts) => createActivity('ALT', target, actor, { delta, ...opts }),
+  delete: (target, actor, opts) => createActivity('NUL', target, actor, opts),
+  link: (target, actor, opts) => createActivity('CON', target, actor, opts),
+  // ... etc
+};
+```
+
+### eo_nine_operators.js
+
+**Simplify invoke():**
+
+```javascript
+// Before: returns complex invocation object
+function invoke(operator, target, context = {}) {
+  // ... 30 lines building nested structure
+}
+
+// After: returns activity-ready object
+function invoke(op, target, actor, options = {}) {
+  return {
+    op,
+    target: normalizeTargetId(target),
+    field: target.field || null,
+    actor,
+    delta: options.delta,
+    method: options.method,
+    source: options.source,
+    ctx: options.ctx
+  };
+}
+```
+
+**ActionOperatorMapping simplifies:**
+
+```javascript
+// Before
+'update_field': {
+  operators: ['ALT'],
+  encode: (action) => [
+    invoke('ALT', {
+      type: 'field',
+      id: action.recordId,
+      field: action.fieldId,
+      previousValue: action.oldValue,
+      newValue: action.newValue
+    }, {
+      agent: action.userId,
+      method: 'inline_edit'
+    })
+  ]
+}
+
+// After
+'update_field': {
+  op: 'ALT',
+  encode: (a) => ({
+    target: a.recordId,
+    field: a.fieldId,
+    delta: [a.oldValue, a.newValue],
+    method: 'inline_edit'
+  })
+}
+```
+
+### eo_compliance.js
+
+**Validation works on expanded form:**
+
+```javascript
+// Before: deeply nested access
+const agent = activity.context?.epistemic?.agent;
+const method = activity.context?.epistemic?.method;
+
+// After: flat access (expand first if needed)
+function validate(activity) {
+  const a = activity.actor ? activity : expand(activity);
+  const agent = a.actor;
+  const method = a.method;
+  // ...
+}
+```
+
+### eo_ghost_registry.js
+
+**Ghost operations become simple:**
+
+```javascript
+// Before
+GhostActivities.ghost(entityId, entityType, actor, reason) {
+  return createActivityAtom({
+    operator: 'NUL',
+    target: { entityId, entityType, positionType: 'entity' },
+    context: ContextTemplates.ghostCreation(actor, reason)
+  });
+}
+
+// After
+function ghost(entityId, actor, reason) {
+  return createActivity('NUL', entityId, actor, {
+    method: 'soft_delete',
+    ctx: reason ? createContext({ background: reason }) : null
+  });
+}
+```
+
+### ActivityStore class
+
+**Indexes simplify:**
+
+```javascript
+// Before: nested path indexes
+actStore.createIndex('agent', 'context.epistemic.agent');
+
+// After: flat field indexes
+actStore.createIndex('actor', 'actor');
+actStore.createIndex('op', 'op');
+actStore.createIndex('target', 'target');
+actStore.createIndex('ts', 'ts');
+```
+
+**Queries stay the same interface, work with flat fields:**
+
+```javascript
+getByOperator(op) {
+  return this.query({ op });
+}
+
+getByEntity(entityId) {
+  return this.query({ target: entityId });
+}
+
+getByActor(actor) {
+  return this.query({ actor });
+}
+```
+
+---
+
+## API Examples
+
+### Create Record
+
+**Request:**
 ```http
 POST /api/sets/set_abc/records
-Content-Type: application/json
-
-{
-  "values": { "name": "John Doe", "email": "john@example.com" }
-}
+{ "values": { "name": "John" } }
 ```
 
-**Stored Activity (what gets persisted):**
+**Stored:**
+```json
+{ "id": "act_x7k2", "ts": 1735643460, "op": "INS", "actor": "user_789", "target": "rec_456", "method": "api" }
+```
+
+**Response:**
 ```json
 {
-  "id": "act_m5x7k2_abc123",
-  "type": "activity_atom",
-
-  "operator": "INS",
-  "symbol": "⊕",
-
-  "target": {
-    "type": "record",
-    "id": "rec_m5x7k2_def456",
-    "scope": "set_abc",
-    "value": { "name": "John Doe", "email": "john@example.com" }
-  },
-
-  "context": {
-    "epistemic": {
-      "agent": "user_789",
-      "method": "api_call",
-      "source": "POST /api/sets/set_abc/records"
-    },
-    "semantic": {
-      "term": "record_creation",
-      "definition": null,
-      "jurisdiction": "set_abc"
-    },
-    "situational": {
-      "scale": "single_operation",
-      "timeframe": "2025-12-31T10:30:00.000Z",
-      "background": null
-    }
-  },
-
-  "timestamp": "2025-12-31T10:30:00.000Z",
-  "logicalClock": 1735643400000,
-
-  "grounding": {
-    "operator": "REC",
-    "target": { "type": "invocation", "ref": "act_m5x7k2_abc123" }
-  }
+  "record": { "id": "rec_456", "values": { "name": "John" } },
+  "activity": { "id": "act_x7k2", "op": "INS" }
 }
 ```
 
-**API Response:**
-```json
-{
-  "record": {
-    "id": "rec_m5x7k2_def456",
-    "values": { "name": "John Doe", "email": "john@example.com" }
-  },
-  "operation": {
-    "operator": "INS",
-    "symbol": "⊕",
-    "activityId": "act_m5x7k2_abc123",
-    "timestamp": "2025-12-31T10:30:00.000Z"
-  }
-}
-```
+### Update Field
 
----
-
-### Example 2: Update Field (ALT operator)
-
-**API Request:**
+**Request:**
 ```http
 PATCH /api/records/rec_123/fields/name
-Content-Type: application/json
-
-{
-  "value": "Jane Doe"
-}
+{ "value": "Jane" }
 ```
 
-**Stored Activity:**
+**Stored:**
 ```json
-{
-  "id": "act_m5x8a1_xyz789",
-  "type": "activity_atom",
+{ "id": "act_x8a1", "ts": 1735643520, "op": "ALT", "actor": "user_789", "target": "rec_123", "field": "name", "delta": ["John", "Jane"], "method": "inline_edit" }
+```
 
-  "operator": "ALT",
-  "symbol": "Δ",
+### Join Sources (Compound)
 
-  "target": {
-    "type": "field",
-    "id": "rec_123",
-    "field": "name",
-    "previousValue": "John Doe",
-    "newValue": "Jane Doe"
-  },
+**Stored sequence:**
+```json
+{ "id": "seq_xa12", "ts": 1735643580, "name": "Join Sources", "ops": ["INS", "CON", "DES"], "actor": "user_789" }
+```
 
-  "context": {
-    "epistemic": {
-      "agent": "user_789",
-      "method": "inline_edit",
-      "source": "PATCH /api/records/rec_123/fields/name"
-    },
-    "semantic": {
-      "term": "value_change",
-      "definition": null,
-      "jurisdiction": "set_abc"
-    },
-    "situational": {
-      "scale": "single_operation",
-      "timeframe": "2025-12-31T10:31:00.000Z",
-      "background": null
-    }
-  },
+**Stored activities:**
+```json
+{ "id": "act_001", "ts": 1735643580, "op": "INS", "actor": "user_789", "target": "set_new", "seq": "seq_xa12" }
+{ "id": "act_002", "ts": 1735643580, "op": "CON", "actor": "user_789", "target": "set_new", "seq": "seq_xa12", "method": "left_join" }
+{ "id": "act_003", "ts": 1735643580, "op": "DES", "actor": "user_789", "target": "set_new", "delta": [null, "Employee Details"], "seq": "seq_xa12" }
+```
 
-  "timestamp": "2025-12-31T10:31:00.000Z",
-  "logicalClock": 1735643460000,
+### With Rich Context (Legal)
 
-  "grounding": {
-    "operator": "REC",
-    "target": { "type": "invocation", "ref": "act_m5x8a1_xyz789" }
-  }
-}
+**Stored:**
+```json
+{ "id": "act_legal", "ts": 1735643640, "op": "NUL", "actor": "system", "target": "filing_123", "method": "expectation_check", "ctx": "ctx_metro" }
+```
+
+**Context record:**
+```json
+{ "id": "ctx_metro", "jurisdiction": "Metro County Court", "definition": "Per Rule 12.4", "term": "filing_deadline" }
 ```
 
 ---
 
-### Example 3: Soft Delete (NUL → Ghost)
+## Migration
 
-**API Request:**
-```http
-DELETE /api/records/rec_123
-```
+### Step 1: Add new functions alongside old
 
-**Stored Activity:**
-```json
-{
-  "id": "act_m5x9b2_ghi012",
-  "type": "activity_atom",
-
-  "operator": "NUL",
-  "symbol": "∅",
-
-  "target": {
-    "type": "record",
-    "id": "rec_123",
-    "positionType": "entity",
-    "value": { "reason": "user_deletion" }
-  },
-
-  "context": {
-    "epistemic": {
-      "agent": "user_789",
-      "method": "soft_delete",
-      "source": "DELETE /api/records/rec_123"
-    },
-    "semantic": {
-      "term": "ghost_creation",
-      "definition": "Entity transitioned to ghost state",
-      "jurisdiction": "data_lifecycle"
-    },
-    "situational": {
-      "scale": "single_entity",
-      "timeframe": "2025-12-31T10:32:00.000Z",
-      "background": "deletion_requested"
-    }
-  },
-
-  "timestamp": "2025-12-31T10:32:00.000Z",
-  "logicalClock": 1735643520000,
-
-  "grounding": {
-    "operator": "REC",
-    "target": { "type": "invocation", "ref": "act_m5x9b2_ghi012" }
-  }
-}
-```
-
----
-
-### Example 4: Join Sources (Compound Action → Sequence)
-
-**API Request:**
-```http
-POST /api/joins
-Content-Type: application/json
-
-{
-  "leftSourceId": "src_employees",
-  "rightSourceId": "src_departments",
-  "joinType": "left",
-  "conditions": [{ "left": "dept_id", "right": "id" }],
-  "conflictPolicy": "LEFT_WINS",
-  "resultSetName": "Employee Details"
-}
-```
-
-**Stored Activity Sequence:**
-```json
-{
-  "id": "seq_m5xa12_jkl345",
-  "type": "activity_sequence",
-  "name": "Join Sources",
-  "timestamp": "2025-12-31T10:33:00.000Z",
-
-  "operators": ["INS", "CON", "DES"],
-  "pattern": "join_sources",
-
-  "context": {
-    "epistemic": {
-      "agent": "user_789",
-      "method": "join_creation",
-      "source": "POST /api/joins"
-    },
-    "semantic": {
-      "term": "relational_connection",
-      "definition": null,
-      "jurisdiction": "workspace"
-    },
-    "situational": {
-      "scale": "compound_operation",
-      "timeframe": "2025-12-31T10:33:00.000Z",
-      "background": null
-    }
-  },
-
-  "atoms": [
-    {
-      "id": "act_m5xa12_001",
-      "operator": "INS",
-      "symbol": "⊕",
-      "target": {
-        "type": "joined_set",
-        "id": "set_m5xa12_mno678",
-        "value": {
-          "leftSource": "src_employees",
-          "rightSource": "src_departments",
-          "joinType": "left"
-        }
-      },
-      "sequenceId": "seq_m5xa12_jkl345",
-      "sequenceIndex": 0
-    },
-    {
-      "id": "act_m5xa12_002",
-      "operator": "CON",
-      "symbol": "⊗",
-      "target": {
-        "type": "join",
-        "id": "set_m5xa12_mno678",
-        "relatedTo": ["src_employees", "src_departments"],
-        "value": {
-          "joinType": "left",
-          "conditions": [{ "left": "dept_id", "right": "id" }],
-          "conflictPolicy": "LEFT_WINS"
-        }
-      },
-      "sequenceId": "seq_m5xa12_jkl345",
-      "sequenceIndex": 1,
-      "causedBy": "act_m5xa12_001"
-    },
-    {
-      "id": "act_m5xa12_003",
-      "operator": "DES",
-      "symbol": "⊙",
-      "target": {
-        "type": "set",
-        "id": "set_m5xa12_mno678",
-        "newValue": "Employee Details"
-      },
-      "sequenceId": "seq_m5xa12_jkl345",
-      "sequenceIndex": 2,
-      "causedBy": "act_m5xa12_002"
-    }
-  ],
-
-  "atomCount": 3,
-  "completed": true,
-  "completedAt": "2025-12-31T10:33:00.500Z"
-}
-```
-
-**API Response:**
-```json
-{
-  "set": {
-    "id": "set_m5xa12_mno678",
-    "name": "Employee Details",
-    "type": "joined_set"
-  },
-  "operation": {
-    "sequenceId": "seq_m5xa12_jkl345",
-    "pattern": "join_sources",
-    "operators": ["⊕ INS", "⊗ CON", "⊙ DES"],
-    "timestamp": "2025-12-31T10:33:00.000Z"
-  }
-}
-```
-
----
-
-### Example 5: Entity Resolution (SYN operator)
-
-**API Request:**
-```http
-POST /api/entities/resolve
-Content-Type: application/json
-
-{
-  "leftEntity": "rec_123",
-  "rightEntity": "rec_456",
-  "confidence": 0.95,
-  "matchMethod": "fuzzy_name_match"
-}
-```
-
-**Stored Activity:**
-```json
-{
-  "id": "act_m5xb34_pqr901",
-  "type": "activity_atom",
-
-  "operator": "SYN",
-  "symbol": "≡",
-
-  "target": {
-    "type": "entity_resolution",
-    "id": "ent_m5xb34_canonical",
-    "value": {
-      "left": "rec_123",
-      "right": "rec_456",
-      "confidence": 0.95,
-      "method": "fuzzy_name_match"
-    }
-  },
-
-  "context": {
-    "epistemic": {
-      "agent": "user_789",
-      "method": "fuzzy_name_match",
-      "source": "POST /api/entities/resolve"
-    },
-    "semantic": {
-      "term": "same_entity",
-      "definition": "These records represent the same real-world entity",
-      "jurisdiction": "entity_resolution"
-    },
-    "situational": {
-      "scale": "single_operation",
-      "timeframe": "2025-12-31T10:34:00.000Z",
-      "background": "deduplication_workflow"
-    }
-  },
-
-  "timestamp": "2025-12-31T10:34:00.000Z",
-  "logicalClock": 1735643640000,
-
-  "grounding": {
-    "operator": "REC",
-    "target": { "type": "invocation", "ref": "act_m5xb34_pqr901" }
-  }
-}
-```
-
----
-
-## Implementation Steps
-
-### Step 1: Create Unified Action Executor
-Create `eo_action.js` that:
-- Takes action type + params
-- Looks up in `ActionOperatorMapping`
-- Creates operator invocation(s)
-- Records to activity store
-- Returns unified response
-
-### Step 2: Deprecate Convenience Methods
-Mark `ActivityPatterns.*` and `GhostActivities.*` as deprecated.
-They should internally call the unified executor.
-
-### Step 3: Add Frame Support
-Extend signature to `operator(target, context, frame)` where frame is optional:
 ```javascript
-{
-  frame: {
-    claim: "This entity was deleted",
-    epistemicStatus: "ASSERTED",
-    caveats: ["User requested deletion"],
-    purpose: "data_cleanup"
+// New compact API
+export const Activity = { insert, update, delete, link, ... };
+
+// Old API still works (deprecated)
+export { createActivityAtom, ActivityPatterns };
+```
+
+### Step 2: Migrate storage
+
+```javascript
+// On read: detect old format, expand
+function load(raw) {
+  if (raw.type === 'activity_atom') {
+    return migrate(raw);  // Convert old → new
   }
+  return raw;
+}
+
+// Migration: old verbose → new compact
+function migrate(old) {
+  return {
+    id: old.id,
+    ts: new Date(old.timestamp).getTime(),
+    op: old.operator,
+    actor: old.context?.epistemic?.agent,
+    target: old.target?.id || old.target?.entityId,
+    field: old.target?.fieldId,
+    delta: old.target?.previousValue !== undefined
+      ? [old.target.previousValue, old.target.newValue]
+      : null,
+    method: old.context?.epistemic?.method,
+    source: old.context?.epistemic?.source,
+    seq: old.sequenceId,
+    ctx: null  // Rich context migrated separately if needed
+  };
 }
 ```
 
-### Step 4: Bridge to Event Store
-Add optional auto-bridging where activities create corresponding events with proper grounding chains.
+### Step 3: Update IndexedDB schema
+
+```javascript
+// Version 2 schema
+request.onupgradeneeded = (event) => {
+  const db = event.target.result;
+
+  if (event.oldVersion < 2) {
+    // Migrate activities store
+    const store = transaction.objectStore('activities');
+    store.deleteIndex('agent');
+    store.createIndex('actor', 'actor');
+    store.createIndex('op', 'op');
+    store.createIndex('target', 'target');
+  }
+};
+```
 
 ---
 
-## Key Benefits
+## What We Keep
 
-1. **Single Source of Truth**: All actions go through `ActionOperatorMapping`
-2. **Explicit Semantics**: Every action shows its operator(s) - no hidden meaning
-3. **Full Provenance**: Context is always recorded, including method and source
-4. **Queryable**: Can query activities by operator (`getByOperator('SYN')`)
-5. **Auditable**: API responses include operation metadata
+- **9 operators** (INS, DES, SEG, CON, SYN, ALT, SUP, REC, NUL) - these are the vocabulary
+- **Sequences** for compound actions
+- **Rich context** when needed (via reference)
+- **Full expansion** available for compliance/display
+
+## What We Drop
+
+- **Mandatory 9-element context** on every activity
+- **Nested object structure** for storage
+- **Verbose field names** (operator → op, timestamp → ts)
+- **Always-null fields** (definition, jurisdiction, scale on routine ops)
 
 ---
 
-## Decision Points
+## Size Comparison
 
-1. **Keep convenience methods as thin wrappers?**
-   - Pro: Easier migration, familiar API
-   - Con: Two ways to do things
+| Operation | Old Size | New Size | Savings |
+|-----------|----------|----------|---------|
+| Field update | ~850 bytes | ~180 bytes | 79% |
+| Create record | ~750 bytes | ~150 bytes | 80% |
+| Delete record | ~700 bytes | ~120 bytes | 83% |
+| Join (3 ops) | ~2400 bytes | ~500 bytes | 79% |
 
-2. **Auto-bridge to event store?**
-   - Pro: Unified data model
-   - Con: More complexity, potential performance impact
+---
 
-3. **Include frame in all activities?**
-   - Pro: Richer semantics for MEANT events
-   - Con: More verbose, may not always be needed
+## Decision: Store Compact, Expand on Demand
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Action    │ ──▶ │   Store     │ ──▶ │   Query     │
+│  (simple)   │     │  (compact)  │     │  (expand?)  │
+└─────────────┘     └─────────────┘     └─────────────┘
+                                              │
+                          ┌───────────────────┴───────────────────┐
+                          │                                       │
+                    ┌─────▼─────┐                         ┌───────▼───────┐
+                    │  Simple   │                         │   Expanded    │
+                    │  (API)    │                         │  (Compliance) │
+                    └───────────┘                         └───────────────┘
+```
+
+Most consumers get compact. Compliance/audit get expanded.
