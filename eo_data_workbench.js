@@ -5976,8 +5976,8 @@ class EODataWorkbench {
             <button class="btn btn-secondary" id="btn-refresh-definition" title="Refresh from URI">
               <i class="ph ph-arrows-clockwise"></i> Refresh
             </button>
-            <button class="btn btn-secondary" id="btn-apply-definition" title="Apply to a set">
-              <i class="ph ph-arrow-right"></i> Apply to Set
+            <button class="btn btn-secondary" id="btn-apply-definition" title="Apply to keys">
+              <i class="ph ph-arrow-right"></i> Apply to Keys
             </button>
             <button class="btn btn-secondary btn-danger" id="btn-delete-definition" title="Delete definition">
               <i class="ph ph-trash"></i>
@@ -6293,7 +6293,7 @@ class EODataWorkbench {
 
     const menuItems = [
       { label: 'View Details', icon: 'ph-eye', action: () => this._showDefinitionDetail(definitionId) },
-      { label: 'Apply to Set...', icon: 'ph-arrow-right', action: () => this._showApplyDefinitionModal(definitionId) },
+      { label: 'Apply to Keys...', icon: 'ph-arrow-right', action: () => this._showApplyDefinitionModal(definitionId) },
       { divider: true },
       { label: 'Refresh from URI', icon: 'ph-arrows-clockwise', action: () => this._refreshDefinitionFromUri(definitionId), disabled: !definition.sourceUri },
       { label: 'Edit Definition', icon: 'ph-pencil', action: () => this._showEditDefinitionModal(definitionId) },
@@ -10971,7 +10971,7 @@ class EODataWorkbench {
   }
 
   /**
-   * Show modal to apply definition to a set
+   * Show modal to apply definition to keys
    */
   _showApplyDefinitionModal(definitionId) {
     const definition = this.definitions.find(d => d.id === definitionId);
@@ -10979,32 +10979,51 @@ class EODataWorkbench {
 
     const sets = this.sets.filter(s => s.status !== 'archived');
 
+    // Collect all unique keys from all sets
+    const keysMap = new Map(); // key name -> { sets: [setNames], count: number }
+    sets.forEach(set => {
+      const fields = set.fields || [];
+      fields.forEach(field => {
+        const keyName = field.name || field.id;
+        if (!keysMap.has(keyName)) {
+          keysMap.set(keyName, { sets: [], count: 0 });
+        }
+        const keyInfo = keysMap.get(keyName);
+        keyInfo.sets.push(set.name);
+        keyInfo.count += (set.records?.length || 0);
+      });
+    });
+
+    const keys = Array.from(keysMap.entries())
+      .map(([name, info]) => ({ name, sets: info.sets, count: info.count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     const html = `
       <div class="apply-definition-form">
         <p>Apply "<strong>${this._escapeHtml(definition.name)}</strong>" to:</p>
         <div class="apply-definition-sets">
-          ${sets.length > 0 ? sets.map(set => `
+          ${keys.length > 0 ? keys.map(key => `
             <label class="apply-definition-set-option">
-              <input type="radio" name="target-set" value="${set.id}">
-              <i class="${set.icon || 'ph ph-table'}"></i>
-              <span>${this._escapeHtml(set.name)}</span>
-              <span class="set-record-count">${set.records?.length || 0} records</span>
+              <input type="radio" name="target-key" value="${this._escapeHtml(key.name)}">
+              <i class="ph ph-key"></i>
+              <span>${this._escapeHtml(key.name)}</span>
+              <span class="set-record-count">${key.count} records</span>
             </label>
           `).join('') : `
-            <p class="no-sets-message">No sets available. Create a set first.</p>
+            <p class="no-sets-message">No keys available. Create a set with fields first.</p>
           `}
         </div>
       </div>
     `;
 
     this._showModal('Apply Definition', html, () => {
-      const selectedSet = document.querySelector('input[name="target-set"]:checked')?.value;
-      if (selectedSet) {
-        this._applyDefinitionToSet(definitionId, selectedSet);
+      const selectedKey = document.querySelector('input[name="target-key"]:checked')?.value;
+      if (selectedKey) {
+        this._applyDefinitionToKey(definitionId, selectedKey);
       }
     }, {
       confirmText: 'Apply',
-      confirmDisabled: sets.length === 0
+      confirmDisabled: keys.length === 0
     });
   }
 
@@ -11045,6 +11064,39 @@ class EODataWorkbench {
 
     this._saveData();
     this._showToast(`Applied ${mappedCount} term${mappedCount !== 1 ? 's' : ''} to "${set.name}"`, 'success');
+  }
+
+  /**
+   * Apply a definition to a key across all sets
+   */
+  _applyDefinitionToKey(definitionId, keyName) {
+    const definition = this.definitions.find(d => d.id === definitionId);
+    if (!definition) {
+      this._showToast('Definition not found', 'error');
+      return;
+    }
+
+    const sets = this.sets.filter(s => s.status !== 'archived');
+    let updatedCount = 0;
+
+    // Apply definition to all fields with matching key name across all sets
+    sets.forEach(set => {
+      const fields = set.fields || [];
+      fields.forEach(field => {
+        const fieldName = field.name || field.id;
+        if (fieldName === keyName) {
+          field.definition = {
+            definitionId: definition.id,
+            definitionName: definition.name,
+            uri: definition.sourceUri || definition.uri
+          };
+          updatedCount++;
+        }
+      });
+    });
+
+    this._saveData();
+    this._showToast(`Applied definition to "${keyName}" in ${updatedCount} set${updatedCount !== 1 ? 's' : ''}`, 'success');
   }
 
   // ==========================================================================
