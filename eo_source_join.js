@@ -625,7 +625,8 @@ class SourceStore {
         name: source.name,
         recordCount: source.recordCount,
         schema: source.schema,
-        origin: 'manual'
+        sourceType: 'null',  // CORE_ARCHITECTURE.md compliant
+        origin: 'manual'     // Legacy - kept for backward compatibility
       },
       grounding: {
         references: [],
@@ -886,7 +887,8 @@ class SetCreator {
         importedAt: null,
         provenance: source.provenance,
         sourceId: source.id,
-        origin: 'scratch'
+        sourceType: 'null',  // CORE_ARCHITECTURE.md compliant
+        origin: 'scratch'    // Legacy - how the set was created
       },
       createdAt: timestamp,
       updatedAt: timestamp
