@@ -89,6 +89,13 @@
             </div>
             <span class="new-action-shortcut">Ctrl+I</span>
           </button>
+          <button class="new-action-item" id="new-action-definition" data-action="definition">
+            <i class="ph ph-book-open"></i>
+            <div class="new-action-item-content">
+              <span class="new-action-item-label">New Definition</span>
+              <span class="new-action-item-hint">Vocabulary schemas from URI</span>
+            </div>
+          </button>
           <button class="new-action-item" id="new-action-set" data-action="set">
             <i class="ph ph-database"></i>
             <div class="new-action-item-content">
@@ -122,10 +129,19 @@
             </div>
             <span class="new-action-shortcut">Ctrl+Shift+F</span>
           </button>
+          <div class="new-action-divider"></div>
+          <button class="new-action-item" id="new-action-export" data-action="export">
+            <i class="ph ph-export"></i>
+            <div class="new-action-item-content">
+              <span class="new-action-item-label">New Export</span>
+              <span class="new-action-item-hint">Create immutable snapshot</span>
+            </div>
+          </button>
         </div>
       </div>
 
-      <!-- Five-Panel Navigation: Projects / Sources (GIVEN) / Sets (Schema) / Definitions (TERMS) / Exports (SNAPSHOT) -->
+      <!-- Five-Panel Navigation: Projects / Sources (GIVEN) / Definitions (TERMS) / Sets (SCHEMA) / Exports (SNAPSHOT) -->
+      <!-- Reordered for workflow: Organize → Input (Sources + Definitions) → Transform (Sets) → Output (Exports) -->
       <nav class="sidebar-nav" id="sidebar-nav">
         <!-- Panel 0: PROJECTS (Super Object - Organizational Container) -->
         <div class="nav-panel projects-panel" data-panel="projects">
@@ -138,10 +154,6 @@
             <div class="nav-panel-actions">
               <button class="nav-panel-action" id="btn-projects-view-toggle" title="Toggle view mode">
                 <i class="ph ph-list"></i>
-              </button>
-              <button class="nav-panel-action-labeled" id="btn-new-project" title="Create new project">
-                <i class="ph ph-plus"></i>
-                <span class="nav-panel-action-label">New</span>
               </button>
             </div>
           </div>
@@ -162,10 +174,6 @@
               <button class="nav-panel-action" id="btn-file-explorer" title="Open File Explorer">
                 <i class="ph ph-folder-open"></i>
               </button>
-              <button class="nav-panel-action-labeled" id="btn-import-data" title="Import data - Ctrl+I">
-                <i class="ph ph-plus"></i>
-                <span class="nav-panel-action-label">Import</span>
-              </button>
             </div>
           </div>
           <div class="nav-panel-content" id="sources-nav">
@@ -173,7 +181,28 @@
           </div>
         </div>
 
-        <!-- Panel 2: SETS (Data Collections) -->
+        <!-- Panel 2: DEFINITIONS (Column/Key Schemas from URIs) - Moved before Sets -->
+        <div class="nav-panel definitions-panel" data-panel="definitions">
+          <div class="nav-panel-header" data-collapsible="true">
+            <div class="nav-panel-title">
+              <i class="ph ph-caret-right nav-panel-collapse-icon"></i>
+              <i class="ph ph-book-open"></i>
+              <span>Definitions</span>
+              <span class="nav-panel-badge dictionary-badge">TERMS</span>
+              <span class="nav-panel-count-badge" id="definitions-count-badge" style="display: none;">0</span>
+            </div>
+            <div class="nav-panel-actions">
+              <button class="nav-panel-action" id="btn-definitions-explorer" title="Open Definitions Explorer">
+                <i class="ph ph-folder-open"></i>
+              </button>
+            </div>
+          </div>
+          <div class="nav-panel-content" id="definitions-nav">
+            <!-- Definition schemas rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Panel 3: SETS (Data Collections) -->
         <div class="nav-panel sets-panel" data-panel="sets">
           <div class="nav-panel-header">
             <div class="nav-panel-title">
@@ -185,10 +214,6 @@
               <button class="nav-panel-action" id="btn-sets-explorer" title="Open Sets Explorer">
                 <i class="ph ph-folder-open"></i>
               </button>
-              <button class="nav-panel-action-labeled" id="btn-new-set" title="Create new set - Ctrl+Shift+S">
-                <i class="ph ph-plus"></i>
-                <span class="nav-panel-action-label">New Set</span>
-              </button>
             </div>
           </div>
           <div class="nav-panel-content" id="sets-nav">
@@ -196,44 +221,19 @@
           </div>
         </div>
 
-        <!-- Panel 3: DEFINITIONS (Column/Key Schemas from URIs) -->
-        <div class="nav-panel definitions-panel" data-panel="definitions">
-          <div class="nav-panel-header">
-            <div class="nav-panel-title">
-              <i class="ph ph-book-open"></i>
-              <span>Definitions</span>
-              <span class="nav-panel-badge dictionary-badge">TERMS</span>
-            </div>
-            <div class="nav-panel-actions">
-              <button class="nav-panel-action" id="btn-definitions-explorer" title="Open Definitions Explorer">
-                <i class="ph ph-folder-open"></i>
-              </button>
-              <button class="nav-panel-action-labeled" id="btn-new-definition" title="Create new definition">
-                <i class="ph ph-plus"></i>
-                <span class="nav-panel-action-label">New</span>
-              </button>
-            </div>
-          </div>
-          <div class="nav-panel-content" id="definitions-nav">
-            <!-- Definition schemas rendered dynamically -->
-          </div>
-        </div>
-
         <!-- Panel 4: EXPORTS (Immutable Snapshot Captures) -->
         <div class="nav-panel exports-panel" data-panel="exports">
-          <div class="nav-panel-header">
+          <div class="nav-panel-header" data-collapsible="true">
             <div class="nav-panel-title">
+              <i class="ph ph-caret-right nav-panel-collapse-icon"></i>
               <i class="ph ph-export"></i>
               <span>Exports</span>
               <span class="nav-panel-badge export-badge">SNAPSHOT</span>
+              <span class="nav-panel-count-badge" id="exports-count-badge" style="display: none;">0</span>
             </div>
             <div class="nav-panel-actions">
               <button class="nav-panel-action" id="btn-exports-explorer" title="Open Exports Explorer">
                 <i class="ph ph-folder-open"></i>
-              </button>
-              <button class="nav-panel-action-labeled" id="btn-new-export" title="Create new export">
-                <i class="ph ph-plus"></i>
-                <span class="nav-panel-action-label">New</span>
               </button>
             </div>
           </div>
