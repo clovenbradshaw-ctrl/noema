@@ -197,6 +197,196 @@ class SourceStore {
   }
 
   /**
+   * Create an empty source for manual/scratch set creation
+   *
+   * When users create a "Set from scratch" (without importing data),
+   * we still create a backing source to maintain the invariant that
+   * all sets have a source. This source starts empty but can receive
+   * records via dual-write when records are added to the set.
+   *
+   * @param {Object} config
+   * @param {string} config.name - Source name (usually derived from set name)
+   * @param {Object[]} config.fields - Initial field definitions (optional)
+   * @param {string} config.actor - Who is creating this source
+   * @returns {Source}
+   */
+  createEmptySource(config) {
+    const {
+      name,
+      fields = [],
+      actor = 'user'
+    } = config;
+
+    const sourceId = this._generateSourceId();
+    const timestamp = new Date().toISOString();
+
+    // Build empty source with manual origin
+    const source = {
+      id: sourceId,
+      name,
+      type: 'source',
+
+      // Empty records (will be populated via dual-write)
+      records: Object.freeze([]),
+      recordCount: 0,
+
+      // Schema (can start empty or with provided fields)
+      schema: {
+        fields: fields.map(f => ({
+          name: f.name,
+          type: f.type || 'text',
+          sourceColumn: f.name
+        })),
+        inferenceDecisions: null
+      },
+
+      // File identity - null for manual sources
+      fileIdentity: {
+        originalFilename: null,
+        contentHash: null,
+        rawSize: null,
+        encoding: 'utf-8',
+        mimeType: null
+      },
+
+      // Origin distinguishes imported vs manual sources
+      origin: 'manual',
+
+      // Provenance for manual/scratch sources
+      provenance: this._normalizeSourceProvenance({
+        identity_kind: 'manual',
+        identity_scope: 'composite',
+        designation_operator: 'rec',
+        designation_mechanism: 'scratch_set_creation',
+        asserting_agent: actor,
+        authority_class: 'human',
+        boundary_type: '+1',
+        boundary_basis: 'set',
+        container_id: name,
+        container_stability: 'mutable', // Manual sources can grow
+        containment_level: 'root',
+        jurisdiction_present: false,
+        temporal_mode: '0', // Ongoing (not a snapshot)
+        temporal_justification: 'manual data entry',
+        fixation_event: 'source created for scratch set',
+        validity_window: 'indefinite',
+        reassessment_required: false
+      }, { name, timestamp }),
+
+      // No parsing decisions for manual sources
+      parsingDecisions: null,
+
+      // Timestamps
+      importedAt: null, // Not imported
+      createdAt: timestamp,
+
+      // Derived sets (will be populated when set is created)
+      derivedSetIds: [],
+
+      // Status
+      status: 'active'
+    };
+
+    // Freeze the source (immutable snapshot, but can be replaced)
+    Object.freeze(source);
+
+    // Store it
+    this.sources.set(sourceId, source);
+
+    // Create EO event for provenance
+    if (this.eventStore) {
+      this._createManualSourceEvent(source, actor);
+    }
+
+    // Notify listeners
+    this._notify('source_created', source);
+
+    return source;
+  }
+
+  /**
+   * Add a record to a source (for dual-write from set operations)
+   *
+   * When a record is added to a set that has a backing source,
+   * we also add the record to the source to maintain data consistency.
+   * The source is immutable, so we create a new source object.
+   *
+   * @param {string} sourceId - ID of the source to update
+   * @param {Object} record - Record values to add (raw values, not field IDs)
+   * @returns {Source} Updated source
+   */
+  addRecordToSource(sourceId, record) {
+    const source = this.sources.get(sourceId);
+    if (!source) return null;
+
+    // Only allow adding records to manual sources
+    if (source.origin !== 'manual') {
+      console.warn('Cannot add records to imported sources - they are immutable');
+      return source;
+    }
+
+    const timestamp = new Date().toISOString();
+
+    // Create updated source with new record
+    const updatedRecords = [...source.records, Object.freeze(record)];
+
+    const updatedSource = {
+      ...source,
+      records: Object.freeze(updatedRecords),
+      recordCount: updatedRecords.length,
+      updatedAt: timestamp
+    };
+    Object.freeze(updatedSource);
+
+    this.sources.set(sourceId, updatedSource);
+    this._notify('source_record_added', { source: updatedSource, record });
+
+    return updatedSource;
+  }
+
+  /**
+   * Update source schema when fields are added to a scratch set
+   *
+   * @param {string} sourceId - ID of the source to update
+   * @param {Object} field - Field definition to add
+   * @returns {Source} Updated source
+   */
+  addFieldToSource(sourceId, field) {
+    const source = this.sources.get(sourceId);
+    if (!source) return null;
+
+    // Only allow adding fields to manual sources
+    if (source.origin !== 'manual') {
+      console.warn('Cannot modify schema of imported sources');
+      return source;
+    }
+
+    const timestamp = new Date().toISOString();
+
+    // Add field to schema
+    const updatedFields = [...source.schema.fields, {
+      name: field.name,
+      type: field.type || 'text',
+      sourceColumn: field.name
+    }];
+
+    const updatedSource = {
+      ...source,
+      schema: {
+        ...source.schema,
+        fields: updatedFields
+      },
+      updatedAt: timestamp
+    };
+    Object.freeze(updatedSource);
+
+    this.sources.set(sourceId, updatedSource);
+    this._notify('source_schema_updated', updatedSource);
+
+    return updatedSource;
+  }
+
+  /**
    * Subscribe to source events
    */
   subscribe(listener) {
@@ -399,6 +589,36 @@ class SourceStore {
     this.eventStore.add(event);
   }
 
+  _createManualSourceEvent(source, actor) {
+    if (!this.eventStore?.add) return;
+
+    const event = {
+      id: `evt_${source.id}`,
+      epistemicType: 'given', // Still GIVEN - it's source data
+      category: 'source_created_manual',
+      timestamp: source.createdAt,
+      actor: actor || 'user',
+      payload: {
+        sourceId: source.id,
+        name: source.name,
+        recordCount: source.recordCount,
+        schema: source.schema,
+        origin: 'manual'
+      },
+      grounding: {
+        references: [],
+        kind: 'internal' // Manual sources don't have external grounding
+      },
+      frame: {
+        claim: `Created empty source for scratch set: ${source.name}`,
+        epistemicStatus: 'confirmed',
+        purpose: 'scratch_set_backing'
+      }
+    };
+
+    this.eventStore.add(event);
+  }
+
   _notify(eventType, data) {
     for (const listener of this._listeners) {
       try {
@@ -554,6 +774,134 @@ class SetCreator {
       sampleRecords: records.slice(0, 10),
       filters
     };
+  }
+
+  /**
+   * Create a Set "from scratch" - creates both an empty backing source and a set
+   *
+   * This maintains the invariant that all sets have a backing source.
+   * The source starts empty but receives records via dual-write when
+   * records are added to the set.
+   *
+   * @param {Object} config
+   * @param {string} config.setName - Name for the new Set
+   * @param {Object[]} config.fields - Initial field definitions (optional)
+   * @param {string} config.icon - Icon for the set (optional)
+   * @param {string} config.actor - Who is creating this (optional)
+   * @returns {Object} - { source, set, events }
+   */
+  createSetFromScratch(config) {
+    const {
+      setName,
+      fields = [{ name: 'Name', type: 'text' }],
+      icon = 'ph-table',
+      actor = 'user'
+    } = config;
+
+    const timestamp = new Date().toISOString();
+
+    // Step 1: Create empty backing source
+    const source = this.sourceStore.createEmptySource({
+      name: `${setName} (source)`,
+      fields: fields,
+      actor: actor
+    });
+
+    // Step 2: Build field definitions for the set
+    const setId = this._generateSetId();
+    const setFields = fields.map((field, index) => ({
+      id: this._generateFieldId(),
+      name: field.name,
+      type: field.type || 'text',
+      width: field.width || 200,
+      isPrimary: index === 0,
+      sourceColumn: field.name,
+      options: field.options || {}
+    }));
+
+    // Step 3: Build derivation (DIRECT strategy - created from scratch)
+    const derivation = {
+      strategy: 'direct',
+      parentSourceId: source.id,
+      constraint: {
+        selectedFields: fields.map(f => f.name),
+        filters: []
+      },
+      derivedBy: actor,
+      derivedAt: timestamp
+    };
+
+    // Step 4: Build the Set
+    const set = {
+      id: setId,
+      name: setName,
+      icon: icon,
+      fields: setFields,
+      records: [],
+      views: [
+        this._createDefaultView()
+      ],
+      derivation,
+      datasetProvenance: {
+        originalFilename: null,
+        importedAt: null,
+        provenance: source.provenance,
+        sourceId: source.id,
+        origin: 'scratch'
+      },
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    // Step 5: Create provenance events
+    const events = this._createScratchSetEvents(set, source, derivation, actor);
+
+    // Step 6: Register derived set with source
+    this.sourceStore.registerDerivedSet(source.id, setId);
+
+    return { source, set, events };
+  }
+
+  /**
+   * Create EO events for scratch set creation
+   */
+  _createScratchSetEvents(set, source, derivation, actor) {
+    const events = [];
+    const timestamp = new Date().toISOString();
+
+    // Event: Set created from scratch
+    events.push({
+      id: `evt_${set.id}`,
+      epistemicType: 'meant',
+      category: 'set_created_scratch',
+      timestamp,
+      actor: actor,
+      payload: {
+        setId: set.id,
+        name: set.name,
+        fieldCount: set.fields.length,
+        recordCount: 0,
+        backingSourceId: source.id
+      },
+      grounding: {
+        references: [
+          { eventId: `evt_${source.id}`, kind: 'structural' }
+        ],
+        derivation: {
+          strategy: 'direct',
+          sourceId: source.id,
+          origin: 'scratch'
+        },
+        kind: 'constructive' // User is constructing new data structure
+      },
+      frame: {
+        claim: `Created scratch set "${set.name}" with empty backing source`,
+        epistemicStatus: 'confirmed',
+        purpose: 'scratch_set_creation'
+      }
+    });
+
+    return events;
   }
 
   // --------------------------------------------------------------------------

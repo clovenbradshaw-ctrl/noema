@@ -18433,6 +18433,10 @@ class EODataWorkbench {
     const record = createRecord(set.id, values);
     set.records.push(record);
 
+    // Dual-write to backing source if set has a manual origin source
+    // This maintains the invariant that source contains all data
+    this._dualWriteRecordToSource(set, record);
+
     // Track for undo (unless skipping)
     if (!skipUndo) {
       this._pushUndoAction({
@@ -18463,6 +18467,51 @@ class EODataWorkbench {
     this._renderView();
 
     return record;
+  }
+
+  /**
+   * Dual-write a record to the backing source (if applicable)
+   *
+   * When a set has a backing source with origin='manual', we also
+   * write the record to the source to maintain data consistency.
+   * This ensures the source is always the canonical data layer.
+   *
+   * @param {Object} set - The set the record belongs to
+   * @param {Object} record - The record to write
+   */
+  _dualWriteRecordToSource(set, record) {
+    // Check if set has a backing source
+    const sourceId = set.datasetProvenance?.sourceId || set.derivation?.parentSourceId;
+    if (!sourceId) return;
+
+    // Ensure sourceStore is initialized
+    if (!this.sourceStore) {
+      this._initSourceStore();
+    }
+
+    // Get the source
+    const source = this.sourceStore.get(sourceId);
+    if (!source) return;
+
+    // Only dual-write to manual origin sources
+    if (source.origin !== 'manual') return;
+
+    // Convert record values from field IDs to field names
+    const sourceRecord = {};
+    for (const field of set.fields) {
+      const fieldValue = record.values[field.id];
+      if (fieldValue !== undefined) {
+        sourceRecord[field.sourceColumn || field.name] = fieldValue;
+      }
+    }
+
+    // Add metadata
+    sourceRecord._recordId = record.id;
+    sourceRecord._setId = set.id;
+    sourceRecord._createdAt = record.createdAt;
+
+    // Write to source
+    this.sourceStore.addRecordToSource(sourceId, sourceRecord);
   }
 
   deleteRecord(recordId, skipUndo = false) {
@@ -18595,6 +18644,9 @@ class EODataWorkbench {
 
     set.fields.push(field);
 
+    // Dual-write field to backing source if set has a manual origin source
+    this._dualWriteFieldToSource(set, field);
+
     // Record field history event
     this._recordFieldEvent(field.id, 'field.created', {
       name: name,
@@ -18605,6 +18657,40 @@ class EODataWorkbench {
     this._renderView();
 
     return field;
+  }
+
+  /**
+   * Dual-write a field to the backing source schema (if applicable)
+   *
+   * When a set has a backing source with origin='manual', we also
+   * add the field to the source schema to maintain consistency.
+   *
+   * @param {Object} set - The set the field belongs to
+   * @param {Object} field - The field to write
+   */
+  _dualWriteFieldToSource(set, field) {
+    // Check if set has a backing source
+    const sourceId = set.datasetProvenance?.sourceId || set.derivation?.parentSourceId;
+    if (!sourceId) return;
+
+    // Ensure sourceStore is initialized
+    if (!this.sourceStore) {
+      this._initSourceStore();
+    }
+
+    // Get the source
+    const source = this.sourceStore.get(sourceId);
+    if (!source) return;
+
+    // Only dual-write to manual origin sources
+    if (source.origin !== 'manual') return;
+
+    // Add field to source schema
+    this.sourceStore.addFieldToSource(sourceId, {
+      name: field.name,
+      type: field.type,
+      sourceColumn: field.name
+    });
   }
 
   _deleteField(fieldId) {
@@ -19741,11 +19827,35 @@ class EODataWorkbench {
       });
 
       if (selectedSourceIds.length === 0) {
-        // No sources selected - create empty set
-        const set = createSet(name);
-        this.sets.push(set);
-        this.currentSetId = set.id;
-        this.currentViewId = set.views[0]?.id;
+        // No sources selected - create scratch set with backing source
+        // This maintains the invariant that all sets have a backing source
+
+        // Ensure sourceStore is initialized
+        if (!this.sourceStore) {
+          this._initSourceStore();
+        }
+
+        // Get or create the SetCreator
+        if (!this._setCreator) {
+          this._setCreator = new SetCreator(this.sourceStore, this.eoApp?.eventStore);
+        }
+
+        // Create scratch set with backing source
+        const result = this._setCreator.createSetFromScratch({
+          setName: name,
+          fields: [{ name: 'Name', type: 'text' }],
+          actor: 'user'
+        });
+
+        // Add the backing source to our sources list
+        if (!this.sources) this.sources = [];
+        this.sources.push(result.source);
+
+        // Add the set
+        this.sets.push(result.set);
+        this.currentSetId = result.set.id;
+        this.currentViewId = result.set.views[0]?.id;
+
         this._saveData();
         this._renderSidebar();
         this._renderView();
