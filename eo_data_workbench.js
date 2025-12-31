@@ -1371,7 +1371,7 @@ class EODataWorkbench {
 
     // Explorer buttons for each panel
     document.getElementById('btn-sets-explorer')?.addEventListener('click', () => {
-      this._showSetsExplorer();
+      this._showSetsTableView();
     });
 
     document.getElementById('btn-definitions-explorer')?.addEventListener('click', () => {
@@ -1386,6 +1386,12 @@ class EODataWorkbench {
     const definitionsPanel = document.querySelector('.definitions-panel .nav-panel-title');
     definitionsPanel?.addEventListener('click', () => {
       this._showDefinitionsPanel();
+    });
+
+    // Sets panel title click - show sets table view
+    const setsPanel = document.querySelector('.sets-panel .nav-panel-title');
+    setsPanel?.addEventListener('click', () => {
+      this._showSetsTableView();
     });
 
     // New export button
@@ -8186,6 +8192,323 @@ class EODataWorkbench {
         : `${total} source${total !== 1 ? 's' : ''}`;
     }
   }
+
+  // ==========================================================================
+  // Sets Table View
+  // ==========================================================================
+
+  /**
+   * Show sets as a table view in the main content area
+   * Each row represents a set with its metadata
+   */
+  _showSetsTableView() {
+    const contentArea = this.elements.contentArea;
+    if (!contentArea) return;
+
+    // Get all sets filtered by project
+    const filteredSets = this._getProjectSets();
+
+    // Sort by creation date (newest first)
+    const sortedSets = filteredSets.sort((a, b) => {
+      if (!a.createdAt) return 1;
+      if (!b.createdAt) return -1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    // Mark that we're viewing the sets table
+    this.currentSetId = 'sets-table';
+    this.currentSourceId = null;
+    this.currentDefinitionId = null;
+    this.currentViewId = null;
+
+    // Clear set/view selection in sidebar
+    document.querySelectorAll('.set-item, .source-item').forEach(item => {
+      item.classList.remove('active');
+    });
+
+    // Update breadcrumb
+    this._updateBreadcrumb({
+      workspace: this._getCurrentWorkspaceName(),
+      set: 'Sets',
+      view: 'Table View'
+    });
+
+    // Build the sets table HTML
+    contentArea.innerHTML = `
+      <div class="sources-table-view sets-table-view">
+        <!-- Header -->
+        <div class="sources-table-header">
+          <div class="sources-table-title">
+            <div class="sources-table-icon">
+              <i class="ph ph-database"></i>
+            </div>
+            <div class="sources-table-info">
+              <h2>
+                <span>Sets</span>
+                <span class="schema-badge" style="margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--accent-purple, #8b5cf6); color: white;">
+                  SCHEMA
+                </span>
+              </h2>
+              <div class="sources-table-meta">
+                ${sortedSets.length} set${sortedSets.length !== 1 ? 's' : ''} in workspace
+              </div>
+            </div>
+          </div>
+          <div class="sources-table-actions">
+            <button class="source-action-btn" id="sets-table-new-btn" title="Create new set">
+              <i class="ph ph-plus"></i>
+              <span>New Set</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="sources-table-toolbar">
+          <div class="sources-table-search">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="sets-table-search" placeholder="Search sets...">
+          </div>
+          <div class="sources-table-count">
+            ${sortedSets.length} set${sortedSets.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="sources-table-container">
+          ${sortedSets.length > 0 ? `
+            <table class="sources-table sets-table">
+              <thead>
+                <tr>
+                  <th class="col-icon"></th>
+                  <th class="col-name">Name</th>
+                  <th class="col-operator">Operator</th>
+                  <th class="col-records">Records</th>
+                  <th class="col-fields">Fields</th>
+                  <th class="col-views">Views</th>
+                  <th class="col-lenses">Lenses</th>
+                  <th class="col-source">Source</th>
+                  <th class="col-created">Created</th>
+                  <th class="col-actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sortedSets.map(set => {
+                  const icon = set.icon || 'ph-database';
+                  const recordCount = set.records?.length || 0;
+                  const fieldCount = set.fields?.length || 0;
+                  const viewCount = set.views?.length || 0;
+                  const lensCount = set.lenses?.length || 0;
+                  const createdDate = set.createdAt ? new Date(set.createdAt).toLocaleDateString() : 'Unknown';
+
+                  // Get derivation info
+                  const derivation = this._getSetDerivationInfo(set);
+                  const operatorBadge = derivation.operator;
+                  const operatorBadges = {
+                    'SEG': { symbol: '｜', color: '#a855f7', title: 'Segmented (filtered)' },
+                    'CON': { symbol: '⋈', color: '#3b82f6', title: 'Connected (joined)' },
+                    'ALT': { symbol: '∿', color: '#22c55e', title: 'Alternated (transformed)' },
+                    'SYN': { symbol: '∨', color: '#f97316', title: 'Synthesized (merged)' },
+                    'INS': { symbol: '△', color: '#6b7280', title: 'Instantiated (created)' }
+                  };
+                  const opInfo = operatorBadges[operatorBadge] || operatorBadges['INS'];
+
+                  // Get source name
+                  const sourceName = this._getSetSourceName(set);
+
+                  return `
+                    <tr class="sources-table-row sets-table-row" data-set-id="${set.id}">
+                      <td class="col-icon">
+                        <i class="ph ${icon}"></i>
+                      </td>
+                      <td class="col-name">
+                        <span class="set-name-text">${this._escapeHtml(set.name)}</span>
+                      </td>
+                      <td class="col-operator">
+                        <span class="operator-badge" style="background: ${opInfo.color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600;" title="${opInfo.title}">
+                          ${operatorBadge}
+                        </span>
+                      </td>
+                      <td class="col-records">${recordCount.toLocaleString()}</td>
+                      <td class="col-fields">${fieldCount}</td>
+                      <td class="col-views">${viewCount}</td>
+                      <td class="col-lenses">${lensCount}</td>
+                      <td class="col-source" title="${this._escapeHtml(sourceName)}">
+                        ${this._escapeHtml(this._truncateText(sourceName, 20))}
+                      </td>
+                      <td class="col-created">${createdDate}</td>
+                      <td class="col-actions">
+                        <button class="sources-table-action-btn" data-action="view" title="View set">
+                          <i class="ph ph-eye"></i>
+                        </button>
+                        <button class="sources-table-action-btn" data-action="edit" title="Edit fields">
+                          <i class="ph ph-pencil"></i>
+                        </button>
+                        <button class="sources-table-action-btn" data-action="export" title="Export set">
+                          <i class="ph ph-export"></i>
+                        </button>
+                        <button class="sources-table-action-btn sources-table-delete-btn" data-action="delete" title="Delete set">
+                          <i class="ph ph-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          ` : `
+            <div class="sources-table-empty">
+              <i class="ph ph-database"></i>
+              <p>No sets created yet</p>
+              <button class="btn-primary" id="sets-table-first-create">
+                <i class="ph ph-plus"></i>
+                Create your first set
+              </button>
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+
+    // Attach event handlers
+    this._attachSetsTableHandlers(sortedSets);
+  }
+
+  /**
+   * Get the source name for a set (from provenance or source bindings)
+   */
+  _getSetSourceName(set) {
+    // Check dataset provenance first
+    if (set.datasetProvenance?.originalFilename) {
+      return set.datasetProvenance.originalFilename;
+    }
+
+    // Check source bindings
+    if (set.sourceBindings?.length > 0) {
+      const sourceId = set.sourceBindings[0].sourceId;
+      const source = this.sources.find(s => s.id === sourceId);
+      if (source) return source.name;
+    }
+
+    // Check derivation source items
+    if (set.derivation?.sourceItems?.length > 0) {
+      const firstSource = set.derivation.sourceItems[0];
+      if (firstSource.type === 'source') {
+        const source = this.sources.find(s => s.id === firstSource.id);
+        if (source) return source.name;
+      } else if (firstSource.type === 'set') {
+        const sourceSet = this.sets.find(s => s.id === firstSource.id);
+        if (sourceSet) return `← ${sourceSet.name}`;
+      }
+    }
+
+    return '(manual)';
+  }
+
+  /**
+   * Attach event handlers for sets table view
+   */
+  _attachSetsTableHandlers(sets) {
+    // New set button
+    document.getElementById('sets-table-new-btn')?.addEventListener('click', () => {
+      this._showNewSetModal();
+    });
+
+    // First create button (empty state)
+    document.getElementById('sets-table-first-create')?.addEventListener('click', () => {
+      this._showNewSetModal();
+    });
+
+    // Search
+    const searchInput = document.getElementById('sets-table-search');
+    searchInput?.addEventListener('input', (e) => {
+      this._filterSetsTable(e.target.value);
+    });
+
+    // Row click to view set
+    document.querySelectorAll('.sets-table-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        // Ignore if clicking action buttons
+        if (e.target.closest('.sources-table-action-btn')) return;
+
+        const setId = row.dataset.setId;
+        this._selectSet(setId);
+      });
+
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this._showSetContextMenu(e, row.dataset.setId);
+      });
+    });
+
+    // Action buttons
+    document.querySelectorAll('.sets-table-row .sources-table-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = btn.closest('.sets-table-row');
+        const setId = row.dataset.setId;
+        const action = btn.dataset.action;
+        const set = this.sets.find(s => s.id === setId);
+
+        if (!set) return;
+
+        switch (action) {
+          case 'view':
+            this._selectSet(setId);
+            break;
+          case 'edit':
+            this._selectSet(setId, 'fields');
+            break;
+          case 'export':
+            this._exportSet(setId);
+            break;
+          case 'delete':
+            this._deleteSet(setId);
+            break;
+        }
+      });
+    });
+  }
+
+  /**
+   * Filter sets table by search term
+   */
+  _filterSetsTable(searchTerm) {
+    const rows = document.querySelectorAll('.sets-table-row');
+    const term = searchTerm.toLowerCase().trim();
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const setId = row.dataset.setId;
+      const set = this.sets.find(s => s.id === setId);
+      if (!set) {
+        row.style.display = 'none';
+        return;
+      }
+
+      const searchFields = [
+        set.name,
+        this._getSetSourceName(set),
+        set.derivation?.strategy
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      const matches = !term || searchFields.includes(term);
+      row.style.display = matches ? '' : 'none';
+      if (matches) visibleCount++;
+    });
+
+    // Update count display
+    const countEl = document.querySelector('.sources-table-count');
+    if (countEl) {
+      const total = this._getProjectSets().length;
+      countEl.textContent = term
+        ? `${visibleCount} of ${total} set${total !== 1 ? 's' : ''}`
+        : `${total} set${total !== 1 ? 's' : ''}`;
+    }
+  }
+
+  // ==========================================================================
+  // Source Provenance Display
+  // ==========================================================================
 
   /**
    * Render source provenance items for display
