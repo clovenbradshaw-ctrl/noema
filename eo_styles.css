@@ -9318,8 +9318,11 @@ a:focus-visible,
 .browser-tab.active {
   background: var(--bg-primary);
   color: var(--text-primary);
-  border-color: var(--border-primary);
+  border-color: var(--primary-500);
+  border-top-width: 2px;
   z-index: 1;
+  font-weight: 600;
+  box-shadow: inset 0 2px 0 0 var(--primary-500);
 }
 
 .browser-tab.active::after {
@@ -9810,6 +9813,8 @@ html:not(.light-theme) .browser-tab:hover {
 
 html:not(.light-theme) .browser-tab.active {
   background: var(--bg-tertiary);
+  border-color: var(--primary-500);
+  box-shadow: inset 0 2px 0 0 var(--primary-500);
 }
 
 html:not(.light-theme) .browser-tab.active::after {
