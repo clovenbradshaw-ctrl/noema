@@ -2177,8 +2177,8 @@ class EODataWorkbench {
     // Initialize panel expansion state if not exists
     if (!this.panelExpansionState) {
       this.panelExpansionState = {
-        definitions: null,  // null = auto (collapsed when empty)
-        exports: null       // null = auto (collapsed when empty)
+        definitions: false,  // false = collapsed by default
+        exports: null        // null = auto (collapsed when empty)
       };
     }
 
@@ -2190,8 +2190,7 @@ class EODataWorkbench {
     const definitionsPanel = document.querySelector('.definitions-panel');
     if (definitionsPanel) {
       definitionsPanel.setAttribute('data-collapsible', 'true');
-      const isExpanded = this.panelExpansionState.definitions === true ||
-                        (this.panelExpansionState.definitions === null && definitionsCount > 0);
+      const isExpanded = this.panelExpansionState.definitions === true;
       definitionsPanel.classList.toggle('collapsed', !isExpanded);
       definitionsPanel.classList.toggle('expanded', isExpanded);
 
