@@ -1211,7 +1211,7 @@ html, body {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 13px;
@@ -1219,12 +1219,12 @@ html, body {
 }
 
 .set-item-header:hover {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
 }
 
 .set-item-header.active {
-  background: var(--bg-active);
+  background: rgba(59, 130, 246, 0.15);
   color: var(--text-primary);
 }
 
@@ -1248,6 +1248,7 @@ html, body {
 
 .set-item-icon {
   font-size: 14px;
+  color: var(--text-muted);
 }
 
 .set-item-name {
@@ -1260,9 +1261,8 @@ html, body {
 .set-item-count {
   font-size: 11px;
   color: var(--text-muted);
-  padding: 1px 6px;
-  background: var(--bg-tertiary);
-  border-radius: 10px;
+  padding: 0;
+  background: transparent;
 }
 
 .set-item-actions {
@@ -1298,11 +1298,13 @@ html, body {
   font-size: 12px;
 }
 
-/* Nested Views List */
+/* Nested Views List - File Explorer Style */
 .set-views-list {
   display: none;
-  padding-left: 24px;
+  padding-left: 12px;
   padding-bottom: 4px;
+  margin-left: 7px;
+  border-left: 1px solid var(--border-primary);
 }
 
 .set-item-container.expanded .set-views-list {
@@ -1313,28 +1315,40 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
-  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  border-radius: 3px;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
   transition: var(--transition-fast);
   position: relative;
+  margin-left: 4px;
+}
+
+/* Tree connection line */
+.set-view-item::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  width: 12px;
+  height: 1px;
+  background: var(--border-primary);
 }
 
 .set-view-item:hover {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
 }
 
 .set-view-item.active {
-  background: var(--primary-500);
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--primary-500);
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--text-primary);
 }
 
 .set-view-item i {
   font-size: 13px;
+  color: var(--text-muted);
 }
 
 .set-view-item span {
@@ -1344,19 +1358,17 @@ html, body {
   white-space: nowrap;
 }
 
-/* Record count badge for type-filtered views */
+/* Record count badge for type-filtered views - File Explorer Style */
 .view-item-count {
   font-size: 10px;
   color: var(--text-muted);
-  padding: 1px 5px;
-  background: var(--bg-tertiary);
-  border-radius: 8px;
+  padding: 0;
+  background: transparent;
   flex-shrink: 0;
 }
 
 .set-view-item.active .view-item-count {
-  background: rgba(59, 130, 246, 0.2);
-  color: var(--primary-500);
+  color: var(--text-secondary);
 }
 
 /* Type-filtered view styling (legacy) */
@@ -1376,38 +1388,33 @@ html, body {
   transform: translateY(-50%);
 }
 
-/* Record Type View styling (distinct from regular views) */
+/* Record Type View styling - File Explorer Style */
 .set-view-item.record-type-view {
-  padding-left: 10px;
-  border-left: 2px solid var(--primary-500);
-  margin-left: 4px;
-  background: rgba(99, 102, 241, 0.05);
+  /* No special styling - keep consistent with other items */
 }
 
 .set-view-item.record-type-view:hover {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .set-view-item.record-type-view.active {
-  background: rgba(99, 102, 241, 0.15);
-  border-left-color: var(--primary-400);
+  background: rgba(59, 130, 246, 0.12);
 }
 
-/* Record type badge */
+/* View type badge - File Explorer Style (subtle text) */
 .view-type-badge {
   font-size: 9px;
-  padding: 1px 4px;
-  background: var(--primary-500);
-  color: white;
-  border-radius: 3px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.3px;
   flex-shrink: 0;
 }
 
 .set-view-item.active .view-type-badge {
-  background: var(--primary-400);
+  color: var(--text-secondary);
 }
 
 /* Regular view styling */
@@ -1415,9 +1422,9 @@ html, body {
   /* Default styling */
 }
 
-/* Fields item styling (at top of views list) */
+/* Fields item styling - File Explorer Style */
 .set-view-item.set-fields-item {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-primary);
   margin-bottom: 4px;
   padding-bottom: 6px;
   font-weight: 500;
@@ -1425,22 +1432,22 @@ html, body {
 }
 
 .set-view-item.set-fields-item:hover {
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
 }
 
 .set-view-item.set-fields-item.active {
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--success-500);
-  border-color: var(--success-500);
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--text-primary);
 }
 
 .set-view-item.set-fields-item i {
-  color: var(--success-500);
+  color: var(--text-muted);
 }
 
-/* Detail item styling (at top of views list) */
+/* Detail item styling - File Explorer Style */
 .set-view-item.set-detail-item {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-primary);
   margin-bottom: 2px;
   padding-bottom: 6px;
   font-weight: 500;
@@ -1448,17 +1455,17 @@ html, body {
 }
 
 .set-view-item.set-detail-item:hover {
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary);
 }
 
 .set-view-item.set-detail-item.active {
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--primary-500);
-  border-color: var(--primary-500);
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--text-primary);
 }
 
 .set-view-item.set-detail-item i {
-  color: var(--primary-500);
+  color: var(--text-muted);
 }
 
 /* ========================================
@@ -10098,9 +10105,10 @@ a:focus-visible,
   font-weight: 400 !important;
 }
 
-.fs-layer-item.given i { color: var(--info-500); }
-.fs-layer-item.meant i { color: var(--success-500); }
-.fs-layer-item.lens i { color: var(--warning-500); }
+/* File Explorer Style - Monochrome layer icons */
+.fs-layer-item.given i { color: var(--text-muted); }
+.fs-layer-item.meant i { color: var(--text-muted); }
+.fs-layer-item.lens i { color: var(--text-muted); }
 .fs-layer-item.entity i { color: var(--text-muted); }
 
 /* Tree Nodes */
@@ -10116,35 +10124,32 @@ a:focus-visible,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  border-radius: 3px;
   cursor: pointer;
   transition: var(--transition-fast);
   font-size: 13px;
 }
 
 .fs-node-header:hover {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.06);
 }
 
-/* Level-based styling */
+/* Level-based styling - File Explorer Style (indentation only) */
 .fs-node-header[data-level="given"] {
-  border-left: 3px solid var(--info-500);
+  /* No colored border */
 }
 
 .fs-node-header[data-level="meant"] {
-  border-left: 3px solid var(--success-500);
-  margin-left: 12px;
+  margin-left: 16px;
 }
 
 .fs-node-header[data-level="lens"] {
-  border-left: 3px solid var(--warning-500);
-  margin-left: 24px;
+  margin-left: 32px;
 }
 
 .fs-node-header[data-level="entity"] {
-  border-left: 3px solid var(--border-secondary);
-  margin-left: 24px;
+  margin-left: 32px;
 }
 
 .fs-toggle {
@@ -10169,9 +10174,10 @@ a:focus-visible,
   flex-shrink: 0;
 }
 
-.source-node > .fs-node-header .fs-icon { color: var(--info-500); }
-.set-node > .fs-node-header .fs-icon { color: var(--success-500); }
-.view-node > .fs-node-header .fs-icon { color: var(--warning-500); }
+/* File Explorer Style - Monochrome icons */
+.source-node > .fs-node-header .fs-icon { color: var(--text-muted); }
+.set-node > .fs-node-header .fs-icon { color: var(--text-muted); }
+.view-node > .fs-node-header .fs-icon { color: var(--text-muted); }
 .records-node > .fs-node-header .fs-icon { color: var(--text-muted); }
 .record-node > .fs-node-header .fs-icon { color: var(--text-muted); }
 
@@ -10190,18 +10196,16 @@ a:focus-visible,
 .fs-node-count {
   font-size: 11px;
   color: var(--text-muted);
-  background: var(--bg-tertiary);
-  padding: 2px 6px;
-  border-radius: 8px;
+  background: transparent;
+  padding: 0;
   flex-shrink: 0;
 }
 
 .fs-node-type {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
-  background: var(--bg-tertiary);
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: transparent;
+  padding: 0;
   text-transform: uppercase;
   flex-shrink: 0;
 }
@@ -10214,26 +10218,21 @@ a:focus-visible,
   display: block;
 }
 
-/* Active state */
+/* Active state - File Explorer Style (subtle selection) */
 .fs-node.active > .fs-node-header {
-  background: var(--primary-500);
-  color: white;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--text-primary);
 }
 
 .fs-node.active > .fs-node-header .fs-icon,
 .fs-node.active > .fs-node-header .fs-node-meta,
 .fs-node.active > .fs-node-header .fs-node-count,
 .fs-node.active > .fs-node-header .fs-node-type {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.fs-node.active > .fs-node-header .fs-node-count,
-.fs-node.active > .fs-node-header .fs-node-type {
-  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
 }
 
 .view-node.active > .fs-node-header {
-  background: var(--warning-500);
+  background: rgba(59, 130, 246, 0.15);
 }
 
 /* Selected state (keyboard/click selection, different from active/open) */
