@@ -1043,11 +1043,6 @@ class EODataWorkbench {
     document.getElementById('activity-filter-type')?.addEventListener('change', () => this._renderActivityPanel());
     document.getElementById('activity-filter-action')?.addEventListener('change', () => this._renderActivityPanel());
 
-    // Floating Add-Field button
-    document.getElementById('add-field-fab')?.addEventListener('click', (e) => {
-      this._showAddFieldMenu(e.target.closest('button'));
-    });
-
     // Sync panel
     document.getElementById('nav-sync')?.addEventListener('click', () => this._showSyncPanel());
     document.getElementById('sync-panel-close')?.addEventListener('click', () => this._hideSyncPanel());
@@ -7089,10 +7084,6 @@ class EODataWorkbench {
     this.currentSourceId = null;
     this.currentSetId = null;
 
-    // Hide add-field buttons - they don't apply in file explorer
-    const addFieldFab = document.getElementById('add-field-fab');
-    if (addFieldFab) addFieldFab.style.display = 'none';
-
     // Update breadcrumb
     this._updateBreadcrumb('File Explorer', 'ph-folder-open');
 
@@ -11770,14 +11761,6 @@ class EODataWorkbench {
    * Actually perform the view rendering (called after loading indicator is shown)
    */
   _doRenderView(view) {
-    // Show/hide the floating Add-Field button based on view type
-    // Only show FAB for table views where adding fields makes sense
-    const addFieldFab = document.getElementById('add-field-fab');
-    if (addFieldFab) {
-      const isTableView = view.type === 'table' || !view.type;
-      addFieldFab.style.display = isTableView ? 'flex' : 'none';
-    }
-
     switch (view.type) {
       case 'table':
         this._renderTableView();
