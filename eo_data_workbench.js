@@ -704,7 +704,16 @@ class EODataWorkbench {
   }
 
   _createDefaultSet() {
-    const set = createSet('Projects');
+    // EO-LAKE PRINCIPLE: SETs exist on the interpretation layer.
+    // No real data exists in SETs - it all references data that originates in source.
+    // Even sample/demo data must have a backing source.
+
+    const timestamp = new Date().toISOString();
+
+    // Initialize sourceStore if needed
+    if (!this.sourceStore) {
+      this._initSourceStore();
+    }
 
     // Create status field with choices
     const statusChoices = [
@@ -730,7 +739,162 @@ class EODataWorkbench {
       { id: generateId(), name: 'Testing', color: 'teal' }
     ];
 
-    // Add fields - index 0 is Name (primary), created by createSet
+    // Helper to get date string offset from today
+    const getDate = (daysOffset) => {
+      const date = new Date();
+      date.setDate(date.getDate() + daysOffset);
+      return date.toISOString().split('T')[0];
+    };
+
+    // Sample project data - this is the GIVEN data that will live in the source
+    const projectData = [
+      {
+        Name: 'User authentication system',
+        Status: statusChoices[2].name, // Review
+        Priority: priorityChoices[2].name, // High
+        Category: categoryChoices[0].name, // Development
+        'Due Date': getDate(3),
+        'Estimate (hrs)': 16,
+        Completed: false,
+        Notes: 'Implement OAuth2 with Google and GitHub providers. Include password reset flow.'
+      },
+      {
+        Name: 'Dashboard redesign',
+        Status: statusChoices[1].name, // In Progress
+        Priority: priorityChoices[1].name, // Medium
+        Category: categoryChoices[1].name, // Design
+        'Due Date': getDate(7),
+        'Estimate (hrs)': 24,
+        Completed: false,
+        Notes: 'New layout with improved data visualization. Focus on mobile responsiveness.'
+      },
+      {
+        Name: 'API documentation',
+        Status: statusChoices[3].name, // Complete
+        Priority: priorityChoices[0].name, // Low
+        Category: categoryChoices[2].name, // Documentation
+        'Due Date': getDate(-2),
+        'Estimate (hrs)': 8,
+        Completed: true,
+        Notes: 'OpenAPI spec and usage examples for all public endpoints.'
+      },
+      {
+        Name: 'Performance optimization',
+        Status: statusChoices[0].name, // Backlog
+        Priority: priorityChoices[3].name, // Urgent
+        Category: categoryChoices[0].name, // Development
+        'Due Date': getDate(14),
+        'Estimate (hrs)': 32,
+        Completed: false,
+        Notes: 'Database query optimization and caching layer implementation.'
+      },
+      {
+        Name: 'Integration tests',
+        Status: statusChoices[1].name, // In Progress
+        Priority: priorityChoices[2].name, // High
+        Category: categoryChoices[3].name, // Testing
+        'Due Date': getDate(5),
+        'Estimate (hrs)': 12,
+        Completed: false,
+        Notes: 'End-to-end tests for critical user flows.'
+      },
+      {
+        Name: 'Mobile app wireframes',
+        Status: statusChoices[3].name, // Complete
+        Priority: priorityChoices[1].name, // Medium
+        Category: categoryChoices[1].name, // Design
+        'Due Date': getDate(-5),
+        'Estimate (hrs)': 6,
+        Completed: true,
+        Notes: 'Initial wireframes approved by stakeholders.'
+      },
+      {
+        Name: 'Database migration',
+        Status: statusChoices[0].name, // Backlog
+        Priority: priorityChoices[1].name, // Medium
+        Category: categoryChoices[0].name, // Development
+        'Due Date': getDate(21),
+        'Estimate (hrs)': 20,
+        Completed: false,
+        Notes: 'Migrate from PostgreSQL 12 to 16. Plan for zero-downtime deployment.'
+      },
+      {
+        Name: 'User onboarding flow',
+        Status: statusChoices[2].name, // Review
+        Priority: priorityChoices[2].name, // High
+        Category: categoryChoices[1].name, // Design
+        'Due Date': getDate(2),
+        'Estimate (hrs)': 10,
+        Completed: false,
+        Notes: 'Interactive tutorial and tooltips for new users.'
+      }
+    ];
+
+    // Step 1: Create the backing SOURCE (GIVEN layer) with sample data
+    const sourceId = generateId();
+    const sourceFields = [
+      { name: 'Name', type: 'text' },
+      { name: 'Status', type: 'text' },
+      { name: 'Priority', type: 'text' },
+      { name: 'Category', type: 'text' },
+      { name: 'Due Date', type: 'date' },
+      { name: 'Estimate (hrs)', type: 'number' },
+      { name: 'Completed', type: 'boolean' },
+      { name: 'Notes', type: 'text' }
+    ];
+
+    const source = {
+      id: sourceId,
+      name: 'Projects (source)',
+      type: 'source',
+      origin: 'sample', // Sample data origin
+      records: projectData, // Raw GIVEN data lives here
+      recordCount: projectData.length,
+      schema: {
+        fields: sourceFields,
+        inferenceDecisions: null
+      },
+      fileIdentity: {
+        originalFilename: null,
+        contentHash: null,
+        rawSize: null,
+        encoding: 'utf-8',
+        mimeType: 'application/json'
+      },
+      provenance: {
+        identity_kind: 'sample',
+        identity_scope: 'composite',
+        designation_operator: 'rec',
+        designation_mechanism: 'sample_data_creation',
+        asserting_agent: 'system',
+        authority_class: 'system',
+        boundary_type: '+1',
+        boundary_basis: 'set',
+        container_id: 'Projects',
+        container_stability: 'stable',
+        containment_level: 'root',
+        jurisdiction_present: false,
+        temporal_mode: '0',
+        temporal_justification: 'sample data for demonstration',
+        fixation_event: 'default set initialization',
+        validity_window: 'indefinite',
+        reassessment_required: false
+      },
+      derivedSetIds: [],
+      status: 'active',
+      importedAt: timestamp,
+      createdAt: timestamp
+    };
+
+    // Add source to sourceStore and sources array
+    this.sourceStore.sources.set(sourceId, source);
+    if (!this.sources) this.sources = [];
+    this.sources.push(source);
+
+    // Step 2: Create the SET (MEANT layer) that interprets the source
+    const set = createSet('Projects');
+
+    // Create fields with choices - these are the INTERPRETED field definitions
     const statusField = createField('Status', FieldTypes.SELECT, { choices: statusChoices });
     const priorityField = createField('Priority', FieldTypes.SELECT, { choices: priorityChoices });
     const categoryField = createField('Category', FieldTypes.SELECT, { choices: categoryChoices });
@@ -738,6 +902,17 @@ class EODataWorkbench {
     const estimateField = createField('Estimate (hrs)', FieldTypes.NUMBER, { precision: 1 });
     const completedField = createField('Completed', FieldTypes.CHECKBOX);
     const notesField = createField('Notes', FieldTypes.LONG_TEXT);
+
+    // Add sourceColumn mapping to each field for grounding
+    const nameField = set.fields[0];
+    nameField.sourceColumn = 'Name';
+    statusField.sourceColumn = 'Status';
+    priorityField.sourceColumn = 'Priority';
+    categoryField.sourceColumn = 'Category';
+    dueDateField.sourceColumn = 'Due Date';
+    estimateField.sourceColumn = 'Estimate (hrs)';
+    completedField.sourceColumn = 'Completed';
+    notesField.sourceColumn = 'Notes';
 
     set.fields.push(
       statusField,
@@ -749,119 +924,58 @@ class EODataWorkbench {
       notesField
     );
 
-    // Get field references for record creation
-    const nameField = set.fields[0];
-
-    // Helper to get date string offset from today
-    const getDate = (daysOffset) => {
-      const date = new Date();
-      date.setDate(date.getDate() + daysOffset);
-      return date.toISOString().split('T')[0];
+    // Helper to find choice ID by name
+    const findChoiceId = (choices, name) => {
+      const choice = choices.find(c => c.name === name);
+      return choice ? choice.id : null;
     };
 
-    // Sample project data
-    const projectData = [
-      {
-        name: 'User authentication system',
-        status: statusChoices[2].id, // Review
-        priority: priorityChoices[2].id, // High
-        category: categoryChoices[0].id, // Development
-        dueDate: getDate(3),
-        estimate: 16,
-        completed: false,
-        notes: 'Implement OAuth2 with Google and GitHub providers. Include password reset flow.'
-      },
-      {
-        name: 'Dashboard redesign',
-        status: statusChoices[1].id, // In Progress
-        priority: priorityChoices[1].id, // Medium
-        category: categoryChoices[1].id, // Design
-        dueDate: getDate(7),
-        estimate: 24,
-        completed: false,
-        notes: 'New layout with improved data visualization. Focus on mobile responsiveness.'
-      },
-      {
-        name: 'API documentation',
-        status: statusChoices[3].id, // Complete
-        priority: priorityChoices[0].id, // Low
-        category: categoryChoices[2].id, // Documentation
-        dueDate: getDate(-2),
-        estimate: 8,
-        completed: true,
-        notes: 'OpenAPI spec and usage examples for all public endpoints.'
-      },
-      {
-        name: 'Performance optimization',
-        status: statusChoices[0].id, // Backlog
-        priority: priorityChoices[3].id, // Urgent
-        category: categoryChoices[0].id, // Development
-        dueDate: getDate(14),
-        estimate: 32,
-        completed: false,
-        notes: 'Database query optimization and caching layer implementation.'
-      },
-      {
-        name: 'Integration tests',
-        status: statusChoices[1].id, // In Progress
-        priority: priorityChoices[2].id, // High
-        category: categoryChoices[3].id, // Testing
-        dueDate: getDate(5),
-        estimate: 12,
-        completed: false,
-        notes: 'End-to-end tests for critical user flows.'
-      },
-      {
-        name: 'Mobile app wireframes',
-        status: statusChoices[3].id, // Complete
-        priority: priorityChoices[1].id, // Medium
-        category: categoryChoices[1].id, // Design
-        dueDate: getDate(-5),
-        estimate: 6,
-        completed: true,
-        notes: 'Initial wireframes approved by stakeholders.'
-      },
-      {
-        name: 'Database migration',
-        status: statusChoices[0].id, // Backlog
-        priority: priorityChoices[1].id, // Medium
-        category: categoryChoices[0].id, // Development
-        dueDate: getDate(21),
-        estimate: 20,
-        completed: false,
-        notes: 'Migrate from PostgreSQL 12 to 16. Plan for zero-downtime deployment.'
-      },
-      {
-        name: 'User onboarding flow',
-        status: statusChoices[2].id, // Review
-        priority: priorityChoices[2].id, // High
-        category: categoryChoices[1].id, // Design
-        dueDate: getDate(2),
-        estimate: 10,
-        completed: false,
-        notes: 'Interactive tutorial and tooltips for new users.'
-      }
-    ];
-
-    // Create records from project data
-    projectData.forEach(project => {
+    // Step 3: Create records that REFERENCE source data (not duplicate it)
+    projectData.forEach((project, index) => {
       const values = {
-        [nameField.id]: project.name,
-        [statusField.id]: project.status,
-        [priorityField.id]: project.priority,
-        [categoryField.id]: project.category,
-        [dueDateField.id]: project.dueDate,
-        [estimateField.id]: project.estimate,
-        [completedField.id]: project.completed,
-        [notesField.id]: project.notes
+        [nameField.id]: project.Name,
+        [statusField.id]: findChoiceId(statusChoices, project.Status),
+        [priorityField.id]: findChoiceId(priorityChoices, project.Priority),
+        [categoryField.id]: findChoiceId(categoryChoices, project.Category),
+        [dueDateField.id]: project['Due Date'],
+        [estimateField.id]: project['Estimate (hrs)'],
+        [completedField.id]: project.Completed,
+        [notesField.id]: project.Notes
       };
-      set.records.push(createRecord(set.id, values));
+      const record = createRecord(set.id, values);
+      // Link record back to source via _sourceIndex
+      record._sourceIndex = index;
+      record._sourceId = sourceId;
+      set.records.push(record);
     });
+
+    // Step 4: Set up derivation and provenance linking set to source
+    set.derivation = {
+      strategy: 'direct',
+      parentSourceId: sourceId,
+      constraint: {
+        selectedFields: sourceFields.map(f => f.name),
+        filters: []
+      },
+      derivedBy: 'system',
+      derivedAt: timestamp
+    };
+
+    set.datasetProvenance = {
+      originalFilename: null,
+      importedAt: timestamp,
+      sourceId: sourceId,
+      origin: 'sample',
+      provenance: source.provenance
+    };
 
     // Add a Kanban view for status-based workflow
     set.views.push(createView('Kanban', 'kanban', {
       groupByFieldId: statusField.id
     }));
+
+    // Register set with source
+    source.derivedSetIds.push(set.id);
 
     this.sets.push(set);
     this._saveData();
