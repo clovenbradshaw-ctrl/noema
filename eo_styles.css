@@ -582,6 +582,51 @@ html, body {
   color: rgb(251, 146, 60);
 }
 
+/* Project context indicator - shows which project items belong to */
+.nav-panel-project-context {
+  display: flex;
+  padding: 4px 12px 8px 12px;
+  font-size: 11px;
+}
+
+.project-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  border-left: 3px solid var(--accent);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.project-context-badge.all-items {
+  border-left-color: var(--text-muted);
+}
+
+.project-context-badge i {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.project-context-name {
+  font-weight: 500;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-context-count {
+  background: var(--bg-secondary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 /* Projects panel styles */
 .projects-panel {
   border-bottom: 1px solid var(--border-primary);

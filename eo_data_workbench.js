@@ -1902,10 +1902,15 @@ class EODataWorkbench {
     const container = document.getElementById('sets-nav');
     if (!container) return;
 
-    // Filter sets by tag if filter is active
-    let filteredSets = this.sets;
+    // Filter sets by project first, then by tag
+    let filteredSets = this._getProjectSets();
+    const totalSets = this.sets.length;
+
+    // Update panel header with project context
+    this._updatePanelProjectContext('sets', filteredSets.length, totalSets);
+
     if (this.currentSetTagFilter) {
-      filteredSets = this.sets.filter(set =>
+      filteredSets = filteredSets.filter(set =>
         set.tags && set.tags.includes(this.currentSetTagFilter)
       );
     }
@@ -2966,8 +2971,9 @@ class EODataWorkbench {
       }
     };
 
-    // Add to sets
+    // Add to sets and project
     this.sets.push(newSet);
+    this._addSetToProject(newSet.id);
     this.currentSetId = newSet.id;
     this.currentViewId = newSet.views[0]?.id;
     this.lastViewPerSet[newSet.id] = this.currentViewId;
@@ -3764,6 +3770,7 @@ class EODataWorkbench {
     };
 
     this.sets.push(newSet);
+    this._addSetToProject(newSet.id);
     this._saveData();
     this._renderSidebar();
     this._selectSet(newSet.id);
@@ -4240,6 +4247,69 @@ class EODataWorkbench {
   }
 
   /**
+   * Update panel header with project context indicator
+   * Shows "in [Project Name]" or item count when filtering by project
+   */
+  _updatePanelProjectContext(panelType, filteredCount, totalCount) {
+    const panelMap = {
+      sources: '.sources-panel',
+      sets: '.sets-panel',
+      definitions: '.definitions-panel',
+      exports: '.exports-panel'
+    };
+
+    const selector = panelMap[panelType];
+    if (!selector) return;
+
+    const panel = document.querySelector(selector);
+    if (!panel) return;
+
+    // Find or create the project context element
+    let contextEl = panel.querySelector('.nav-panel-project-context');
+    if (!contextEl) {
+      const header = panel.querySelector('.nav-panel-header');
+      if (header) {
+        contextEl = document.createElement('div');
+        contextEl.className = 'nav-panel-project-context';
+        header.after(contextEl);
+      }
+    }
+
+    if (!contextEl) return;
+
+    // Show context when a project is selected
+    if (this.currentProjectId) {
+      const project = this.projects.find(p => p.id === this.currentProjectId);
+      if (project) {
+        contextEl.innerHTML = `
+          <span class="project-context-badge" style="border-left-color: ${project.color || '#3B82F6'}">
+            <i class="ph ph-folder-simple"></i>
+            <span class="project-context-name">${this._escapeHtml(this._truncateName(project.name, 15))}</span>
+            <span class="project-context-count">${filteredCount}</span>
+          </span>
+        `;
+        contextEl.style.display = 'flex';
+      } else {
+        contextEl.style.display = 'none';
+      }
+    } else {
+      // Show "All Items" mode with total count
+      if (totalCount > 0) {
+        contextEl.innerHTML = `
+          <span class="project-context-badge all-items">
+            <i class="ph ph-stack"></i>
+            <span class="project-context-name">All Items</span>
+            <span class="project-context-count">${totalCount}</span>
+          </span>
+        `;
+        contextEl.style.display = 'flex';
+      } else {
+        contextEl.style.display = 'none';
+      }
+    }
+  }
+
+  /**
    * Show project context menu
    */
   _showProjectContextMenu(e, projectId) {
@@ -4465,11 +4535,53 @@ class EODataWorkbench {
   }
 
   /**
+   * Get or create a default project for new items
+   * If no project is selected, uses the first project or creates a default one
+   */
+  _getOrCreateDefaultProject() {
+    // If a project is already selected, use it
+    if (this.currentProjectId) {
+      const project = this.projects.find(p => p.id === this.currentProjectId);
+      if (project) return project;
+    }
+
+    // If no projects exist, create a default one
+    if (!this.projects || this.projects.length === 0) {
+      const defaultProject = this._createProject({
+        name: 'My Project',
+        description: 'Default project for organizing data',
+        color: '#3B82F6'
+      });
+      return defaultProject;
+    }
+
+    // Otherwise, return the first active project
+    const activeProjects = this.projects.filter(p => p.status !== 'archived');
+    if (activeProjects.length > 0) {
+      return activeProjects[0];
+    }
+
+    // All projects are archived - create a new default
+    return this._createProject({
+      name: 'My Project',
+      description: 'Default project for organizing data',
+      color: '#3B82F6'
+    });
+  }
+
+  /**
    * Add a source to the current project (or a specific project)
+   * Creates a default project if none exists
    */
   _addSourceToProject(sourceId, projectId = null) {
-    const targetProjectId = projectId || this.currentProjectId;
-    if (!targetProjectId) return;
+    let targetProjectId = projectId || this.currentProjectId;
+
+    // If no project selected, get or create a default
+    if (!targetProjectId) {
+      const defaultProject = this._getOrCreateDefaultProject();
+      targetProjectId = defaultProject.id;
+      this.currentProjectId = targetProjectId;
+    }
 
     const project = this.projects.find(p => p.id === targetProjectId);
     if (!project) return;
@@ -4485,10 +4597,17 @@ class EODataWorkbench {
 
   /**
    * Add a set to the current project (or a specific project)
+   * Creates a default project if none exists
    */
   _addSetToProject(setId, projectId = null) {
-    const targetProjectId = projectId || this.currentProjectId;
-    if (!targetProjectId) return;
+    let targetProjectId = projectId || this.currentProjectId;
+
+    // If no project selected, get or create a default
+    if (!targetProjectId) {
+      const defaultProject = this._getOrCreateDefaultProject();
+      targetProjectId = defaultProject.id;
+      this.currentProjectId = targetProjectId;
+    }
 
     const project = this.projects.find(p => p.id === targetProjectId);
     if (!project) return;
@@ -4504,10 +4623,17 @@ class EODataWorkbench {
 
   /**
    * Add a definition to the current project (or a specific project)
+   * Creates a default project if none exists
    */
   _addDefinitionToProject(definitionId, projectId = null) {
-    const targetProjectId = projectId || this.currentProjectId;
-    if (!targetProjectId) return;
+    let targetProjectId = projectId || this.currentProjectId;
+
+    // If no project selected, get or create a default
+    if (!targetProjectId) {
+      const defaultProject = this._getOrCreateDefaultProject();
+      targetProjectId = defaultProject.id;
+      this.currentProjectId = targetProjectId;
+    }
 
     const project = this.projects.find(p => p.id === targetProjectId);
     if (!project) return;
@@ -4515,6 +4641,32 @@ class EODataWorkbench {
     if (!project.definitionIds) project.definitionIds = [];
     if (!project.definitionIds.includes(definitionId)) {
       project.definitionIds.push(definitionId);
+      project.updatedAt = new Date().toISOString();
+      this._renderProjectsNav();
+      this._saveData();
+    }
+  }
+
+  /**
+   * Add an export to the current project (or a specific project)
+   * Creates a default project if none exists
+   */
+  _addExportToProject(exportId, projectId = null) {
+    let targetProjectId = projectId || this.currentProjectId;
+
+    // If no project selected, get or create a default
+    if (!targetProjectId) {
+      const defaultProject = this._getOrCreateDefaultProject();
+      targetProjectId = defaultProject.id;
+      this.currentProjectId = targetProjectId;
+    }
+
+    const project = this.projects.find(p => p.id === targetProjectId);
+    if (!project) return;
+
+    if (!project.exportIds) project.exportIds = [];
+    if (!project.exportIds.includes(exportId)) {
+      project.exportIds.push(exportId);
       project.updatedAt = new Date().toISOString();
       this._renderProjectsNav();
       this._saveData();
@@ -4541,12 +4693,17 @@ class EODataWorkbench {
       this.sources = [];
     }
 
-    // Get all active sources from the sources array
-    const activeSources = this.sources.filter(s => s.status !== 'archived');
+    // Get sources filtered by current project
+    const activeSources = this._getProjectSources();
+    const totalSources = this.sources.filter(s => s.status !== 'archived').length;
     console.log('_renderSourcesNav: Rendering sources', {
-      totalSources: this.sources.length,
-      activeSources: activeSources.length
+      totalSources: totalSources,
+      filteredSources: activeSources.length,
+      currentProject: this.currentProjectId
     });
+
+    // Update panel header with project context
+    this._updatePanelProjectContext('sources', activeSources.length, totalSources);
 
     // Sort sources by import date (newest first)
     const sortedSources = activeSources.sort((a, b) => {
@@ -4625,8 +4782,12 @@ class EODataWorkbench {
       this.definitions = [];
     }
 
-    // Get all active definitions
-    const activeDefinitions = this.definitions.filter(d => d.status !== 'archived');
+    // Get definitions filtered by current project
+    const activeDefinitions = this._getProjectDefinitions();
+    const totalDefinitions = this.definitions.filter(d => d.status !== 'archived').length;
+
+    // Update panel header with project context
+    this._updatePanelProjectContext('definitions', activeDefinitions.length, totalDefinitions);
 
     // Sort definitions by import date (newest first)
     const sortedDefinitions = activeDefinitions.sort((a, b) => {
@@ -4742,8 +4903,15 @@ class EODataWorkbench {
       this.exports = [];
     }
 
-    // Get all exports
-    const sortedExports = [...this.exports].sort((a, b) => {
+    // Get exports filtered by current project
+    const filteredExports = this._getProjectExports();
+    const totalExports = this.exports.length;
+
+    // Update panel header with project context
+    this._updatePanelProjectContext('exports', filteredExports.length, totalExports);
+
+    // Sort exports by date
+    const sortedExports = [...filteredExports].sort((a, b) => {
       if (!a.createdAt) return 1;
       if (!b.createdAt) return -1;
       return new Date(b.createdAt) - new Date(a.createdAt);
@@ -21217,6 +21385,8 @@ class EODataWorkbench {
 
         // Add the set
         this.sets.push(result.set);
+        this._addSetToProject(result.set.id);
+        this._addSourceToProject(result.source.id);
         this.currentSetId = result.set.id;
         this.currentViewId = result.set.views[0]?.id;
 
@@ -21387,6 +21557,7 @@ class EODataWorkbench {
     };
 
     this.sets.push(newSet);
+    this._addSetToProject(newSet.id);
     this.currentSetId = newSet.id;
     this.currentViewId = newSet.views[0]?.id;
 
@@ -22024,6 +22195,7 @@ class EODataWorkbench {
     };
 
     this.sets.push(newSet);
+    this._addSetToProject(newSet.id);
     this.currentSetId = newSet.id;
     this.currentViewId = newSet.views[0]?.id;
 
@@ -22329,6 +22501,7 @@ class EODataWorkbench {
     };
 
     this.sets.push(newSet);
+    this._addSetToProject(newSet.id);
     this.currentSetId = newSet.id;
     this.currentViewId = newSet.views[0]?.id;
 
@@ -22587,11 +22760,12 @@ class EODataWorkbench {
           }
         };
 
-        // Add to exports array
+        // Add to exports array and project
         if (!Array.isArray(this.exports)) {
           this.exports = [];
         }
         this.exports.push(exportRecord);
+        this._addExportToProject(exportRecord.id);
 
         // Save data
         this._saveData();
