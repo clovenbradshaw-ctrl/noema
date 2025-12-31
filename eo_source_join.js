@@ -3785,9 +3785,10 @@ class QueryBuilderUI {
     const segOp = pipeline.find(op => op.op === 'SEG');
     if (segOp && segOp.params && segOp.params.predicate) {
       // Convert predicate back to filter builder format
-      // This is simplified - full implementation would recursively convert
-      this._filterBuilder.clear();
-      // TODO: Convert predicate to filter conditions
+      const filterGroup = this._predicateToFilterGroup(segOp.params.predicate);
+      if (filterGroup) {
+        this._filterBuilder.setFilters(filterGroup);
+      }
     }
 
     // Find DES operator for name
@@ -3795,6 +3796,110 @@ class QueryBuilderUI {
     if (desOp && desOp.params && desOp.params.designation) {
       this._setName = desOp.params.designation;
     }
+  }
+
+  /**
+   * Convert a Predicate JSON structure to AdvancedFilterBuilder filter group format.
+   * Supports AND, OR, NOT, and COMPARISON predicate types.
+   */
+  _predicateToFilterGroup(predicate, generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 6)) {
+    if (!predicate) return null;
+
+    const convertPredicate = (pred) => {
+      switch (pred.type) {
+        case 'AND':
+        case 'OR': {
+          const group = {
+            id: generateId(),
+            logic: pred.type.toLowerCase(),
+            conditions: [],
+            groups: []
+          };
+          for (const child of (pred.conditions || [])) {
+            if (child.type === 'COMPARISON') {
+              group.conditions.push({
+                id: generateId(),
+                field: `data.${child.field}`,
+                operator: child.operator,
+                value: child.value
+              });
+            } else if (child.type === 'AND' || child.type === 'OR') {
+              const nestedGroup = convertPredicate(child);
+              if (nestedGroup) group.groups.push(nestedGroup);
+            } else if (child.type === 'NOT' && child.operand) {
+              // Convert NOT to negated operator where possible
+              if (child.operand.type === 'COMPARISON') {
+                const negatedOp = this._negateOperator(child.operand.operator);
+                group.conditions.push({
+                  id: generateId(),
+                  field: `data.${child.operand.field}`,
+                  operator: negatedOp,
+                  value: child.operand.value
+                });
+              }
+            }
+          }
+          return group;
+        }
+        case 'COMPARISON': {
+          // Single comparison becomes a group with one condition
+          return {
+            id: generateId(),
+            logic: 'and',
+            conditions: [{
+              id: generateId(),
+              field: `data.${pred.field}`,
+              operator: pred.operator,
+              value: pred.value
+            }],
+            groups: []
+          };
+        }
+        case 'NOT': {
+          // NOT wrapping a comparison - negate the operator
+          if (pred.operand && pred.operand.type === 'COMPARISON') {
+            const negatedOp = this._negateOperator(pred.operand.operator);
+            return {
+              id: generateId(),
+              logic: 'and',
+              conditions: [{
+                id: generateId(),
+                field: `data.${pred.operand.field}`,
+                operator: negatedOp,
+                value: pred.operand.value
+              }],
+              groups: []
+            };
+          }
+          return null;
+        }
+        default:
+          return null;
+      }
+    };
+
+    return convertPredicate(predicate);
+  }
+
+  /**
+   * Get the negated version of a comparison operator
+   */
+  _negateOperator(operator) {
+    const negations = {
+      'eq': 'neq',
+      'neq': 'eq',
+      'gt': 'lte',
+      'gte': 'lt',
+      'lt': 'gte',
+      'lte': 'gt',
+      'contains': 'not_contains',
+      'not_contains': 'contains',
+      'null': 'notnull',
+      'notnull': 'null',
+      'in': 'not_in',
+      'not_in': 'in'
+    };
+    return negations[operator] || operator;
   }
 
   /**
@@ -7034,8 +7139,7 @@ class DataPipelineUI {
   }
 
   _getOutputRecordCount() {
-    // For now, simple pass-through count
-    // TODO: Apply filters and joins to get actual count
+    // Apply filters to get accurate count (joins not yet supported in count)
     const baseCount = this._getSourceRecordCount();
     const filterTransform = this._transforms.find(t => t.type === 'filter');
     if (filterTransform && this._sources.length > 0) {

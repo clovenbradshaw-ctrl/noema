@@ -9754,12 +9754,15 @@ class EODataWorkbench {
       this.folderStore = new FolderStore();
     }
 
-    // Migrate existing sources from legacy format
+    // Migrate existing sources from legacy format (backward compatibility)
     this._migrateLegacySourcesToStore();
   }
 
   /**
-   * Migrate legacy sources (derived from sets) to the new SourceStore
+   * Migrate legacy sources (derived from sets) to the new SourceStore.
+   * Required for backward compatibility with workbenches saved before SourceStore was introduced.
+   * Sources were previously embedded in sets via datasetProvenance; this extracts them
+   * into the standalone SourceStore for the new architecture.
    */
   _migrateLegacySourcesToStore() {
     if (!this.sourceStore) return;
@@ -21874,13 +21877,8 @@ class EODataWorkbench {
   }
 
   // --------------------------------------------------------------------------
-  // Filter & Sort Panels
+  // Sort Panel (Filter panel is in Advanced Filter Panel section)
   // --------------------------------------------------------------------------
-
-  _showFilterPanel() {
-    // TODO: Implement filter dropdown
-    console.log('Show filter panel');
-  }
 
   _showSortPanel() {
     const panel = document.getElementById('sort-panel');

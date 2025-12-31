@@ -1144,15 +1144,14 @@ class ChainExecutor {
   }
 
   _executeALT(data, columns, params) {
-    // For now, ALT is a marker that affects how we query the event store
-    // In full implementation, this would reconstruct world state at time T
-
-    // TODO: Implement proper temporal reconstruction
-    // - WORLD_STATE: Replay events up to timestamp
-    // - EVENT_TIME: Filter by event occurrence time
-    // - DATA_VERSION: Pin to specific import version
-
-    // For now, just pass through with temporal metadata attached
+    // ALT (Alternate) operator for temporal queries.
+    // Current implementation: Pass-through with temporal context annotation.
+    // Full implementation would support:
+    // - WORLD_STATE: Replay events up to timestamp to reconstruct historical state
+    // - EVENT_TIME: Filter by when events occurred
+    // - DATA_VERSION: Pin query to specific import version
+    //
+    // For now, annotate records with temporal context for downstream processing.
     const annotatedData = data.map(row => ({
       ...row,
       _temporalContext: params
