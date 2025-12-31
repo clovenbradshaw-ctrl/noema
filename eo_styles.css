@@ -16141,6 +16141,77 @@ body.has-picked-up .browser-tab:hover {
 }
 
 /* ============================================================================
+   Sets Table View (Main Content Area)
+   ============================================================================ */
+
+.sets-table-view .sources-table-icon {
+  background: var(--accent-purple-bg, rgba(139, 92, 246, 0.1));
+}
+
+.sets-table-view .sources-table-icon i {
+  color: var(--accent-purple, #8b5cf6);
+}
+
+.sets-table-row td.col-icon i {
+  color: var(--accent-purple, #8b5cf6);
+}
+
+/* Sets table specific column widths */
+.sets-table th.col-operator,
+.sets-table td.col-operator {
+  width: 80px;
+  text-align: center;
+}
+
+.sets-table th.col-views,
+.sets-table th.col-lenses {
+  width: 70px;
+  text-align: right;
+}
+
+.sets-table td.col-views,
+.sets-table td.col-lenses {
+  text-align: right;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.sets-table th.col-source {
+  width: 150px;
+}
+
+.sets-table td.col-source {
+  color: var(--text-secondary);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sets-table th.col-created {
+  width: 100px;
+}
+
+/* Responsive adjustments for sets table */
+@media (max-width: 1100px) {
+  .sets-table th.col-lenses,
+  .sets-table td.col-lenses,
+  .sets-table th.col-source,
+  .sets-table td.col-source {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .sets-table th.col-views,
+  .sets-table td.col-views,
+  .sets-table th.col-created,
+  .sets-table td.col-created {
+    display: none;
+  }
+}
+
+/* ============================================================================
    Definitions Explorer View (Main Content Area - File Explorer Style)
    ============================================================================ */
 
