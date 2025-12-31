@@ -1419,13 +1419,11 @@ html, body {
   font-size: 12px;
 }
 
-/* Nested Views List - File Explorer Style */
+/* Nested Views List - Modern Minimal Style */
 .set-views-list {
   display: none;
-  padding-left: 12px;
+  padding-left: 28px;
   padding-bottom: 4px;
-  margin-left: 7px;
-  border-left: 1px solid var(--border-primary);
 }
 
 .set-item-container.expanded .set-views-list {
@@ -1442,19 +1440,6 @@ html, body {
   cursor: pointer;
   font-size: 12px;
   transition: var(--transition-fast);
-  position: relative;
-  margin-left: 4px;
-}
-
-/* Tree connection line */
-.set-view-item::before {
-  content: '';
-  position: absolute;
-  left: -16px;
-  top: 50%;
-  width: 12px;
-  height: 1px;
-  background: var(--border-primary);
 }
 
 .set-view-item:hover {
