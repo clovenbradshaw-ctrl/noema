@@ -6288,18 +6288,91 @@ class EODataWorkbench {
   }
 
   /**
-   * Show modal to import definition from URI
+   * Show modal to import definition from URI or search APIs
    */
   _showImportDefinitionModal() {
     const html = `
       <div class="import-definition-form">
         <div class="import-tabs">
-          <button class="import-tab active" data-tab="uri">From URI</button>
+          <button class="import-tab active" data-tab="search">Search APIs</button>
+          <button class="import-tab" data-tab="uri">From URI</button>
           <button class="import-tab" data-tab="json">Paste JSON</button>
           <button class="import-tab" data-tab="manual">Create Manually</button>
         </div>
 
-        <div class="import-tab-content" id="tab-uri">
+        <!-- Search APIs Tab -->
+        <div class="import-tab-content" id="tab-search">
+          <div class="api-source-selector">
+            <div class="api-source-group">
+              <label class="api-source-label">Concept Sources</label>
+              <div class="api-source-pills" id="concept-source-pills">
+                <button class="api-pill active" data-source="wikidata" data-type="concept">
+                  <span class="api-status live"></span>Wikidata
+                </button>
+                <button class="api-pill" data-source="dbpedia" data-type="concept">
+                  <span class="api-status live"></span>DBpedia
+                </button>
+                <button class="api-pill" data-source="lov" data-type="concept">
+                  <span class="api-status live"></span>LOV
+                </button>
+                <button class="api-pill" data-source="schemaOrg" data-type="concept">
+                  <span class="api-status static"></span>Schema.org
+                </button>
+              </div>
+            </div>
+            <div class="api-source-group">
+              <label class="api-source-label">Regulatory Sources</label>
+              <div class="api-source-pills" id="regulatory-source-pills">
+                <button class="api-pill" data-source="ecfr" data-type="regulatory">
+                  <span class="api-status live"></span>eCFR
+                </button>
+                <button class="api-pill" data-source="federalRegister" data-type="regulatory">
+                  <span class="api-status live"></span>Fed Register
+                </button>
+                <button class="api-pill" data-source="usCode" data-type="regulatory">
+                  <span class="api-status link"></span>US Code
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="definition-search-query" class="form-label">Search</label>
+            <div class="search-input-row">
+              <input type="text" id="definition-search-query" class="form-input"
+                     placeholder="Search for concepts, terms, regulations...">
+              <button class="btn btn-primary" id="btn-search-definitions">
+                <i class="ph ph-magnifying-glass"></i> Search
+              </button>
+            </div>
+          </div>
+
+          <div id="definition-search-results" class="definition-search-results">
+            <div class="search-empty-state">
+              <i class="ph ph-magnifying-glass"></i>
+              <p>Select a source and search for definitions</p>
+            </div>
+          </div>
+
+          <div id="definition-selected-item" class="definition-selected-item" style="display: none;">
+            <!-- Selected item will be rendered here -->
+          </div>
+
+          <div class="form-group" id="definition-term-group" style="display: none;">
+            <label for="definition-term-name" class="form-label">Term Name (for your column)</label>
+            <input type="text" id="definition-term-name" class="form-input"
+                   placeholder="e.g., housing_status">
+            <span class="form-hint">This will be the key used in your data columns</span>
+          </div>
+
+          <div class="form-group" id="definition-scope-group" style="display: none;">
+            <label for="definition-scope-note" class="form-label">Your Scope Note (optional)</label>
+            <textarea id="definition-scope-note" class="form-input" rows="2"
+                      placeholder="How are YOU using this definition? What's included/excluded?"></textarea>
+          </div>
+        </div>
+
+        <div class="import-tab-content" id="tab-uri" style="display: none;">
           <div class="form-group">
             <label for="definition-uri" class="form-label">Definition URI</label>
             <input type="url" id="definition-uri" class="form-input"
@@ -6325,7 +6398,7 @@ class EODataWorkbench {
   "source": { "citation": "24 CFR 578.3" },
   "validity": { "from": "2015-12-04" }
 }'></textarea>
-            <span class="form-hint">Supports single definition or array of definitions. Use the Definition Source Builder tool for guided creation.</span>
+            <span class="form-hint">Supports single definition or array of definitions.</span>
           </div>
         </div>
 
@@ -6344,10 +6417,23 @@ class EODataWorkbench {
       </div>
     `;
 
+    // Store selected search result
+    this._selectedDefinitionResult = null;
+    this._selectedApiSource = 'wikidata';
+    this._selectedApiType = 'concept';
+
     this._showModal('Import Definition', html, () => {
       const activeTab = document.querySelector('.import-tab.active')?.dataset.tab;
 
-      if (activeTab === 'uri') {
+      if (activeTab === 'search') {
+        if (this._selectedDefinitionResult) {
+          const termName = document.getElementById('definition-term-name')?.value?.trim();
+          const scopeNote = document.getElementById('definition-scope-note')?.value?.trim();
+          this._importFromSearchResult(this._selectedDefinitionResult, termName, scopeNote);
+        } else {
+          this._showNotification('Please search and select a definition', 'error');
+        }
+      } else if (activeTab === 'uri') {
         const uri = document.getElementById('definition-uri')?.value?.trim();
         const name = document.getElementById('definition-name-uri')?.value?.trim();
         if (uri) {
@@ -6373,18 +6459,289 @@ class EODataWorkbench {
       }
     });
 
-    // Tab switching
+    // Initialize event listeners after modal renders
     setTimeout(() => {
-      document.querySelectorAll('.import-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
-          tab.classList.add('active');
-          document.querySelectorAll('.import-tab-content').forEach(content => {
-            content.style.display = content.id === `tab-${tab.dataset.tab}` ? 'block' : 'none';
-          });
+      this._initDefinitionModalListeners();
+    }, 0);
+  }
+
+  /**
+   * Initialize definition modal event listeners
+   */
+  _initDefinitionModalListeners() {
+    // Tab switching
+    document.querySelectorAll('.import-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.import-tab-content').forEach(content => {
+          content.style.display = content.id === `tab-${tab.dataset.tab}` ? 'block' : 'none';
         });
       });
-    }, 0);
+    });
+
+    // API source pills
+    document.querySelectorAll('.api-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        // Only allow one source at a time
+        document.querySelectorAll('.api-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        this._selectedApiSource = pill.dataset.source;
+        this._selectedApiType = pill.dataset.type;
+      });
+    });
+
+    // Search button
+    document.getElementById('btn-search-definitions')?.addEventListener('click', () => {
+      this._searchDefinitions();
+    });
+
+    // Enter key to search
+    document.getElementById('definition-search-query')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this._searchDefinitions();
+      }
+    });
+  }
+
+  /**
+   * Search definitions using the selected API
+   */
+  async _searchDefinitions() {
+    const query = document.getElementById('definition-search-query')?.value?.trim();
+    if (!query) {
+      this._showNotification('Please enter a search term', 'error');
+      return;
+    }
+
+    const resultsDiv = document.getElementById('definition-search-results');
+    if (!resultsDiv) return;
+
+    resultsDiv.innerHTML = '<div class="search-loading"><i class="ph ph-spinner ph-spin"></i> Searching...</div>';
+
+    try {
+      const api = window.EO?.getDefinitionAPI?.();
+      if (!api) {
+        throw new Error('Definition API not loaded');
+      }
+
+      let results = [];
+      if (this._selectedApiType === 'concept') {
+        results = await api.searchConcepts(query, { sources: [this._selectedApiSource] });
+      } else {
+        results = await api.searchRegulatory(query, { sources: [this._selectedApiSource] });
+      }
+
+      if (results.length === 0) {
+        resultsDiv.innerHTML = '<div class="search-empty-state"><p>No results found. Try a different search term.</p></div>';
+        return;
+      }
+
+      // Render results
+      resultsDiv.innerHTML = results.map((r, i) => this._renderSearchResult(r, i)).join('');
+
+      // Add click listeners
+      resultsDiv.querySelectorAll('.search-result-item').forEach((item, i) => {
+        item.addEventListener('click', () => {
+          this._selectDefinitionResult(results[i]);
+        });
+      });
+
+    } catch (error) {
+      console.error('Definition search failed:', error);
+      resultsDiv.innerHTML = `<div class="search-error"><i class="ph ph-warning"></i> Error: ${error.message}</div>`;
+    }
+  }
+
+  /**
+   * Render a search result item
+   */
+  _renderSearchResult(result, index) {
+    const isRegulatory = result.citation !== undefined;
+
+    if (isRegulatory) {
+      return `
+        <div class="search-result-item" data-index="${index}">
+          <div class="search-result-header">
+            <span class="search-result-label">${this._escapeHtml(result.title?.substring(0, 60) || 'Untitled')}${result.title?.length > 60 ? '...' : ''}</span>
+            <span class="search-result-source">${result.source}</span>
+          </div>
+          <div class="search-result-citation">${this._escapeHtml(result.citation || '')}</div>
+          <div class="search-result-desc">${this._escapeHtml(result.snippet?.substring(0, 150) || '')}${result.snippet?.length > 150 ? '...' : ''}</div>
+          <div class="search-result-uri">${this._escapeHtml(result.url || '')}</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="search-result-item" data-index="${index}">
+        <div class="search-result-header">
+          <span class="search-result-label">${this._escapeHtml(result.label || result.id || 'Unknown')}</span>
+          <span class="search-result-source">${result.source}</span>
+        </div>
+        <div class="search-result-desc">${this._escapeHtml(result.description || '')}</div>
+        <div class="search-result-uri">${this._escapeHtml(result.uri || '')}</div>
+      </div>
+    `;
+  }
+
+  /**
+   * Select a definition result
+   */
+  async _selectDefinitionResult(result) {
+    this._selectedDefinitionResult = result;
+
+    const selectedDiv = document.getElementById('definition-selected-item');
+    const termGroup = document.getElementById('definition-term-group');
+    const scopeGroup = document.getElementById('definition-scope-group');
+
+    if (!selectedDiv) return;
+
+    // Fetch additional details for Wikidata
+    let details = null;
+    if (result.source === 'Wikidata' && result.id) {
+      try {
+        const api = window.EO?.getDefinitionAPI?.();
+        details = await api?.getWikidataDetails(result.id);
+        if (details) {
+          this._selectedDefinitionResult.details = details;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch Wikidata details:', e);
+      }
+    }
+
+    const isRegulatory = result.citation !== undefined;
+
+    selectedDiv.style.display = 'block';
+    selectedDiv.innerHTML = `
+      <div class="selected-definition">
+        <div class="selected-header">
+          <span class="selected-label">${this._escapeHtml(isRegulatory ? result.title?.substring(0, 50) : result.label)}</span>
+          <button class="btn-clear-selection" id="btn-clear-definition">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+        <div class="selected-meta">
+          <span class="meta-tag source">${result.source}</span>
+          ${isRegulatory && result.citation ? `<span class="meta-tag">${this._escapeHtml(result.citation)}</span>` : ''}
+          ${details?.instanceOf?.length ? `<span class="meta-tag">P31: ${details.instanceOf.map(x => x.id).join(', ')}</span>` : ''}
+        </div>
+        <div class="selected-uri">${this._escapeHtml(result.uri || result.url || '')}</div>
+        ${result.description || result.snippet ? `<div class="selected-desc">${this._escapeHtml((result.description || result.snippet)?.substring(0, 200))}...</div>` : ''}
+      </div>
+    `;
+
+    // Pre-fill term name
+    const termNameInput = document.getElementById('definition-term-name');
+    if (termNameInput && !termNameInput.value) {
+      const suggestedTerm = isRegulatory
+        ? result.citation?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'term'
+        : (result.id || result.label || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      termNameInput.value = suggestedTerm;
+    }
+
+    // Show term and scope groups
+    if (termGroup) termGroup.style.display = 'block';
+    if (scopeGroup) scopeGroup.style.display = 'block';
+
+    // Clear button
+    document.getElementById('btn-clear-definition')?.addEventListener('click', () => {
+      this._clearDefinitionSelection();
+    });
+
+    // Highlight in results
+    document.querySelectorAll('.search-result-item').forEach(item => {
+      item.classList.remove('selected');
+    });
+    document.querySelector(`.search-result-item[data-index="${document.querySelectorAll('.search-result-item').length > 0 ? Array.from(document.querySelectorAll('.search-result-item')).findIndex(el => el.querySelector('.search-result-uri')?.textContent === (result.uri || result.url)) : 0}"]`)?.classList.add('selected');
+  }
+
+  /**
+   * Clear definition selection
+   */
+  _clearDefinitionSelection() {
+    this._selectedDefinitionResult = null;
+
+    const selectedDiv = document.getElementById('definition-selected-item');
+    const termGroup = document.getElementById('definition-term-group');
+    const scopeGroup = document.getElementById('definition-scope-group');
+
+    if (selectedDiv) selectedDiv.style.display = 'none';
+    if (termGroup) termGroup.style.display = 'none';
+    if (scopeGroup) scopeGroup.style.display = 'none';
+
+    document.querySelectorAll('.search-result-item').forEach(item => {
+      item.classList.remove('selected');
+    });
+  }
+
+  /**
+   * Import from a search result
+   */
+  _importFromSearchResult(result, termName, scopeNote) {
+    const isRegulatory = result.citation !== undefined;
+
+    if (isRegulatory) {
+      // Build DefinitionSource for regulatory result
+      const defSource = {
+        term: {
+          term: termName || result.citation?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'term',
+          label: result.title,
+          definitionText: result.snippet
+        },
+        authority: {
+          name: result.meta?.agencies?.[0]?.name || result.source,
+          shortName: result.meta?.agencies?.[0]?.slug?.toUpperCase(),
+          type: 'federal_agency'
+        },
+        source: {
+          title: result.title,
+          citation: result.citation,
+          url: result.url,
+          type: 'regulation'
+        },
+        validity: {
+          from: result.meta?.effectiveDate || result.meta?.publicationDate || new Date().toISOString().split('T')[0]
+        },
+        scopeNote: scopeNote || undefined
+      };
+
+      this._importDefinitionSourceFromJson(JSON.stringify(defSource));
+    } else {
+      // Build definition for concept result
+      const definition = {
+        id: `def_${Date.now()}`,
+        name: `${result.label} (${result.source})`,
+        description: result.description || '',
+        sourceUri: result.uri,
+        format: 'concept',
+        importedAt: new Date().toISOString(),
+        status: 'active',
+        terms: [{
+          id: `term_${Date.now()}`,
+          name: termName || result.id || result.label,
+          label: result.label,
+          type: 'concept',
+          description: result.description,
+          uri: result.uri
+        }],
+        mapping: {
+          uri: result.uri,
+          label: result.label,
+          source: result.source,
+          details: result.details || null
+        },
+        scopeNote: scopeNote || null
+      };
+
+      this.definitions.push(definition);
+      this._saveData();
+      this._renderDefinitionsNav();
+      this._showDefinitionDetail(definition.id);
+      this._showNotification(`Imported "${result.label}" from ${result.source}`, 'success');
+    }
   }
 
   /**
