@@ -511,6 +511,11 @@ class SetCreator {
       updatedAt: timestamp
     };
 
+    // Create record-type views if source has multiple record types
+    if (source.multiRecordAnalysis) {
+      this._createRecordTypeViews(set, source);
+    }
+
     // Create provenance events
     const events = this._createDerivationEvents(set, source, derivation);
 
@@ -991,6 +996,181 @@ class SetCreator {
     });
 
     return events;
+  }
+
+  // --------------------------------------------------------------------------
+  // Multi-Record Type View Creation
+  // --------------------------------------------------------------------------
+
+  /**
+   * Create record-type views if source has multiple record types
+   * @param {Object} set - The Set to add views to
+   * @param {Object} source - The Source with multiRecordAnalysis
+   */
+  _createRecordTypeViews(set, source) {
+    const multiRecordAnalysis = source.multiRecordAnalysis;
+    if (!multiRecordAnalysis || !multiRecordAnalysis.types || multiRecordAnalysis.types.length < 2) {
+      return;
+    }
+
+    // Find the type field in the set (it may have been renamed)
+    const typeField = set.fields.find(f =>
+      f.name === multiRecordAnalysis.typeField ||
+      f.sourceColumn === multiRecordAnalysis.typeField
+    );
+
+    if (!typeField) {
+      // Type field was not included in the set, skip view creation
+      return;
+    }
+
+    for (const typeInfo of multiRecordAnalysis.types) {
+      const typeValue = typeInfo.value;
+
+      // Calculate hidden fields (fields with no values for this type)
+      const hiddenFields = this._getHiddenFieldsForType(set, typeField.id, typeValue);
+
+      // Calculate field order (type-specific fields prominently after primary)
+      const fieldOrder = this._getFieldOrderForType(set, typeField.id, typeValue, multiRecordAnalysis);
+
+      // Get icon for this type
+      const icon = this._getIconForType(typeValue);
+
+      // Create the record-type view
+      const view = {
+        id: 'view_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
+        name: this._formatTypeName(typeValue),
+        type: 'table',
+        config: {
+          filters: [{
+            fieldId: typeField.id,
+            operator: 'is',
+            filterValue: typeValue,
+            enabled: true
+          }],
+          hiddenFields,
+          fieldOrder,
+          sorts: [],
+          groups: []
+        },
+        metadata: {
+          recordType: typeValue,
+          recordCount: typeInfo.count,
+          isRecordTypeView: true,
+          icon,
+          typeSpecificFields: typeInfo.specificFields || [],
+          commonFields: multiRecordAnalysis.commonFields || []
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      set.views.push(view);
+    }
+  }
+
+  /**
+   * Get fields that should be hidden for a specific record type.
+   * Returns field IDs for fields that have NO values for records of this type.
+   */
+  _getHiddenFieldsForType(set, typeFieldId, typeValue) {
+    // Get all records of this type
+    const typeRecords = set.records.filter(r => r.values[typeFieldId] === typeValue);
+
+    const hiddenFields = [];
+    for (const field of set.fields) {
+      // Don't hide the type field itself
+      if (field.id === typeFieldId) continue;
+
+      // Check if ANY record of this type has a non-empty value for this field
+      const hasValue = typeRecords.some(r => {
+        const val = r.values[field.id];
+        return val !== null && val !== undefined && val !== '';
+      });
+
+      if (!hasValue) {
+        hiddenFields.push(field.id);
+      }
+    }
+
+    return hiddenFields;
+  }
+
+  /**
+   * Get field order for a specific record type.
+   * Orders fields with type-specific fields prominently after the primary field.
+   */
+  _getFieldOrderForType(set, typeFieldId, typeValue, multiRecordAnalysis) {
+    // Get type-specific field NAMES from multiRecordAnalysis
+    const typeInfo = multiRecordAnalysis?.types?.find(t => t.value === typeValue);
+    const specificFieldNames = new Set(typeInfo?.specificFields || []);
+
+    // Map field names to IDs for type-specific fields
+    const specificFieldIds = new Set();
+    for (const field of set.fields) {
+      if (specificFieldNames.has(field.name) || specificFieldNames.has(field.sourceColumn)) {
+        specificFieldIds.add(field.id);
+      }
+    }
+
+    // Order: primary field first, then type-specific, then common fields
+    return set.fields
+      .map(f => f.id)
+      .sort((aId, bId) => {
+        const fieldA = set.fields.find(f => f.id === aId);
+        const fieldB = set.fields.find(f => f.id === bId);
+
+        // Primary field first
+        if (fieldA.isPrimary) return -1;
+        if (fieldB.isPrimary) return 1;
+
+        // Type-specific fields next
+        const aSpecific = specificFieldIds.has(aId);
+        const bSpecific = specificFieldIds.has(bId);
+        if (aSpecific && !bSpecific) return -1;
+        if (!aSpecific && bSpecific) return 1;
+
+        return 0;
+      });
+  }
+
+  /**
+   * Get an appropriate icon for a record type
+   */
+  _getIconForType(typeValue) {
+    const iconMap = {
+      'person': 'ph-user',
+      'people': 'ph-users',
+      'user': 'ph-user',
+      'org': 'ph-buildings',
+      'organization': 'ph-buildings',
+      'company': 'ph-building-office',
+      'government': 'ph-bank',
+      'nonprofit': 'ph-heart',
+      'contract': 'ph-file-text',
+      'document': 'ph-file-doc',
+      'property': 'ph-house',
+      'real_estate': 'ph-house-line',
+      'funding': 'ph-money',
+      'payment': 'ph-credit-card',
+      'transaction': 'ph-arrows-left-right',
+      'bank_account': 'ph-bank',
+      'event': 'ph-calendar',
+      'meeting': 'ph-calendar-check',
+      'complaint': 'ph-warning',
+      'violation': 'ph-shield-warning'
+    };
+    return iconMap[String(typeValue).toLowerCase()] || 'ph-stack';
+  }
+
+  /**
+   * Format a type value into a display name
+   */
+  _formatTypeName(typeValue) {
+    const str = String(typeValue);
+    // Capitalize first letter, replace underscores with spaces
+    return str
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
   }
 }
 
