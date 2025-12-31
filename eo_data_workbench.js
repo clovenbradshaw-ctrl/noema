@@ -1956,16 +1956,116 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderSidebar() {
-    // Five-panel navigation: Projects / Sources (GIVEN) / Sets (SCHEMA) / Definitions (TERMS) / Exports (SNAPSHOT)
+    // Five-panel navigation: Projects / Sources (GIVEN) / Definitions (TERMS) / Sets (SCHEMA) / Exports (SNAPSHOT)
+    // Reordered for workflow: Organize → Input (Sources + Definitions) → Transform (Sets) → Output (Exports)
     // Projects are super objects that contain all other entities
     // Views are shown nested under sets in sidebar (Airtable-style)
     this._renderProjectsNav();
     this._renderSourcesNav();
+    this._renderDefinitionsNav();  // Moved before Sets - definitions inform data structure
     this._renderSetsNavFlat();
-    this._renderDefinitionsNav();
     this._renderExportsNav();
+    // Update collapsible panel states (progressive disclosure)
+    this._updateCollapsiblePanels();
     // Update tab bar (view disclosure removed - views in sidebar only)
     this._renderTabBar();
+  }
+
+  /**
+   * Progressive Disclosure: Update collapsible panel states
+   * Auto-collapses empty Definitions and Exports panels
+   * Expands panels when they have content or user manually expands
+   */
+  _updateCollapsiblePanels() {
+    // Initialize panel expansion state if not exists
+    if (!this.panelExpansionState) {
+      this.panelExpansionState = {
+        definitions: null,  // null = auto (collapsed when empty)
+        exports: null       // null = auto (collapsed when empty)
+      };
+    }
+
+    // Get counts
+    const definitionsCount = (this.definitions || []).filter(d => d.status !== 'archived').length;
+    const exportsCount = (this.exports || []).length;
+
+    // Update definitions panel
+    const definitionsPanel = document.querySelector('.definitions-panel');
+    if (definitionsPanel) {
+      definitionsPanel.setAttribute('data-collapsible', 'true');
+      const isExpanded = this.panelExpansionState.definitions === true ||
+                        (this.panelExpansionState.definitions === null && definitionsCount > 0);
+      definitionsPanel.classList.toggle('collapsed', !isExpanded);
+      definitionsPanel.classList.toggle('expanded', isExpanded);
+
+      // Update count badge
+      const countBadge = document.getElementById('definitions-count-badge');
+      if (countBadge) {
+        countBadge.textContent = definitionsCount;
+        countBadge.style.display = definitionsCount > 0 || !isExpanded ? '' : 'none';
+      }
+    }
+
+    // Update exports panel
+    const exportsPanel = document.querySelector('.exports-panel');
+    if (exportsPanel) {
+      exportsPanel.setAttribute('data-collapsible', 'true');
+      const isExpanded = this.panelExpansionState.exports === true ||
+                        (this.panelExpansionState.exports === null && exportsCount > 0);
+      exportsPanel.classList.toggle('collapsed', !isExpanded);
+      exportsPanel.classList.toggle('expanded', isExpanded);
+
+      // Update count badge
+      const countBadge = document.getElementById('exports-count-badge');
+      if (countBadge) {
+        countBadge.textContent = exportsCount;
+        countBadge.style.display = exportsCount > 0 || !isExpanded ? '' : 'none';
+      }
+    }
+
+    // Attach click handlers for collapsible headers (once)
+    this._attachCollapsiblePanelHandlers();
+  }
+
+  /**
+   * Attach click handlers to collapsible panel headers
+   */
+  _attachCollapsiblePanelHandlers() {
+    // Only attach once
+    if (this._collapsibleHandlersAttached) return;
+    this._collapsibleHandlersAttached = true;
+
+    // Definitions panel header click
+    const definitionsHeader = document.querySelector('.definitions-panel .nav-panel-header');
+    if (definitionsHeader) {
+      definitionsHeader.addEventListener('click', (e) => {
+        // Don't toggle if clicking on action buttons
+        if (e.target.closest('.nav-panel-actions')) return;
+
+        const panel = definitionsHeader.closest('.nav-panel');
+        const isCurrentlyExpanded = panel.classList.contains('expanded');
+
+        // Toggle state - set explicit user preference
+        this.panelExpansionState.definitions = !isCurrentlyExpanded;
+        this._updateCollapsiblePanels();
+      });
+    }
+
+    // Exports panel header click
+    const exportsHeader = document.querySelector('.exports-panel .nav-panel-header');
+    if (exportsHeader) {
+      exportsHeader.addEventListener('click', (e) => {
+        // Don't toggle if clicking on action buttons
+        if (e.target.closest('.nav-panel-actions')) return;
+
+        const panel = exportsHeader.closest('.nav-panel');
+        const isCurrentlyExpanded = panel.classList.contains('expanded');
+
+        // Toggle state - set explicit user preference
+        this.panelExpansionState.exports = !isCurrentlyExpanded;
+        this._updateCollapsiblePanels();
+      });
+    }
   }
 
   /**
@@ -23175,6 +23275,9 @@ class EODataWorkbench {
         case 'source':
           this._showImportModal();
           break;
+        case 'definition':
+          this._showImportDefinitionModal();
+          break;
         case 'set':
           this._showNewSetModal();
           break;
@@ -23186,6 +23289,9 @@ class EODataWorkbench {
           break;
         case 'field':
           this._showAddFieldMenu(btn);
+          break;
+        case 'export':
+          this._showNewExportModal();
           break;
       }
     });
