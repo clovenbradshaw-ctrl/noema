@@ -1034,12 +1034,12 @@ class SetCreator {
       const fieldOrder = this._getFieldOrderForType(set, typeField.id, typeValue, multiRecordAnalysis);
 
       // Get icon for this type
-      const icon = this._getIconForType(typeValue);
+      const icon = EoSharedUtils.getIconForType(typeValue);
 
       // Create the record-type view
       const view = {
         id: 'view_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-        name: this._formatTypeName(typeValue),
+        name: EoSharedUtils.formatTypeName(typeValue),
         type: 'table',
         config: {
           filters: [{
@@ -1131,46 +1131,6 @@ class SetCreator {
 
         return 0;
       });
-  }
-
-  /**
-   * Get an appropriate icon for a record type
-   */
-  _getIconForType(typeValue) {
-    const iconMap = {
-      'person': 'ph-user',
-      'people': 'ph-users',
-      'user': 'ph-user',
-      'org': 'ph-buildings',
-      'organization': 'ph-buildings',
-      'company': 'ph-building-office',
-      'government': 'ph-bank',
-      'nonprofit': 'ph-heart',
-      'contract': 'ph-file-text',
-      'document': 'ph-file-doc',
-      'property': 'ph-house',
-      'real_estate': 'ph-house-line',
-      'funding': 'ph-money',
-      'payment': 'ph-credit-card',
-      'transaction': 'ph-arrows-left-right',
-      'bank_account': 'ph-bank',
-      'event': 'ph-calendar',
-      'meeting': 'ph-calendar-check',
-      'complaint': 'ph-warning',
-      'violation': 'ph-shield-warning'
-    };
-    return iconMap[String(typeValue).toLowerCase()] || 'ph-stack';
-  }
-
-  /**
-   * Format a type value into a display name
-   */
-  _formatTypeName(typeValue) {
-    const str = String(typeValue);
-    // Capitalize first letter, replace underscores with spaces
-    return str
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
   }
 }
 

@@ -1399,7 +1399,7 @@ class ImportOrchestrator {
 
       for (const typeValue of typeValues) {
         const typeRows = rowsByType[typeValue];
-        const typeName = this._formatViewName(typeValue);
+        const typeName = EoSharedUtils.formatTypeName(typeValue);
         const sourceName = `${baseFileName} - ${typeName}`;
 
         // Find headers that are actually used by this type
@@ -2411,7 +2411,7 @@ class ImportOrchestrator {
       });
 
       for (const typeValue of typeValues) {
-        const viewName = this._formatViewName(typeValue);
+        const viewName = EoSharedUtils.formatTypeName(typeValue);
         // Count records of this type for metadata
         const typeRecordCount = set.records.filter(r => r.values[typeField.id] === typeValue).length;
 
@@ -2422,7 +2422,7 @@ class ImportOrchestrator {
         const fieldOrder = this._getFieldOrderForType(set, typeField.id, typeValue, options.schemaDivergence);
 
         // Get icon for this type
-        const icon = this._getIconForType(typeValue);
+        const icon = EoSharedUtils.getIconForType(typeValue);
 
         const view = createView(viewName, 'table', {
           filters: [{
@@ -2535,17 +2535,6 @@ class ImportOrchestrator {
   }
 
   /**
-   * Format a type value as a view name
-   */
-  _formatViewName(value) {
-    // Capitalize first letter, replace underscores with spaces
-    const formatted = String(value)
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-    return formatted;
-  }
-
-  /**
    * Create separate Sets for each record type.
    * Each record type becomes its own independent Set with only the fields
    * relevant to that type - maintaining proper Given/Meant separation where
@@ -2582,7 +2571,7 @@ class ImportOrchestrator {
     for (let typeIdx = 0; typeIdx < typeValues.length; typeIdx++) {
       const typeValue = typeValues[typeIdx];
       const typeRows = rowsByType[typeValue];
-      const setName = `${baseName} - ${this._formatViewName(typeValue)}`;
+      const setName = `${baseName} - ${EoSharedUtils.formatTypeName(typeValue)}`;
 
       this._emitProgress('progress', {
         phase: 'creating_set',
@@ -2606,7 +2595,7 @@ class ImportOrchestrator {
 
       // Create a Set for this record type
       const set = createSet(setName);
-      set.icon = this._getIconForType(typeValue);
+      set.icon = EoSharedUtils.getIconForType(typeValue);
 
       // Metadata links this Set to the original import and identifies its record type
       set.metadata = {
@@ -2700,35 +2689,6 @@ class ImportOrchestrator {
   }
 
   /**
-   * Get an appropriate icon for a node type
-   */
-  _getIconForType(typeValue) {
-    const iconMap = {
-      'person': 'ph-user',
-      'people': 'ph-users',
-      'user': 'ph-user',
-      'org': 'ph-buildings',
-      'organization': 'ph-buildings',
-      'company': 'ph-building-office',
-      'government': 'ph-bank',
-      'nonprofit': 'ph-heart',
-      'contract': 'ph-file-text',
-      'document': 'ph-file-doc',
-      'property': 'ph-house',
-      'real_estate': 'ph-house-line',
-      'funding': 'ph-money',
-      'payment': 'ph-credit-card',
-      'transaction': 'ph-arrows-left-right',
-      'bank_account': 'ph-bank',
-      'event': 'ph-calendar',
-      'meeting': 'ph-calendar-check',
-      'complaint': 'ph-warning',
-      'violation': 'ph-shield-warning'
-    };
-    return iconMap[typeValue.toLowerCase()] || 'ph-database';
-  }
-
-  /**
    * Get fields that should be hidden for a specific record type.
    * Returns field IDs for fields that have NO values for records of this type.
    */
@@ -2761,7 +2721,8 @@ class ImportOrchestrator {
    */
   _getFieldOrderForType(set, typeFieldId, typeValue, schemaDivergence) {
     // Get type-specific field NAMES from schemaDivergence
-    const typeInfo = schemaDivergence?.types?.find(t => t.type === typeValue);
+    // Note: schemaDivergence.types contains objects with 'value' property, not 'type'
+    const typeInfo = schemaDivergence?.types?.find(t => t.value === typeValue);
     const specificFieldNames = new Set(typeInfo?.specificFields || []);
 
     // Map field names to IDs for type-specific fields
