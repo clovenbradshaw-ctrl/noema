@@ -1014,10 +1014,34 @@ function updateSyncStatus(status) {
   badge.innerHTML = `<i class="ph ${icons[status] || icons.synced}"></i>`;
 }
 
+/**
+ * Ensure the sync API is initialized
+ * Returns the sync API instance or null if initialization fails
+ */
+function ensureSyncAPI() {
+  // Check if already initialized
+  if (typeof window.getEOSyncAPI === 'function') {
+    const existingAPI = window.getEOSyncAPI();
+    if (existingAPI) {
+      return existingAPI;
+    }
+  }
+
+  // Try to initialize it
+  if (typeof window.initSyncAPI === 'function' && typeof window.getEventStore === 'function') {
+    const eventStore = window.getEventStore();
+    if (eventStore) {
+      return window.initSyncAPI(eventStore);
+    }
+  }
+
+  return null;
+}
+
 function showSyncDetails() {
   // Use the sync wizard if available
-  if (typeof window.showSyncWizard === 'function' && typeof window.getEOSyncAPI === 'function') {
-    const syncAPI = window.getEOSyncAPI();
+  if (typeof window.showSyncWizard === 'function') {
+    const syncAPI = ensureSyncAPI();
     if (syncAPI) {
       window.showSyncWizard(syncAPI);
       return;
@@ -1040,11 +1064,10 @@ function showSettingsModal() {
 
   // Get sync status for display
   let syncStatusHtml = '';
-  if (typeof window.getEOSyncAPI === 'function') {
-    const syncAPI = window.getEOSyncAPI();
-    if (syncAPI) {
-      const status = syncAPI.getStatus();
-      const config = syncAPI.config || {};
+  const syncAPI = ensureSyncAPI();
+  if (syncAPI) {
+    const status = syncAPI.getStatus();
+    const config = syncAPI.config || {};
 
       if (status.configured && status.enabled) {
         const hostname = config.endpoint ? (() => { try { return new URL(config.endpoint).hostname; } catch { return config.endpoint; } })() : 'Unknown';
@@ -1080,7 +1103,6 @@ function showSettingsModal() {
           </div>
         `;
       }
-    }
   }
 
   modalTitle.textContent = 'Settings';
@@ -1131,10 +1153,10 @@ function showSettingsModal() {
     configureSyncBtn.addEventListener('click', () => {
       closeModal();
       setTimeout(() => {
-        if (typeof window.showSyncWizard === 'function' && typeof window.getEOSyncAPI === 'function') {
-          const syncAPI = window.getEOSyncAPI();
-          if (syncAPI) {
-            window.showSyncWizard(syncAPI);
+        if (typeof window.showSyncWizard === 'function') {
+          const syncAPIForWizard = ensureSyncAPI();
+          if (syncAPIForWizard) {
+            window.showSyncWizard(syncAPIForWizard);
           }
         }
       }, 100);
@@ -1142,31 +1164,28 @@ function showSettingsModal() {
   }
 
   // Show/enable sync now button if configured and enabled
-  if (typeof window.getEOSyncAPI === 'function') {
-    const syncAPI = window.getEOSyncAPI();
-    if (syncAPI) {
-      const status = syncAPI.getStatus();
-      if (status.configured && status.enabled && syncNowBtn) {
-        syncNowBtn.style.display = 'inline-flex';
-        syncNowBtn.addEventListener('click', async () => {
-          syncNowBtn.disabled = true;
-          syncNowBtn.innerHTML = '<i class="ph ph-arrows-clockwise spinning"></i> Syncing...';
-          try {
-            await syncAPI.sync();
-            syncNowBtn.innerHTML = '<i class="ph ph-check-circle"></i> Synced!';
-            setTimeout(() => {
-              syncNowBtn.disabled = false;
-              syncNowBtn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Sync Now';
-            }, 2000);
-          } catch (err) {
-            syncNowBtn.innerHTML = '<i class="ph ph-x-circle"></i> Failed';
-            setTimeout(() => {
-              syncNowBtn.disabled = false;
-              syncNowBtn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Sync Now';
-            }, 2000);
-          }
-        });
-      }
+  if (syncAPI) {
+    const status = syncAPI.getStatus();
+    if (status.configured && status.enabled && syncNowBtn) {
+      syncNowBtn.style.display = 'inline-flex';
+      syncNowBtn.addEventListener('click', async () => {
+        syncNowBtn.disabled = true;
+        syncNowBtn.innerHTML = '<i class="ph ph-arrows-clockwise spinning"></i> Syncing...';
+        try {
+          await syncAPI.sync();
+          syncNowBtn.innerHTML = '<i class="ph ph-check-circle"></i> Synced!';
+          setTimeout(() => {
+            syncNowBtn.disabled = false;
+            syncNowBtn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Sync Now';
+          }, 2000);
+        } catch (err) {
+          syncNowBtn.innerHTML = '<i class="ph ph-x-circle"></i> Failed';
+          setTimeout(() => {
+            syncNowBtn.disabled = false;
+            syncNowBtn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Sync Now';
+          }, 2000);
+        }
+      });
     }
   }
 }
