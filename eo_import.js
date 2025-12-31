@@ -1152,6 +1152,12 @@ class ImportOrchestrator {
           this.workbench.sourceStore.sources.set(sourceId, source);
         }
 
+        // Add source to current project (if a project is selected)
+        if (typeof this.workbench._addSourceToProject === 'function') {
+          this.workbench._addSourceToProject(source.id);
+          console.log('ImportOrchestrator: Source added to current project');
+        }
+
         // Persist the data
         if (typeof this.workbench._saveData === 'function') {
           this.workbench._saveData();
@@ -1375,6 +1381,11 @@ class ImportOrchestrator {
             this.workbench.sources = [];
           }
           this.workbench.sources.push(source);
+
+          // Add source to current project
+          if (typeof this.workbench._addSourceToProject === 'function') {
+            this.workbench._addSourceToProject(source.id);
+          }
         }
 
         createdSources.push({
