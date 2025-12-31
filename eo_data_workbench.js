@@ -5204,6 +5204,78 @@ class EODataWorkbench {
   }
 
   /**
+   * Authority presets for quick definition creation
+   */
+  _getAuthorityPresets() {
+    return {
+      hud: {
+        name: 'U.S. Department of Housing and Urban Development',
+        shortName: 'HUD',
+        uri: 'http://www.wikidata.org/entity/Q596692',
+        type: 'federal_agency',
+        citationFormat: 'CFR',
+        citationPlaceholder: '24 CFR 578.3'
+      },
+      census: {
+        name: 'U.S. Census Bureau',
+        shortName: 'Census',
+        uri: 'http://www.wikidata.org/entity/Q637413',
+        type: 'federal_agency',
+        citationFormat: 'guidance',
+        citationPlaceholder: 'Census Bureau Definition'
+      },
+      irs: {
+        name: 'Internal Revenue Service',
+        shortName: 'IRS',
+        uri: 'http://www.wikidata.org/entity/Q1046651',
+        type: 'federal_agency',
+        citationFormat: 'CFR',
+        citationPlaceholder: '26 CFR 1.501'
+      },
+      hhs: {
+        name: 'U.S. Department of Health and Human Services',
+        shortName: 'HHS',
+        uri: 'http://www.wikidata.org/entity/Q942530',
+        type: 'federal_agency',
+        citationFormat: 'CFR',
+        citationPlaceholder: '45 CFR 164.501'
+      },
+      dol: {
+        name: 'U.S. Department of Labor',
+        shortName: 'DOL',
+        uri: 'http://www.wikidata.org/entity/Q579775',
+        type: 'federal_agency',
+        citationFormat: 'CFR',
+        citationPlaceholder: '29 CFR 825.102'
+      },
+      omb: {
+        name: 'Office of Management and Budget',
+        shortName: 'OMB',
+        uri: 'http://www.wikidata.org/entity/Q596714',
+        type: 'federal_agency',
+        citationFormat: 'guidance',
+        citationPlaceholder: 'OMB Circular A-133'
+      },
+      state: {
+        name: '',
+        shortName: '',
+        uri: '',
+        type: 'state_agency',
+        citationFormat: 'statute',
+        citationPlaceholder: 'State Code § 123.45'
+      },
+      custom: {
+        name: '',
+        shortName: '',
+        uri: '',
+        type: 'federal_agency',
+        citationFormat: 'regulation',
+        citationPlaceholder: ''
+      }
+    };
+  }
+
+  /**
    * Show modal to import definition from URI
    */
   _showImportDefinitionModal() {
@@ -5255,15 +5327,259 @@ class EODataWorkbench {
         </div>
 
         <div class="import-tab-content" id="tab-manual" style="display: none;">
+          <!-- Authority Presets -->
           <div class="form-group">
-            <label for="definition-name" class="form-label">Definition Name</label>
-            <input type="text" id="definition-name" class="form-input"
-                   placeholder="My Custom Schema">
+            <label class="form-label">Quick Start: Select Authority</label>
+            <div class="authority-presets">
+              <button type="button" class="preset-btn" data-preset="hud">HUD</button>
+              <button type="button" class="preset-btn" data-preset="census">Census</button>
+              <button type="button" class="preset-btn" data-preset="irs">IRS</button>
+              <button type="button" class="preset-btn" data-preset="hhs">HHS</button>
+              <button type="button" class="preset-btn" data-preset="dol">DOL</button>
+              <button type="button" class="preset-btn" data-preset="omb">OMB</button>
+              <button type="button" class="preset-btn" data-preset="state">State Agency</button>
+              <button type="button" class="preset-btn" data-preset="custom">Custom...</button>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="definition-description" class="form-label">Description (optional)</label>
-            <textarea id="definition-description" class="form-input" rows="2"
-                      placeholder="Describe what this definition is for"></textarea>
+
+          <!-- Accordion Sections -->
+          <div class="def-accordion">
+            <!-- Term Section -->
+            <div class="def-accordion-section expanded" data-section="term">
+              <div class="def-accordion-header">
+                <i class="ph ph-caret-right accordion-icon"></i>
+                <i class="ph ph-tag section-icon"></i>
+                <span class="section-title">Term</span>
+                <span class="section-required">required</span>
+              </div>
+              <div class="def-accordion-content">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="def-term" class="form-label">Term <span class="required">*</span></label>
+                    <input type="text" id="def-term" class="form-input"
+                           placeholder="homeless">
+                    <span class="form-hint">Maps to your column/field key</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="def-term-label" class="form-label">Display Label</label>
+                    <input type="text" id="def-term-label" class="form-input"
+                           placeholder="Housing Status">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="def-term-as-written" class="form-label">As Written in Source</label>
+                  <input type="text" id="def-term-as-written" class="form-input"
+                         placeholder="Homeless (Category 1)">
+                </div>
+                <div class="form-group">
+                  <label for="def-term-definition" class="form-label">Definition Text</label>
+                  <textarea id="def-term-definition" class="form-input" rows="3"
+                            placeholder="An individual or family who lacks a fixed, regular, and adequate nighttime residence..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="def-term-categories" class="form-label">Categories / Subdivisions</label>
+                  <input type="text" id="def-term-categories" class="form-input"
+                         placeholder="Category 1, Category 2, Category 3 (comma-separated)">
+                  <span class="form-hint">If the definition has sub-parts (e.g., HUD's 4 categories)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Authority Section -->
+            <div class="def-accordion-section" data-section="authority">
+              <div class="def-accordion-header">
+                <i class="ph ph-caret-right accordion-icon"></i>
+                <i class="ph ph-bank section-icon"></i>
+                <span class="section-title">Authority</span>
+                <span class="section-subtitle" id="authority-preview">Who governs this definition</span>
+              </div>
+              <div class="def-accordion-content">
+                <div class="form-group">
+                  <label for="def-authority-type" class="form-label">Authority Type</label>
+                  <select id="def-authority-type" class="form-input">
+                    <option value="federal_agency">Federal Agency</option>
+                    <option value="state_agency">State Agency</option>
+                    <option value="local_gov">Local Government</option>
+                    <option value="standards_body">Standards Body</option>
+                    <option value="ngo">NGO / Nonprofit</option>
+                    <option value="academic">Academic Institution</option>
+                    <option value="international">International Organization</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="def-authority-name" class="form-label">Authority Name <span class="required">*</span></label>
+                    <input type="text" id="def-authority-name" class="form-input"
+                           placeholder="U.S. Department of Housing and Urban Development">
+                  </div>
+                  <div class="form-group">
+                    <label for="def-authority-short" class="form-label">Short Name / Acronym</label>
+                    <input type="text" id="def-authority-short" class="form-input"
+                           placeholder="HUD">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="def-authority-uri" class="form-label">Authority URI</label>
+                  <div class="input-with-action">
+                    <input type="text" id="def-authority-uri" class="form-input"
+                           placeholder="http://www.wikidata.org/entity/Q596692">
+                    <button type="button" class="btn btn-icon" id="search-authority-btn" title="Search Wikidata">
+                      <i class="ph ph-magnifying-glass"></i>
+                    </button>
+                  </div>
+                  <span class="form-hint">Wikidata or other linked data URI</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Source Document Section -->
+            <div class="def-accordion-section" data-section="source">
+              <div class="def-accordion-header">
+                <i class="ph ph-caret-right accordion-icon"></i>
+                <i class="ph ph-file-text section-icon"></i>
+                <span class="section-title">Source Document</span>
+                <span class="section-subtitle">Where is it written</span>
+              </div>
+              <div class="def-accordion-content">
+                <div class="form-group">
+                  <label for="def-source-type" class="form-label">Document Type</label>
+                  <select id="def-source-type" class="form-input">
+                    <option value="regulation">Regulation (CFR)</option>
+                    <option value="statute">Statute (USC)</option>
+                    <option value="guidance">Guidance / Circular</option>
+                    <option value="policy">Policy Document</option>
+                    <option value="standard">Standard</option>
+                    <option value="manual">Manual / Handbook</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="def-source-title" class="form-label">Document Title</label>
+                  <input type="text" id="def-source-title" class="form-input"
+                         placeholder="Continuum of Care Program">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="def-source-citation" class="form-label">Legal Citation <span class="required">*</span></label>
+                    <input type="text" id="def-source-citation" class="form-input"
+                           placeholder="24 CFR 578.3">
+                  </div>
+                  <div class="form-group">
+                    <label for="def-source-section" class="form-label">Section</label>
+                    <input type="text" id="def-source-section" class="form-input"
+                           placeholder="§578.3 Definitions">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="def-source-url" class="form-label">Document URL</label>
+                  <input type="url" id="def-source-url" class="form-input"
+                         placeholder="https://www.ecfr.gov/current/title-24/...">
+                </div>
+              </div>
+            </div>
+
+            <!-- Version & Validity Section -->
+            <div class="def-accordion-section" data-section="validity">
+              <div class="def-accordion-header">
+                <i class="ph ph-caret-right accordion-icon"></i>
+                <i class="ph ph-calendar section-icon"></i>
+                <span class="section-title">Version & Validity</span>
+                <span class="section-subtitle">When is it in force</span>
+              </div>
+              <div class="def-accordion-content">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="def-version-id" class="form-label">Version</label>
+                    <input type="text" id="def-version-id" class="form-input"
+                           placeholder="2015 Final Rule">
+                  </div>
+                  <div class="form-group">
+                    <label for="def-version-published" class="form-label">Published Date</label>
+                    <input type="date" id="def-version-published" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="def-validity-from" class="form-label">Effective Date <span class="required">*</span></label>
+                    <input type="date" id="def-validity-from" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label for="def-validity-to" class="form-label">End Date</label>
+                    <input type="date" id="def-validity-to" class="form-input">
+                    <span class="form-hint">Leave blank if still in force</span>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="def-supersedes" class="form-label">Supersedes</label>
+                    <input type="text" id="def-supersedes" class="form-input"
+                           placeholder="2012 Interim Rule">
+                  </div>
+                  <div class="form-group">
+                    <label for="def-superseded-by" class="form-label">Superseded By</label>
+                    <input type="text" id="def-superseded-by" class="form-input"
+                           placeholder="Leave blank if current">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Jurisdiction Section -->
+            <div class="def-accordion-section" data-section="jurisdiction">
+              <div class="def-accordion-header">
+                <i class="ph ph-caret-right accordion-icon"></i>
+                <i class="ph ph-globe section-icon"></i>
+                <span class="section-title">Jurisdiction</span>
+                <span class="section-subtitle">Where does it apply</span>
+              </div>
+              <div class="def-accordion-content">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="def-jurisdiction-geo" class="form-label">Geographic Scope</label>
+                    <input type="text" id="def-jurisdiction-geo" class="form-input"
+                           placeholder="United States">
+                  </div>
+                  <div class="form-group">
+                    <label for="def-jurisdiction-programs" class="form-label">Programs</label>
+                    <input type="text" id="def-jurisdiction-programs" class="form-input"
+                           placeholder="CoC Program, ESG Program (comma-separated)">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Your Scope Section (Always visible/prominent) -->
+            <div class="def-accordion-section expanded scope-section" data-section="scope">
+              <div class="def-accordion-header">
+                <i class="ph ph-caret-right accordion-icon"></i>
+                <i class="ph ph-pencil-line section-icon"></i>
+                <span class="section-title">Your Operational Scope</span>
+                <span class="section-required">recommended</span>
+              </div>
+              <div class="def-accordion-content">
+                <div class="scope-note-box">
+                  <div class="form-group">
+                    <label for="def-scope-note" class="form-label">Scope Note</label>
+                    <textarea id="def-scope-note" class="form-input" rows="2"
+                              placeholder="HUD Category 1 only. Excludes doubled-up, at-risk, and fleeing domestic violence."></textarea>
+                    <span class="form-hint">How YOU are applying/interpreting this definition in your context</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="def-scope-predicate" class="form-label">Semantic Relationship (SKOS)</label>
+                    <select id="def-scope-predicate" class="form-input">
+                      <option value="">-- Select relationship --</option>
+                      <option value="skos:exactMatch">Exact Match — identical meaning</option>
+                      <option value="skos:narrowMatch">Narrow Match — your usage is more specific</option>
+                      <option value="skos:broadMatch">Broad Match — your usage is broader</option>
+                      <option value="skos:closeMatch">Close Match — similar but not exact</option>
+                      <option value="skos:relatedMatch">Related Match — conceptually related</option>
+                    </select>
+                    <span class="form-hint">How does your usage relate to the official definition?</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -5281,48 +5597,281 @@ class EODataWorkbench {
           this._showNotification('Please enter a URI', 'error');
         }
       } else {
-        const name = document.getElementById('definition-name')?.value?.trim();
-        const description = document.getElementById('definition-description')?.value?.trim();
-        if (name) {
-          this._createManualDefinition(name, description);
+        // Collect all definition data from form
+        const defData = this._collectDefinitionFormData();
+        if (defData.term?.term) {
+          this._createFullDefinition(defData);
         } else {
-          this._showNotification('Please enter a name', 'error');
+          this._showNotification('Please enter a term name', 'error');
         }
+      }
+    }, { width: '720px' });
+
+    // Setup after modal renders
+    setTimeout(() => {
+      this._setupDefinitionModalEvents();
+    }, 0);
+  }
+
+  /**
+   * Setup all event listeners for the definition modal
+   */
+  _setupDefinitionModalEvents() {
+    // Tab switching
+    document.querySelectorAll('.import-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.import-tab-content').forEach(content => {
+          content.style.display = content.id === `tab-${tab.dataset.tab}` ? 'block' : 'none';
+        });
+      });
+    });
+
+    // URI search functionality
+    const searchBtn = document.getElementById('uri-search-btn');
+    const searchInput = document.getElementById('uri-search-query');
+
+    const performSearch = () => {
+      const query = searchInput?.value?.trim();
+      const source = document.getElementById('uri-search-source')?.value;
+      if (query) {
+        this._searchDefinitionUri(query, source);
+      }
+    };
+
+    searchBtn?.addEventListener('click', performSearch);
+    searchInput?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        performSearch();
       }
     });
 
-    // Tab switching and search setup
-    setTimeout(() => {
-      document.querySelectorAll('.import-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
-          tab.classList.add('active');
-          document.querySelectorAll('.import-tab-content').forEach(content => {
-            content.style.display = content.id === `tab-${tab.dataset.tab}` ? 'block' : 'none';
-          });
-        });
+    // Authority presets
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._applyAuthorityPreset(btn.dataset.preset);
       });
+    });
 
-      // URI search functionality
-      const searchBtn = document.getElementById('uri-search-btn');
-      const searchInput = document.getElementById('uri-search-query');
+    // Accordion sections
+    document.querySelectorAll('.def-accordion-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const section = header.parentElement;
+        section.classList.toggle('expanded');
+      });
+    });
 
-      const performSearch = () => {
-        const query = searchInput?.value?.trim();
-        const source = document.getElementById('uri-search-source')?.value;
-        if (query) {
-          this._searchDefinitionUri(query, source);
+    // Authority name change updates preview
+    const authorityNameInput = document.getElementById('def-authority-name');
+    const authorityShortInput = document.getElementById('def-authority-short');
+    const authorityPreview = document.getElementById('authority-preview');
+
+    const updateAuthorityPreview = () => {
+      const short = authorityShortInput?.value?.trim();
+      const name = authorityNameInput?.value?.trim();
+      if (short || name) {
+        authorityPreview.textContent = short || name;
+        authorityPreview.classList.add('has-value');
+      } else {
+        authorityPreview.textContent = 'Who governs this definition';
+        authorityPreview.classList.remove('has-value');
+      }
+    };
+
+    authorityNameInput?.addEventListener('input', updateAuthorityPreview);
+    authorityShortInput?.addEventListener('input', updateAuthorityPreview);
+
+    // Search authority button
+    document.getElementById('search-authority-btn')?.addEventListener('click', async () => {
+      const name = authorityNameInput?.value?.trim() || authorityShortInput?.value?.trim();
+      if (!name) {
+        this._showNotification('Enter authority name first', 'warning');
+        return;
+      }
+      try {
+        const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&limit=1&format=json&origin=*`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.search?.[0]) {
+          document.getElementById('def-authority-uri').value = `http://www.wikidata.org/entity/${data.search[0].id}`;
+          this._showNotification('Authority URI found', 'success');
+        } else {
+          this._showNotification('No Wikidata match found', 'warning');
         }
+      } catch (e) {
+        this._showNotification('Search failed', 'error');
+      }
+    });
+
+    // Source type changes citation placeholder
+    document.getElementById('def-source-type')?.addEventListener('change', (e) => {
+      const citationInput = document.getElementById('def-source-citation');
+      const placeholders = {
+        regulation: '24 CFR 578.3',
+        statute: '42 U.S.C. § 11302',
+        guidance: 'OMB Circular A-133',
+        policy: 'Policy Memorandum 2015-01',
+        standard: 'ISO 9001:2015',
+        manual: 'HUD Handbook 4000.1',
+        other: ''
       };
+      if (citationInput) {
+        citationInput.placeholder = placeholders[e.target.value] || '';
+      }
+    });
+  }
 
-      searchBtn?.addEventListener('click', performSearch);
-      searchInput?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          performSearch();
+  /**
+   * Apply an authority preset to the form
+   */
+  _applyAuthorityPreset(presetKey) {
+    const presets = this._getAuthorityPresets();
+    const preset = presets[presetKey];
+    if (!preset) return;
+
+    document.getElementById('def-authority-name').value = preset.name;
+    document.getElementById('def-authority-short').value = preset.shortName;
+    document.getElementById('def-authority-uri').value = preset.uri;
+    document.getElementById('def-authority-type').value = preset.type;
+
+    // Update source type based on preset
+    if (preset.citationFormat === 'CFR') {
+      document.getElementById('def-source-type').value = 'regulation';
+    } else if (preset.citationFormat === 'statute') {
+      document.getElementById('def-source-type').value = 'statute';
+    } else if (preset.citationFormat === 'guidance') {
+      document.getElementById('def-source-type').value = 'guidance';
+    }
+
+    // Update citation placeholder
+    const citationInput = document.getElementById('def-source-citation');
+    if (citationInput && preset.citationPlaceholder) {
+      citationInput.placeholder = preset.citationPlaceholder;
+    }
+
+    // Expand authority section and update preview
+    const authoritySection = document.querySelector('[data-section="authority"]');
+    authoritySection?.classList.add('expanded');
+
+    const preview = document.getElementById('authority-preview');
+    if (preview && preset.shortName) {
+      preview.textContent = preset.shortName;
+      preview.classList.add('has-value');
+    }
+
+    // If custom, expand for editing
+    if (presetKey === 'custom' || presetKey === 'state') {
+      document.getElementById('def-authority-name')?.focus();
+    }
+  }
+
+  /**
+   * Collect all definition data from the form
+   */
+  _collectDefinitionFormData() {
+    const getValue = (id) => document.getElementById(id)?.value?.trim() || null;
+    const getArray = (id) => {
+      const val = getValue(id);
+      return val ? val.split(',').map(s => s.trim()).filter(Boolean) : null;
+    };
+
+    return {
+      term: {
+        term: getValue('def-term'),
+        label: getValue('def-term-label'),
+        asWritten: getValue('def-term-as-written'),
+        definitionText: getValue('def-term-definition'),
+        categories: getArray('def-term-categories')
+      },
+      authority: {
+        name: getValue('def-authority-name'),
+        shortName: getValue('def-authority-short'),
+        uri: getValue('def-authority-uri'),
+        type: getValue('def-authority-type')
+      },
+      source: {
+        type: getValue('def-source-type'),
+        title: getValue('def-source-title'),
+        citation: getValue('def-source-citation'),
+        section: getValue('def-source-section'),
+        url: getValue('def-source-url')
+      },
+      version: {
+        id: getValue('def-version-id'),
+        published: getValue('def-version-published')
+      },
+      validity: {
+        from: getValue('def-validity-from'),
+        to: getValue('def-validity-to'),
+        supersedes: getValue('def-supersedes'),
+        supersededBy: getValue('def-superseded-by')
+      },
+      jurisdiction: {
+        geographic: getValue('def-jurisdiction-geo'),
+        programs: getArray('def-jurisdiction-programs')
+      },
+      scope: {
+        note: getValue('def-scope-note'),
+        predicate: getValue('def-scope-predicate')
+      }
+    };
+  }
+
+  /**
+   * Create a full definition from form data
+   */
+  _createFullDefinition(defData) {
+    // Clean out null/empty values
+    const clean = (obj) => {
+      if (obj === null || obj === undefined) return undefined;
+      if (Array.isArray(obj)) {
+        const filtered = obj.filter(Boolean);
+        return filtered.length ? filtered : undefined;
+      }
+      if (typeof obj === 'object') {
+        const cleaned = {};
+        for (const [k, v] of Object.entries(obj)) {
+          const cleanedVal = clean(v);
+          if (cleanedVal !== undefined) {
+            cleaned[k] = cleanedVal;
+          }
         }
-      });
-    }, 0);
+        return Object.keys(cleaned).length ? cleaned : undefined;
+      }
+      return obj || undefined;
+    };
+
+    const cleanedData = clean(defData);
+
+    // Create definition object
+    const definition = {
+      id: `def_${Date.now()}`,
+      name: cleanedData.term?.label || cleanedData.term?.term || 'Unnamed Definition',
+      description: cleanedData.term?.definitionText || '',
+      sourceUri: cleanedData.source?.url || null,
+      format: 'manual',
+      importedAt: new Date().toISOString(),
+      status: 'active',
+      terms: [{
+        id: `term_${Date.now()}_0`,
+        name: cleanedData.term?.term,
+        type: 'definition',
+        description: cleanedData.term?.definitionText,
+        uri: cleanedData.authority?.uri
+      }],
+      // Store the full definition source metadata
+      definitionSource: cleanedData
+    };
+
+    this.definitions.push(definition);
+    this._saveData();
+    this._renderDefinitionsNav();
+    this._showDefinitionDetail(definition.id);
+    this._showNotification(`Created definition: ${definition.name}`, 'success');
   }
 
   /**
@@ -5492,28 +6041,121 @@ class EODataWorkbench {
             </div>
             <div class="uri-result-description">${this._escapeHtml(r.description)}</div>
             <div class="uri-result-uri">${this._escapeHtml(r.uri)}</div>
+            <div class="uri-result-actions">
+              <button type="button" class="btn btn-sm btn-secondary use-uri-btn" data-index="${i}">
+                Use URI
+              </button>
+              <button type="button" class="btn btn-sm btn-primary edit-details-btn" data-index="${i}">
+                Edit Details
+              </button>
+            </div>
           </div>
         `).join('')}
       </div>
     `;
 
-    // Add click handlers
-    container.querySelectorAll('.uri-search-result-item').forEach((item, index) => {
-      item.addEventListener('click', () => {
+    // Add click handlers for Use URI buttons
+    container.querySelectorAll('.use-uri-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = parseInt(btn.dataset.index);
         const result = results[index];
         if (result) {
-          // Populate the URI field
           const uriInput = document.getElementById('definition-uri');
           const nameInput = document.getElementById('definition-name-uri');
           if (uriInput) uriInput.value = result.uri;
           if (nameInput && !nameInput.value) nameInput.value = result.label;
 
-          // Highlight selected
+          container.querySelectorAll('.uri-search-result-item').forEach(el => el.classList.remove('selected'));
+          btn.closest('.uri-search-result-item')?.classList.add('selected');
+        }
+      });
+    });
+
+    // Add click handlers for Edit Details buttons - switches to manual tab with pre-filled data
+    container.querySelectorAll('.edit-details-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = parseInt(btn.dataset.index);
+        const result = results[index];
+        if (result) {
+          this._switchToManualTabWithData(result);
+        }
+      });
+    });
+
+    // Row click also selects for Use URI
+    container.querySelectorAll('.uri-search-result-item').forEach((item, index) => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        const result = results[index];
+        if (result) {
+          const uriInput = document.getElementById('definition-uri');
+          const nameInput = document.getElementById('definition-name-uri');
+          if (uriInput) uriInput.value = result.uri;
+          if (nameInput && !nameInput.value) nameInput.value = result.label;
+
           container.querySelectorAll('.uri-search-result-item').forEach(el => el.classList.remove('selected'));
           item.classList.add('selected');
         }
       });
     });
+  }
+
+  /**
+   * Switch to manual tab and pre-fill data from URI search result
+   */
+  _switchToManualTabWithData(result) {
+    // Switch to manual tab
+    document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.import-tab[data-tab="manual"]')?.classList.add('active');
+    document.querySelectorAll('.import-tab-content').forEach(content => {
+      content.style.display = content.id === 'tab-manual' ? 'block' : 'none';
+    });
+
+    // Pre-fill term fields
+    const termInput = document.getElementById('def-term');
+    const termLabelInput = document.getElementById('def-term-label');
+    const termDefInput = document.getElementById('def-term-definition');
+
+    if (termInput && !termInput.value) termInput.value = result.label?.toLowerCase().replace(/\s+/g, '_') || '';
+    if (termLabelInput && !termLabelInput.value) termLabelInput.value = result.label || '';
+    if (termDefInput && !termDefInput.value && result.description) termDefInput.value = result.description;
+
+    // Pre-fill authority fields based on source
+    const authorityNameInput = document.getElementById('def-authority-name');
+    const authorityTypeInput = document.getElementById('def-authority-type');
+    const authorityUriInput = document.getElementById('def-authority-uri');
+    const sourceUrlInput = document.getElementById('def-source-url');
+
+    const sourceAuthority = {
+      'Wikidata': { name: 'Wikidata', type: 'standards_body' },
+      'Schema.org': { name: 'Schema.org', type: 'standards_body' },
+      'LOV': { name: 'Linked Open Vocabularies', type: 'standards_body' },
+      'DBpedia': { name: 'DBpedia', type: 'standards_body' }
+    };
+
+    const auth = sourceAuthority[result.source];
+    if (auth) {
+      if (authorityNameInput && !authorityNameInput.value) authorityNameInput.value = auth.name;
+      if (authorityTypeInput) authorityTypeInput.value = auth.type;
+    }
+
+    if (authorityUriInput && result.uri) authorityUriInput.value = result.uri;
+    if (sourceUrlInput && result.uri) sourceUrlInput.value = result.uri;
+
+    // Update authority preview
+    const preview = document.getElementById('authority-preview');
+    if (preview && auth) {
+      preview.textContent = auth.name;
+      preview.classList.add('has-value');
+    }
+
+    // Expand relevant sections
+    document.querySelector('[data-section="term"]')?.classList.add('expanded');
+    document.querySelector('[data-section="authority"]')?.classList.add('expanded');
+
+    this._showNotification(`Pre-filled from ${result.source}: ${result.label}`, 'info');
   }
 
   /**
@@ -21087,6 +21729,13 @@ class EODataWorkbench {
 
     modal.querySelector('.modal-title').textContent = title;
     modal.querySelector('.modal-body').innerHTML = content;
+
+    // Handle width option
+    if (options.width) {
+      modal.style.maxWidth = options.width;
+    } else {
+      modal.style.maxWidth = '';
+    }
 
     // Handle hideFooter option
     const footer = document.getElementById('modal-footer');

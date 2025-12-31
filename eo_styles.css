@@ -13573,6 +13573,20 @@ body.has-picked-up .browser-tab:hover {
   word-break: break-all;
 }
 
+.uri-result-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
 .form-divider {
   display: flex;
   align-items: center;
@@ -13588,6 +13602,201 @@ body.has-picked-up .browser-tab:hover {
   flex: 1;
   height: 1px;
   background: var(--border-color);
+}
+
+/* Authority Presets */
+.authority-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.preset-btn {
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-btn:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.preset-btn.active {
+  border-color: var(--primary-500);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary-500);
+  font-weight: 500;
+}
+
+/* Definition Accordion */
+.def-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.def-accordion-section {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.def-accordion-section.scope-section {
+  border-color: var(--primary-300);
+  background: rgba(59, 130, 246, 0.03);
+}
+
+.def-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.def-accordion-header:hover {
+  background: var(--bg-hover);
+}
+
+.def-accordion-section.scope-section .def-accordion-header:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.accordion-icon {
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.def-accordion-section.expanded .accordion-icon {
+  transform: rotate(90deg);
+}
+
+.section-icon {
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.def-accordion-section.scope-section .section-icon {
+  color: var(--primary-500);
+}
+
+.section-title {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.section-subtitle {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.section-subtitle.has-value {
+  color: var(--primary-500);
+  font-weight: 500;
+}
+
+.section-required {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.def-accordion-section.scope-section .section-required {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary-600);
+}
+
+.def-accordion-content {
+  display: none;
+  padding: 0 14px 14px 14px;
+  animation: fadeIn 0.2s ease;
+}
+
+.def-accordion-section.expanded .def-accordion-content {
+  display: block;
+}
+
+/* Form Row for side-by-side fields */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Required field indicator */
+.form-label .required {
+  color: var(--error-500);
+  font-weight: 400;
+}
+
+/* Input with action button */
+.input-with-action {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-action .form-input {
+  flex: 1;
+}
+
+.btn-icon {
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.btn-icon i {
+  font-size: 16px;
+}
+
+/* Scope Note Box */
+.scope-note-box {
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.scope-note-box .form-group:last-child {
+  margin-bottom: 0;
 }
 
 /* Empty State */
