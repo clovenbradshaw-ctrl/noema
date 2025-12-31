@@ -3770,6 +3770,8 @@ body:has(.header-simplified) .view-disclosure {
   position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  width: 100%;
 }
 
 /* ===== View Tabs Header (Airtable-style) ===== */
@@ -4134,12 +4136,13 @@ mark.search-highlight {
   flex: 1;
   overflow: auto;
   position: relative;
+  width: 100%;
+  min-width: 0;
 }
 
 .data-table {
-  width: 100%;
+  min-width: 100%;
   border-collapse: collapse;
-  table-layout: fixed; /* CRITICAL: Column widths from th, not content */
 }
 
 .data-table th,
