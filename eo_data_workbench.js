@@ -5546,6 +5546,7 @@ class EODataWorkbench {
 
     const terms = definition.terms || definition.properties || [];
     const importDate = definition.importedAt ? new Date(definition.importedAt).toLocaleString() : 'Unknown';
+    const defSource = definition.definitionSource;
 
     contentArea.innerHTML = `
       <div class="definition-detail-view">
@@ -5583,6 +5584,8 @@ class EODataWorkbench {
             </button>
           </div>
         </div>
+
+        ${defSource ? this._renderDefinitionSourceSection(defSource) : ''}
 
         <div class="definition-terms-section">
           <h3><i class="ph ph-list"></i> Terms & Properties</h3>
@@ -5639,6 +5642,226 @@ class EODataWorkbench {
   }
 
   /**
+   * Render DefinitionSource metadata section
+   */
+  _renderDefinitionSourceSection(defSource) {
+    const authority = defSource.authority;
+    const source = defSource.source;
+    const validity = defSource.validity;
+    const version = defSource.version;
+    const jurisdiction = defSource.jurisdiction;
+    const term = defSource.term;
+
+    // Check if validity is current
+    const now = new Date().toISOString().split('T')[0];
+    const isCurrent = validity?.from <= now && (!validity?.to || validity.to >= now) && !validity?.supersededBy;
+
+    return `
+      <div class="definition-source-section">
+        <div class="definition-source-grid">
+          <!-- Authority -->
+          <div class="definition-source-card">
+            <div class="definition-source-card-header">
+              <i class="ph ph-buildings"></i>
+              <span>Authority</span>
+            </div>
+            <div class="definition-source-card-content">
+              <div class="definition-source-field">
+                <span class="field-label">Name</span>
+                <span class="field-value">${this._escapeHtml(authority?.name || '—')}</span>
+              </div>
+              ${authority?.shortName ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Short Name</span>
+                  <span class="field-value"><strong>${this._escapeHtml(authority.shortName)}</strong></span>
+                </div>
+              ` : ''}
+              <div class="definition-source-field">
+                <span class="field-label">Type</span>
+                <span class="field-value">
+                  <span class="definition-source-badge">${this._formatAuthorityType(authority?.type)}</span>
+                </span>
+              </div>
+              ${authority?.uri ? `
+                <div class="definition-source-field">
+                  <span class="field-label">URI</span>
+                  <span class="field-value">
+                    <a href="${this._escapeHtml(authority.uri)}" target="_blank" class="definition-source-link">
+                      ${this._escapeHtml(this._truncateName(authority.uri, 35))}
+                    </a>
+                  </span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Source Document -->
+          <div class="definition-source-card">
+            <div class="definition-source-card-header">
+              <i class="ph ph-file-text"></i>
+              <span>Source Document</span>
+            </div>
+            <div class="definition-source-card-content">
+              ${source?.title ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Title</span>
+                  <span class="field-value">${this._escapeHtml(source.title)}</span>
+                </div>
+              ` : ''}
+              ${source?.citation ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Citation</span>
+                  <span class="field-value"><code>${this._escapeHtml(source.citation)}</code></span>
+                </div>
+              ` : ''}
+              ${source?.section ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Section</span>
+                  <span class="field-value">${this._escapeHtml(source.section)}</span>
+                </div>
+              ` : ''}
+              <div class="definition-source-field">
+                <span class="field-label">Type</span>
+                <span class="field-value">
+                  <span class="definition-source-badge">${this._formatSourceType(source?.type)}</span>
+                </span>
+              </div>
+              ${source?.url ? `
+                <div class="definition-source-field">
+                  <span class="field-label">URL</span>
+                  <span class="field-value">
+                    <a href="${this._escapeHtml(source.url)}" target="_blank" class="definition-source-link">
+                      View Source <i class="ph ph-arrow-square-out"></i>
+                    </a>
+                  </span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Validity -->
+          <div class="definition-source-card">
+            <div class="definition-source-card-header">
+              <i class="ph ph-calendar-check"></i>
+              <span>Validity</span>
+              <span class="definition-source-status ${isCurrent ? 'status-current' : 'status-superseded'}">
+                ${isCurrent ? 'Current' : 'Superseded'}
+              </span>
+            </div>
+            <div class="definition-source-card-content">
+              <div class="definition-source-field">
+                <span class="field-label">Effective From</span>
+                <span class="field-value">${validity?.from || '—'}</span>
+              </div>
+              ${validity?.to ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Effective Until</span>
+                  <span class="field-value">${validity.to}</span>
+                </div>
+              ` : ''}
+              ${validity?.supersedes ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Supersedes</span>
+                  <span class="field-value">${this._escapeHtml(validity.supersedes)}</span>
+                </div>
+              ` : ''}
+              ${validity?.supersededBy ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Superseded By</span>
+                  <span class="field-value">${this._escapeHtml(validity.supersededBy)}</span>
+                </div>
+              ` : ''}
+              ${version?.id ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Version</span>
+                  <span class="field-value">${this._escapeHtml(version.id)}</span>
+                </div>
+              ` : ''}
+              ${version?.published ? `
+                <div class="definition-source-field">
+                  <span class="field-label">Published</span>
+                  <span class="field-value">${version.published}</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Jurisdiction -->
+          ${jurisdiction ? `
+            <div class="definition-source-card">
+              <div class="definition-source-card-header">
+                <i class="ph ph-globe"></i>
+                <span>Jurisdiction</span>
+              </div>
+              <div class="definition-source-card-content">
+                ${jurisdiction.geographic ? `
+                  <div class="definition-source-field">
+                    <span class="field-label">Geographic</span>
+                    <span class="field-value">${this._escapeHtml(jurisdiction.geographic)}</span>
+                  </div>
+                ` : ''}
+                ${jurisdiction.programs && jurisdiction.programs.length > 0 ? `
+                  <div class="definition-source-field">
+                    <span class="field-label">Programs</span>
+                    <span class="field-value">
+                      ${jurisdiction.programs.map(p => `<span class="definition-source-tag">${this._escapeHtml(p)}</span>`).join(' ')}
+                    </span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        ${term?.categories && term.categories.length > 0 ? `
+          <div class="definition-source-categories">
+            <div class="definition-source-card-header">
+              <i class="ph ph-list-bullets"></i>
+              <span>Categories / Subdivisions</span>
+            </div>
+            <ul class="definition-source-category-list">
+              ${term.categories.map(cat => `<li>${this._escapeHtml(cat)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  /**
+   * Format authority type for display
+   */
+  _formatAuthorityType(type) {
+    const typeMap = {
+      'federal_agency': 'Federal Agency',
+      'state_agency': 'State Agency',
+      'local_gov': 'Local Government',
+      'standards_body': 'Standards Body',
+      'ngo': 'NGO',
+      'academic': 'Academic',
+      'international': 'International',
+      'other': 'Other'
+    };
+    return typeMap[type] || type || 'Unknown';
+  }
+
+  /**
+   * Format source document type for display
+   */
+  _formatSourceType(type) {
+    const typeMap = {
+      'regulation': 'Regulation',
+      'statute': 'Statute',
+      'guidance': 'Guidance',
+      'policy': 'Policy',
+      'standard': 'Standard',
+      'manual': 'Manual',
+      'other': 'Other'
+    };
+    return typeMap[type] || type || 'Unknown';
+  }
+
+  /**
    * Attach event handlers for definition detail view
    */
   _attachDefinitionDetailHandlers(definition) {
@@ -5689,6 +5912,7 @@ class EODataWorkbench {
       <div class="import-definition-form">
         <div class="import-tabs">
           <button class="import-tab active" data-tab="uri">From URI</button>
+          <button class="import-tab" data-tab="json">Paste JSON</button>
           <button class="import-tab" data-tab="manual">Create Manually</button>
         </div>
 
@@ -5703,6 +5927,22 @@ class EODataWorkbench {
             <label for="definition-name-uri" class="form-label">Name (optional)</label>
             <input type="text" id="definition-name-uri" class="form-input"
                    placeholder="Will be inferred from URI if not provided">
+          </div>
+        </div>
+
+        <div class="import-tab-content" id="tab-json" style="display: none;">
+          <div class="form-group">
+            <label for="definition-json" class="form-label">DefinitionSource JSON</label>
+            <textarea id="definition-json" class="form-input" rows="10"
+                      placeholder='Paste DefinitionSource JSON here...
+
+{
+  "term": { "term": "homeless", "label": "Homelessness Status" },
+  "authority": { "name": "HUD", "type": "federal_agency" },
+  "source": { "citation": "24 CFR 578.3" },
+  "validity": { "from": "2015-12-04" }
+}'></textarea>
+            <span class="form-hint">Supports single definition or array of definitions. Use the Definition Source Builder tool for guided creation.</span>
           </div>
         </div>
 
@@ -5732,6 +5972,13 @@ class EODataWorkbench {
         } else {
           this._showNotification('Please enter a URI', 'error');
         }
+      } else if (activeTab === 'json') {
+        const json = document.getElementById('definition-json')?.value?.trim();
+        if (json) {
+          this._importDefinitionSourceFromJson(json);
+        } else {
+          this._showNotification('Please paste JSON', 'error');
+        }
       } else {
         const name = document.getElementById('definition-name')?.value?.trim();
         const description = document.getElementById('definition-description')?.value?.trim();
@@ -5755,6 +6002,149 @@ class EODataWorkbench {
         });
       });
     }, 0);
+  }
+
+  /**
+   * Import DefinitionSource from pasted JSON
+   * Supports both single definition and array of definitions
+   */
+  _importDefinitionSourceFromJson(jsonString) {
+    try {
+      let data = JSON.parse(jsonString);
+
+      // Normalize to array
+      if (!Array.isArray(data)) {
+        data = [data];
+      }
+
+      let importedCount = 0;
+      const errors = [];
+
+      data.forEach((defSource, index) => {
+        // Validate DefinitionSource schema
+        const validationErrors = this._validateDefinitionSource(defSource);
+        if (validationErrors.length > 0) {
+          errors.push(`Item ${index + 1}: ${validationErrors.join(', ')}`);
+          return;
+        }
+
+        // Convert DefinitionSource to internal definition format
+        const definition = this._convertDefinitionSourceToDefinition(defSource);
+        this.definitions.push(definition);
+        importedCount++;
+      });
+
+      this._saveData();
+      this._renderDefinitionsNav();
+
+      if (importedCount > 0) {
+        // Show the first imported definition
+        const lastDef = this.definitions[this.definitions.length - 1];
+        this._showDefinitionDetail(lastDef.id);
+        this._showNotification(`Imported ${importedCount} definition(s)`, 'success');
+      }
+
+      if (errors.length > 0) {
+        console.warn('Definition import errors:', errors);
+        this._showNotification(`${errors.length} error(s): ${errors[0]}`, 'warning');
+      }
+
+    } catch (error) {
+      console.error('Failed to import definition JSON:', error);
+      this._showNotification(`Invalid JSON: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Validate DefinitionSource object
+   * @returns {string[]} Array of validation error messages
+   */
+  _validateDefinitionSource(defSource) {
+    const errors = [];
+
+    // Term validation
+    if (!defSource.term) {
+      errors.push('missing term object');
+    } else if (!defSource.term.term) {
+      errors.push('missing term.term');
+    }
+
+    // Authority validation
+    if (!defSource.authority) {
+      errors.push('missing authority object');
+    } else {
+      if (!defSource.authority.name && !defSource.authority.shortName) {
+        errors.push('missing authority name');
+      }
+      if (!defSource.authority.type) {
+        errors.push('missing authority.type');
+      }
+    }
+
+    // Source validation
+    if (!defSource.source) {
+      errors.push('missing source object');
+    } else if (!defSource.source.citation && !defSource.source.title) {
+      errors.push('missing source citation or title');
+    }
+
+    // Validity validation
+    if (!defSource.validity) {
+      errors.push('missing validity object');
+    } else if (!defSource.validity.from) {
+      errors.push('missing validity.from');
+    }
+
+    return errors;
+  }
+
+  /**
+   * Convert DefinitionSource to internal definition format
+   */
+  _convertDefinitionSourceToDefinition(defSource) {
+    const id = defSource.id || `def_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Build name from term and authority
+    const authorityName = defSource.authority?.shortName || defSource.authority?.name || 'Unknown';
+    const termName = defSource.term?.label || defSource.term?.term;
+    const name = `${termName} (${authorityName})`;
+
+    // Build description from definition text and citation
+    const description = defSource.term?.definitionText || '';
+    const citation = defSource.source?.citation || defSource.source?.title || '';
+
+    // Create single term from the DefinitionSource
+    const term = {
+      id: `term_${Date.now()}`,
+      name: defSource.term.term,
+      label: defSource.term.label,
+      type: 'definition',
+      description: defSource.term.definitionText,
+      uri: defSource.authority?.uri,
+      asWritten: defSource.term.asWritten,
+      categories: defSource.term.categories
+    };
+
+    return {
+      id,
+      name,
+      description,
+      sourceUri: defSource.source?.url || null,
+      format: 'definition_source',
+      importedAt: new Date().toISOString(),
+      status: 'active',
+      terms: [term],
+
+      // Store the full DefinitionSource for rich display
+      definitionSource: {
+        term: defSource.term,
+        authority: defSource.authority,
+        source: defSource.source,
+        version: defSource.version || null,
+        validity: defSource.validity,
+        jurisdiction: defSource.jurisdiction || null
+      }
+    };
   }
 
   /**
