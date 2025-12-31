@@ -12257,6 +12257,49 @@ a:focus-visible,
   color: white;
 }
 
+/* Tab Close Button (for Import Data and Definitions tabs) */
+.tab-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.browser-tab:hover .tab-close-btn {
+  opacity: 0.7;
+}
+
+.tab-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.tab-close-btn:active {
+  background: var(--danger-500);
+  color: white;
+}
+
+.browser-tab.active .tab-close-btn {
+  opacity: 0.7;
+}
+
+.browser-tab.active .tab-close-btn:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
 /* Tab record count badge (for Sets) */
 .tab-count {
   font-size: 11px;

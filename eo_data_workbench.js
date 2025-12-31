@@ -13064,6 +13064,9 @@ class EODataWorkbench {
         </div>
         <span class="tab-title">Import Data</span>
         <span class="tab-count">${activeSourceCount}</span>
+        <button class="tab-close-btn" data-close-tab="import-data" title="Close tab">
+          <i class="ph ph-x"></i>
+        </button>
         ${isViewingSource ? '<div class="tab-curve-right"></div>' : ''}
       </div>
     `;
@@ -13077,6 +13080,9 @@ class EODataWorkbench {
         </div>
         <span class="tab-title">Definitions</span>
         <span class="tab-count">${activeDefinitionsCount}</span>
+        <button class="tab-close-btn" data-close-tab="definitions" title="Close tab">
+          <i class="ph ph-x"></i>
+        </button>
         ${isViewingDefinitions ? '<div class="tab-curve-right"></div>' : ''}
       </div>
     `;
@@ -13122,6 +13128,17 @@ class EODataWorkbench {
 
     // Create delegated click handler
     this._tabClickHandler = (e) => {
+      // Check if clicking a close button
+      const closeBtn = e.target.closest('.tab-close-btn');
+      if (closeBtn) {
+        e.stopPropagation();
+        const tabType = closeBtn.dataset.closeTab;
+        if (tabType) {
+          this._closeSpecialTab(tabType);
+        }
+        return;
+      }
+
       const tab = e.target.closest('.browser-tab');
       if (!tab) return;
 
@@ -13169,10 +13186,28 @@ class EODataWorkbench {
     }
 
     this._tabContextMenuHandler = (e) => {
-      const tab = e.target.closest('.browser-tab[data-set-id]');
-      if (tab) {
+      // Check for set tabs first
+      const setTab = e.target.closest('.browser-tab[data-set-id]');
+      if (setTab) {
         e.preventDefault();
-        this._showSetTabContextMenu(e, tab.dataset.setId);
+        this._showSetTabContextMenu(e, setTab.dataset.setId);
+        return;
+      }
+
+      // Check for Import Data tab
+      const importTab = e.target.closest('.import-data-tab');
+      if (importTab) {
+        e.preventDefault();
+        this._showSpecialTabContextMenu(e, 'import-data');
+        return;
+      }
+
+      // Check for Definitions tab
+      const definitionsTab = e.target.closest('.definitions-tab');
+      if (definitionsTab) {
+        e.preventDefault();
+        this._showSpecialTabContextMenu(e, 'definitions');
+        return;
       }
     };
 
@@ -13281,6 +13316,66 @@ class EODataWorkbench {
       }
     };
     setTimeout(() => document.addEventListener('click', closeMenu), 0);
+  }
+
+  /**
+   * Show context menu for Import Data or Definitions tab
+   */
+  _showSpecialTabContextMenu(e, tabType) {
+    const existing = document.querySelector('.tab-context-menu');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.className = 'tab-context-menu';
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+    menu.innerHTML = `
+      <div class="tab-context-item" data-action="close">
+        <i class="ph ph-x"></i>
+        <span>Close Tab</span>
+      </div>
+    `;
+
+    document.body.appendChild(menu);
+
+    menu.querySelectorAll('.tab-context-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const action = item.dataset.action;
+        if (action === 'close') {
+          this._closeSpecialTab(tabType);
+        }
+        menu.remove();
+      });
+    });
+
+    const closeMenu = (evt) => {
+      if (!menu.contains(evt.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+  }
+
+  /**
+   * Close the Import Data or Definitions tab and navigate to first set
+   */
+  _closeSpecialTab(tabType) {
+    // Clear the special tab view state
+    if (tabType === 'import-data') {
+      this.currentSourceId = null;
+    } else if (tabType === 'definitions') {
+      this.isViewingDefinitions = false;
+    }
+
+    // Navigate to the first set if available
+    if (this.sets.length > 0) {
+      this._selectSet(this.sets[0].id);
+    } else {
+      // No sets available, just re-render
+      this._renderTabBar();
+      this._renderMainContent();
+    }
   }
 
   /**
