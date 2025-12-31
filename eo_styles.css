@@ -24045,12 +24045,12 @@ body.has-picked-up .browser-tab:hover {
   text-align: right;
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-muted, #888);
+  color: var(--text-muted, #b8b8c8);
 }
 
 .type-distribution .type-bar-more {
   font-size: 11px;
-  color: var(--text-muted, #888);
+  color: var(--text-muted, #b8b8c8);
   text-align: center;
   padding: 4px 0 0;
   border-top: 1px solid var(--border-color, #2a2a4a);
@@ -24106,7 +24106,7 @@ body.has-picked-up .browser-tab:hover {
 
 .subtype-count {
   font-size: 11px;
-  color: var(--text-muted, #888);
+  color: var(--text-muted, #b8b8c8);
   background: var(--bg-tertiary, #1a1a35);
   padding: 2px 8px;
   border-radius: 10px;
@@ -24117,7 +24117,7 @@ body.has-picked-up .browser-tab:hover {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--text-muted, #888);
+  color: var(--text-muted, #b8b8c8);
   padding-top: 8px;
   border-top: 1px solid var(--border-color, #2a2a4a);
 }
@@ -24127,7 +24127,7 @@ body.has-picked-up .browser-tab:hover {
 }
 
 .subtypes-summary i.ph-info {
-  color: var(--text-muted, #888);
+  color: var(--text-muted, #b8b8c8);
 }
 
 .subtypes-summary i.ph-eye {
@@ -24158,7 +24158,7 @@ body.has-picked-up .browser-tab:hover {
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--text-secondary, #aaa);
+  color: var(--text-secondary, #c8c8d8);
   transition: all 0.2s ease;
   border: 1px solid transparent;
 }
@@ -24190,7 +24190,7 @@ body.has-picked-up .browser-tab:hover {
 }
 
 .subtypes-mode-selector .mode-option.selected i.ph-minus-circle {
-  color: var(--text-muted, #888);
+  color: var(--text-muted, #b8b8c8);
 }
 
 /* Enhanced Subtype Item with Configuration */
@@ -24224,7 +24224,7 @@ body.has-picked-up .browser-tab:hover {
 }
 
 .subtype-main label i {
-  color: var(--text-secondary, #aaa);
+  color: var(--text-secondary, #c8c8d8);
   font-size: 14px;
 }
 
@@ -24243,7 +24243,7 @@ body.has-picked-up .browser-tab:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--text-secondary, #aaa);
+  color: var(--text-secondary, #c8c8d8);
 }
 
 .subtype-view-type i {
@@ -24252,7 +24252,7 @@ body.has-picked-up .browser-tab:hover {
 }
 
 .subtype-field-count {
-  color: var(--text-muted, #888);
+  color: var(--text-muted, #b8b8c8);
 }
 
 .subtype-configure-btn {
