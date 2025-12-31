@@ -2221,7 +2221,116 @@ class EODataWorkbench {
     // Select the sample project so user is always in a project context
     this.currentProjectId = sampleProject.id;
 
+    // Trigger auto-import key definition suggestions for sample data
+    this._triggerKeySuggestions(source);
+
     this._saveData();
+  }
+
+  /**
+   * Trigger key definition suggestions for a source
+   * @param {Object} source - Source object with schema
+   * @private
+   */
+  _triggerKeySuggestions(source) {
+    if (!source || !window.EOKeySuggestions) return;
+
+    const { autoImportSuggestions, injectKeySuggestionStyles } = window.EOKeySuggestions;
+
+    // Inject styles
+    injectKeySuggestionStyles();
+
+    // Generate suggestions asynchronously
+    setTimeout(async () => {
+      try {
+        const suggestions = await autoImportSuggestions(source, {
+          showPanel: false, // Don't auto-show, we'll show via notification
+          workbench: this
+        });
+
+        if (suggestions && suggestions.length > 0) {
+          // Show notification banner after a brief delay
+          setTimeout(() => {
+            this._showKeySuggestionNotification(suggestions.length, source.id);
+          }, 1000);
+        }
+      } catch (error) {
+        console.warn('Key suggestion generation failed:', error);
+      }
+    }, 500);
+  }
+
+  /**
+   * Show notification for pending key suggestions
+   * @param {number} count - Number of pending suggestions
+   * @param {string} sourceId - Source ID
+   * @private
+   */
+  _showKeySuggestionNotification(count, sourceId) {
+    if (!window.EOKeySuggestions || count === 0) return;
+
+    const { createSuggestionBanner } = window.EOKeySuggestions;
+
+    const banner = createSuggestionBanner(count, () => {
+      this._showKeySuggestionPanel(sourceId);
+    });
+
+    if (banner) {
+      // Insert banner at top of content area
+      const contentArea = document.getElementById('content-area');
+      if (contentArea) {
+        const existingBanner = contentArea.querySelector('.suggestion-banner');
+        if (existingBanner) existingBanner.remove();
+        contentArea.insertBefore(banner, contentArea.firstChild);
+      }
+    }
+  }
+
+  /**
+   * Show the key suggestion panel
+   * @param {string} sourceId - Optional source ID to focus on
+   */
+  _showKeySuggestionPanel(sourceId = null) {
+    if (!window.EOKeySuggestions) return;
+
+    const { initKeySuggestionPanel, injectKeySuggestionStyles } = window.EOKeySuggestions;
+
+    // Inject styles
+    injectKeySuggestionStyles();
+
+    // Show the overlay
+    const overlay = document.getElementById('key-suggestion-overlay');
+    const container = document.getElementById('key-suggestion-container');
+
+    if (overlay && container) {
+      overlay.style.display = 'flex';
+
+      // Initialize the panel
+      const panel = initKeySuggestionPanel({
+        container: container,
+        workbench: this
+      });
+
+      // Override the hide method to also hide the overlay
+      const originalHide = panel.hide.bind(panel);
+      panel.hide = () => {
+        originalHide();
+        overlay.style.display = 'none';
+
+        // Remove any suggestion banners
+        const banner = document.querySelector('.suggestion-banner');
+        if (banner) banner.remove();
+      };
+
+      panel.show(sourceId);
+
+      // Close on overlay click (outside the panel)
+      overlay.onclick = (e) => {
+        if (e.target === overlay) {
+          panel.hide();
+        }
+      };
+    }
   }
 
   _bindElements() {
@@ -7119,6 +7228,234 @@ class EODataWorkbench {
   }
 
   /**
+   * Get all set linkages for terms in a definition
+   */
+  _getTermSetLinkages(definition) {
+    const linkages = new Map(); // termId -> [{setId, setName, fieldId, fieldName}]
+    const sets = this.sets || [];
+    const terms = definition.terms || definition.properties || [];
+
+    terms.forEach(term => {
+      const termId = term.id || term.name;
+      linkages.set(termId, []);
+    });
+
+    sets.forEach(set => {
+      (set.fields || []).forEach(field => {
+        if (field.definitionRef?.definitionId === definition.id) {
+          const termId = field.definitionRef.termId;
+          if (linkages.has(termId)) {
+            linkages.get(termId).push({
+              setId: set.id,
+              setName: set.name,
+              fieldId: field.id,
+              fieldName: field.name
+            });
+          }
+        }
+      });
+    });
+
+    return linkages;
+  }
+
+  /**
+   * Get unique types from terms
+   */
+  _getUniqueTermTypes(terms) {
+    const types = new Set();
+    terms.forEach(term => {
+      const type = term.type || term.datatype || 'string';
+      types.add(type);
+    });
+    return Array.from(types).sort();
+  }
+
+  /**
+   * Get sets that have terms linked from this definition
+   */
+  _getLinkedSetsForDefinition(definition) {
+    const linkedSets = new Map(); // setId -> {set, fields: [{fieldId, fieldName, termId}]}
+    const sets = this.sets || [];
+
+    sets.forEach(set => {
+      const linkedFields = [];
+      (set.fields || []).forEach(field => {
+        if (field.definitionRef?.definitionId === definition.id) {
+          linkedFields.push({
+            fieldId: field.id,
+            fieldName: field.name,
+            termId: field.definitionRef.termId
+          });
+        }
+      });
+      if (linkedFields.length > 0) {
+        linkedSets.set(set.id, { set, fields: linkedFields });
+      }
+    });
+
+    return linkedSets;
+  }
+
+  /**
+   * Render terms table rows
+   */
+  _renderTermsTableRows(terms, termLinkages, definitionId) {
+    return terms.map(term => {
+      const termId = term.id || term.name;
+      const termName = term.name || term.label || termId;
+      const termLabel = term.label || term.altLabel || term.prefLabel || '';
+      const termType = term.type || term.datatype || 'string';
+      const termDesc = term.description || term.comment || '';
+      const termUri = term.uri || term['@id'] || '';
+      const linkages = termLinkages.get(termId) || [];
+
+      // Build searchable data attributes
+      const searchText = [termName, termLabel, termDesc, termUri].filter(Boolean).join(' ').toLowerCase();
+
+      return `
+        <tr class="definition-term-row"
+            data-term-id="${this._escapeHtml(termId)}"
+            data-definition-id="${this._escapeHtml(definitionId)}"
+            data-term-type="${this._escapeHtml(termType)}"
+            data-linked="${linkages.length > 0 ? 'true' : 'false'}"
+            data-search="${this._escapeHtml(searchText)}">
+          <td class="term-name-cell">
+            <div class="term-name-content">
+              <i class="ph ph-tag"></i>
+              <span class="term-id">${this._escapeHtml(termName)}</span>
+            </div>
+          </td>
+          <td class="term-label-cell">
+            ${termLabel && termLabel !== termName ? `
+              <span class="term-label">${this._escapeHtml(termLabel)}</span>
+            ` : '<span class="term-label-empty">—</span>'}
+          </td>
+          <td class="term-type-cell">
+            <span class="type-badge type-${this._escapeHtml(termType.toLowerCase().replace(/[^a-z0-9]/g, '-'))}">${this._escapeHtml(termType)}</span>
+          </td>
+          <td class="term-description-cell">
+            <span class="term-description" title="${this._escapeHtml(termDesc)}">${this._escapeHtml(termDesc || '—')}</span>
+          </td>
+          <td class="term-linked-cell">
+            ${linkages.length > 0 ? `
+              <div class="term-linkages">
+                ${linkages.slice(0, 2).map(link => `
+                  <span class="term-link-badge" title="${this._escapeHtml(link.setName)}.${this._escapeHtml(link.fieldName)}">
+                    <i class="ph ph-link"></i>
+                    ${this._escapeHtml(link.setName)}
+                  </span>
+                `).join('')}
+                ${linkages.length > 2 ? `<span class="term-link-more">+${linkages.length - 2} more</span>` : ''}
+              </div>
+            ` : '<span class="term-not-linked">—</span>'}
+          </td>
+          <td class="term-uri-cell">
+            ${termUri ? `
+              <a href="${this._escapeHtml(termUri)}" target="_blank" class="term-uri-link" title="${this._escapeHtml(termUri)}">
+                ${this._escapeHtml(this._truncateName(termUri, 25))}
+              </a>
+            ` : '<span class="term-no-uri">—</span>'}
+          </td>
+          <td class="term-actions-cell">
+            <button class="term-action-btn term-link-action-btn"
+                    data-term-id="${this._escapeHtml(termId)}"
+                    data-definition-id="${this._escapeHtml(definitionId)}"
+                    title="${linkages.length > 0 ? 'Manage links' : 'Link to field'}">
+              <i class="ph ${linkages.length > 0 ? 'ph-pencil-simple' : 'ph-arrow-right'}"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  /**
+   * Render grouped terms view
+   */
+  _renderGroupedTermsView(terms, termLinkages, definitionId, groupBy) {
+    if (groupBy === 'type') {
+      // Group by type
+      const grouped = new Map();
+      terms.forEach(term => {
+        const type = term.type || term.datatype || 'string';
+        if (!grouped.has(type)) {
+          grouped.set(type, []);
+        }
+        grouped.get(type).push(term);
+      });
+
+      let html = '';
+      grouped.forEach((groupTerms, type) => {
+        html += `
+          <div class="terms-group">
+            <div class="terms-group-header">
+              <span class="type-badge">${this._escapeHtml(type)}</span>
+              <span class="terms-group-count">${groupTerms.length} term${groupTerms.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="terms-group-table">
+              <table class="data-table terms-data-table compact">
+                <tbody>
+                  ${this._renderTermsTableRows(groupTerms, termLinkages, definitionId)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      });
+      return html;
+    } else if (groupBy === 'set') {
+      // Group by linked set
+      const grouped = new Map();
+      grouped.set('unlinked', { name: 'Not Linked', terms: [] });
+
+      terms.forEach(term => {
+        const termId = term.id || term.name;
+        const linkages = termLinkages.get(termId) || [];
+        if (linkages.length === 0) {
+          grouped.get('unlinked').terms.push(term);
+        } else {
+          linkages.forEach(link => {
+            if (!grouped.has(link.setId)) {
+              grouped.set(link.setId, { name: link.setName, terms: [] });
+            }
+            // Avoid duplicates
+            const existing = grouped.get(link.setId).terms.find(t => (t.id || t.name) === termId);
+            if (!existing) {
+              grouped.get(link.setId).terms.push(term);
+            }
+          });
+        }
+      });
+
+      let html = '';
+      grouped.forEach((group, setId) => {
+        if (group.terms.length > 0) {
+          html += `
+            <div class="terms-group" data-set-id="${setId}">
+              <div class="terms-group-header">
+                <i class="ph ${setId === 'unlinked' ? 'ph-link-break' : 'ph-table'}"></i>
+                <span class="terms-group-name">${this._escapeHtml(group.name)}</span>
+                <span class="terms-group-count">${group.terms.length} term${group.terms.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div class="terms-group-table">
+                <table class="data-table terms-data-table compact">
+                  <tbody>
+                    ${this._renderTermsTableRows(group.terms, termLinkages, definitionId)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
+      });
+      return html;
+    }
+
+    return '';
+  }
+
+  /**
    * Render definition detail view in main content area
    */
   _renderDefinitionDetailView(definition) {
@@ -7128,6 +7465,9 @@ class EODataWorkbench {
     const terms = definition.terms || definition.properties || [];
     const importDate = definition.importedAt ? new Date(definition.importedAt).toLocaleString() : 'Unknown';
     const defSource = definition.definitionSource;
+    const uniqueTypes = this._getUniqueTermTypes(terms);
+    const termLinkages = this._getTermSetLinkages(definition);
+    const linkedSets = this._getLinkedSetsForDefinition(definition);
 
     contentArea.innerHTML = `
       <div class="definition-detail-view">
@@ -7169,43 +7509,110 @@ class EODataWorkbench {
         ${defSource ? this._renderDefinitionSourceSection(defSource) : ''}
 
         <div class="definition-terms-section">
-          <h3><i class="ph ph-list"></i> Terms & Properties</h3>
+          <div class="definition-terms-header">
+            <h3><i class="ph ph-list"></i> Terms & Properties</h3>
+            <span class="terms-count">${terms.length} term${terms.length !== 1 ? 's' : ''}</span>
+          </div>
+
           ${terms.length === 0 ? `
             <div class="definition-empty-terms">
               <i class="ph ph-info"></i>
               <span>No terms defined. Add terms manually or re-import from URI.</span>
             </div>
           ` : `
-            <div class="definition-terms-table">
-              <table class="data-table">
+            <!-- Search and Filters Toolbar -->
+            <div class="terms-toolbar">
+              <div class="terms-search-box">
+                <i class="ph ph-magnifying-glass"></i>
+                <input type="text" id="terms-search-input" placeholder="Search terms by name, description, or URI..." />
+              </div>
+              <div class="terms-filters">
+                <div class="filter-group">
+                  <label>Type:</label>
+                  <select id="terms-type-filter">
+                    <option value="">All Types</option>
+                    ${uniqueTypes.map(type => `<option value="${this._escapeHtml(type)}">${this._escapeHtml(type)}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="filter-group">
+                  <label>Link Status:</label>
+                  <select id="terms-link-filter">
+                    <option value="">All</option>
+                    <option value="linked">Linked to Sets</option>
+                    <option value="unlinked">Not Linked</option>
+                  </select>
+                </div>
+                <div class="filter-group">
+                  <label>Group by:</label>
+                  <select id="terms-group-filter">
+                    <option value="none">None</option>
+                    <option value="type">Type</option>
+                    <option value="set">Linked Set</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Results Count -->
+            <div class="terms-results-info">
+              <span id="terms-results-count">Showing ${terms.length} terms</span>
+              <button id="terms-clear-filters" class="btn-link" style="display: none;">
+                <i class="ph ph-x"></i> Clear filters
+              </button>
+            </div>
+
+            <!-- Terms Table -->
+            <div class="definition-terms-table enhanced" id="terms-table-container">
+              <table class="data-table terms-data-table">
                 <thead>
                   <tr>
-                    <th style="width: 200px;">Name</th>
-                    <th style="width: 120px;">Type</th>
-                    <th>Description</th>
-                    <th style="width: 200px;">URI / IRI</th>
+                    <th class="col-name" style="width: 180px;">
+                      <div class="th-content">
+                        <span>Name</span>
+                        <button class="th-sort-btn" data-sort="name" title="Sort by name">
+                          <i class="ph ph-arrows-down-up"></i>
+                        </button>
+                      </div>
+                    </th>
+                    <th class="col-label" style="width: 180px;">
+                      <div class="th-content">
+                        <span>Label</span>
+                        <button class="th-sort-btn" data-sort="label" title="Sort by label">
+                          <i class="ph ph-arrows-down-up"></i>
+                        </button>
+                      </div>
+                    </th>
+                    <th class="col-type" style="width: 100px;">
+                      <div class="th-content">
+                        <span>Type</span>
+                      </div>
+                    </th>
+                    <th class="col-description">
+                      <div class="th-content">
+                        <span>Description</span>
+                      </div>
+                    </th>
+                    <th class="col-linked" style="width: 160px;">
+                      <div class="th-content">
+                        <span>Linked To</span>
+                      </div>
+                    </th>
+                    <th class="col-uri" style="width: 180px;">
+                      <div class="th-content">
+                        <span>URI / IRI</span>
+                      </div>
+                    </th>
+                    <th class="col-actions" style="width: 60px;"></th>
                   </tr>
                 </thead>
-                <tbody>
-                  ${terms.map(term => `
-                    <tr class="definition-term-row" data-term-id="${term.id || term.name}">
-                      <td class="term-name">
-                        <i class="ph ph-tag"></i>
-                        ${this._escapeHtml(term.name || term.label)}
-                      </td>
-                      <td class="term-type">
-                        <span class="type-badge">${this._escapeHtml(term.type || term.datatype || 'string')}</span>
-                      </td>
-                      <td class="term-description">${this._escapeHtml(term.description || term.comment || '—')}</td>
-                      <td class="term-uri">
-                        ${term.uri || term['@id'] ? `<a href="${this._escapeHtml(term.uri || term['@id'])}" target="_blank" class="term-uri-link">
-                          ${this._escapeHtml(this._truncateName(term.uri || term['@id'], 30))}
-                        </a>` : '—'}
-                      </td>
-                    </tr>
-                  `).join('')}
+                <tbody id="terms-table-body">
+                  ${this._renderTermsTableRows(terms, termLinkages, definition.id)}
                 </tbody>
               </table>
+            </div>
+
+            <!-- Grouped View Container (hidden by default) -->
+            <div class="terms-grouped-view" id="terms-grouped-container" style="display: none;">
             </div>
           `}
         </div>
@@ -7463,6 +7870,244 @@ class EODataWorkbench {
     contentArea.querySelector('#btn-add-term')?.addEventListener('click', () => {
       this._showAddTermModal(definition.id);
     });
+
+    // Terms table search and filter handlers
+    this._attachTermsTableHandlers(definition);
+  }
+
+  /**
+   * Attach event handlers for terms table search, filter, and sorting
+   */
+  _attachTermsTableHandlers(definition) {
+    const contentArea = this.elements.contentArea;
+    const terms = definition.terms || definition.properties || [];
+    const termLinkages = this._getTermSetLinkages(definition);
+
+    // Search input handler
+    const searchInput = contentArea.querySelector('#terms-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this._filterTermsTable(definition);
+      });
+    }
+
+    // Type filter handler
+    const typeFilter = contentArea.querySelector('#terms-type-filter');
+    if (typeFilter) {
+      typeFilter.addEventListener('change', () => {
+        this._filterTermsTable(definition);
+      });
+    }
+
+    // Link status filter handler
+    const linkFilter = contentArea.querySelector('#terms-link-filter');
+    if (linkFilter) {
+      linkFilter.addEventListener('change', () => {
+        this._filterTermsTable(definition);
+      });
+    }
+
+    // Group by handler
+    const groupFilter = contentArea.querySelector('#terms-group-filter');
+    if (groupFilter) {
+      groupFilter.addEventListener('change', (e) => {
+        this._updateTermsGrouping(definition, e.target.value);
+      });
+    }
+
+    // Clear filters button
+    const clearFiltersBtn = contentArea.querySelector('#terms-clear-filters');
+    if (clearFiltersBtn) {
+      clearFiltersBtn.addEventListener('click', () => {
+        this._clearTermsFilters(definition);
+      });
+    }
+
+    // Sort buttons
+    contentArea.querySelectorAll('.th-sort-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const sortKey = btn.dataset.sort;
+        this._sortTermsTable(definition, sortKey);
+      });
+    });
+
+    // Link action buttons
+    contentArea.querySelectorAll('.term-link-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const termId = btn.dataset.termId;
+        const definitionId = btn.dataset.definitionId;
+        this._showLinkTermToSetModal(definitionId, termId);
+      });
+    });
+  }
+
+  /**
+   * Filter terms table based on search and filters
+   */
+  _filterTermsTable(definition) {
+    const contentArea = this.elements.contentArea;
+    const searchInput = contentArea.querySelector('#terms-search-input');
+    const typeFilter = contentArea.querySelector('#terms-type-filter');
+    const linkFilter = contentArea.querySelector('#terms-link-filter');
+    const clearBtn = contentArea.querySelector('#terms-clear-filters');
+    const resultsCount = contentArea.querySelector('#terms-results-count');
+
+    const searchTerm = (searchInput?.value || '').toLowerCase().trim();
+    const typeValue = typeFilter?.value || '';
+    const linkValue = linkFilter?.value || '';
+
+    // Show/hide clear button
+    const hasFilters = searchTerm || typeValue || linkValue;
+    if (clearBtn) {
+      clearBtn.style.display = hasFilters ? '' : 'none';
+    }
+
+    const rows = contentArea.querySelectorAll('#terms-table-body .definition-term-row');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const searchData = row.dataset.search || '';
+      const termType = row.dataset.termType || '';
+      const isLinked = row.dataset.linked === 'true';
+
+      let matchesSearch = !searchTerm || searchData.includes(searchTerm);
+      let matchesType = !typeValue || termType === typeValue;
+      let matchesLink = !linkValue ||
+        (linkValue === 'linked' && isLinked) ||
+        (linkValue === 'unlinked' && !isLinked);
+
+      const visible = matchesSearch && matchesType && matchesLink;
+      row.style.display = visible ? '' : 'none';
+      if (visible) visibleCount++;
+    });
+
+    // Update results count
+    if (resultsCount) {
+      const totalTerms = (definition.terms || definition.properties || []).length;
+      if (hasFilters) {
+        resultsCount.textContent = `Showing ${visibleCount} of ${totalTerms} terms`;
+      } else {
+        resultsCount.textContent = `Showing ${totalTerms} terms`;
+      }
+    }
+  }
+
+  /**
+   * Update terms grouping view
+   */
+  _updateTermsGrouping(definition, groupBy) {
+    const contentArea = this.elements.contentArea;
+    const tableContainer = contentArea.querySelector('#terms-table-container');
+    const groupedContainer = contentArea.querySelector('#terms-grouped-container');
+
+    if (!tableContainer || !groupedContainer) return;
+
+    const terms = definition.terms || definition.properties || [];
+    const termLinkages = this._getTermSetLinkages(definition);
+
+    if (groupBy === 'none') {
+      tableContainer.style.display = '';
+      groupedContainer.style.display = 'none';
+    } else {
+      tableContainer.style.display = 'none';
+      groupedContainer.style.display = '';
+      groupedContainer.innerHTML = this._renderGroupedTermsView(terms, termLinkages, definition.id, groupBy);
+
+      // Re-attach link action handlers for grouped view
+      groupedContainer.querySelectorAll('.term-link-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const termId = btn.dataset.termId;
+          const definitionId = btn.dataset.definitionId;
+          this._showLinkTermToSetModal(definitionId, termId);
+        });
+      });
+    }
+  }
+
+  /**
+   * Clear all terms filters
+   */
+  _clearTermsFilters(definition) {
+    const contentArea = this.elements.contentArea;
+
+    const searchInput = contentArea.querySelector('#terms-search-input');
+    const typeFilter = contentArea.querySelector('#terms-type-filter');
+    const linkFilter = contentArea.querySelector('#terms-link-filter');
+    const groupFilter = contentArea.querySelector('#terms-group-filter');
+
+    if (searchInput) searchInput.value = '';
+    if (typeFilter) typeFilter.value = '';
+    if (linkFilter) linkFilter.value = '';
+    if (groupFilter) groupFilter.value = 'none';
+
+    this._filterTermsTable(definition);
+    this._updateTermsGrouping(definition, 'none');
+  }
+
+  /**
+   * Sort terms table
+   */
+  _sortTermsTable(definition, sortKey) {
+    const contentArea = this.elements.contentArea;
+    const tbody = contentArea.querySelector('#terms-table-body');
+    if (!tbody) return;
+
+    const terms = definition.terms || definition.properties || [];
+    const termLinkages = this._getTermSetLinkages(definition);
+
+    // Get current sort state
+    const currentSort = tbody.dataset.sortKey;
+    const currentDir = tbody.dataset.sortDir || 'asc';
+    let newDir = 'asc';
+
+    if (currentSort === sortKey) {
+      newDir = currentDir === 'asc' ? 'desc' : 'asc';
+    }
+
+    // Sort terms
+    const sortedTerms = [...terms].sort((a, b) => {
+      let aVal, bVal;
+      if (sortKey === 'name') {
+        aVal = (a.name || a.label || '').toLowerCase();
+        bVal = (b.name || b.label || '').toLowerCase();
+      } else if (sortKey === 'label') {
+        aVal = (a.label || a.altLabel || a.prefLabel || '').toLowerCase();
+        bVal = (b.label || b.altLabel || b.prefLabel || '').toLowerCase();
+      }
+
+      if (aVal < bVal) return newDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return newDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    // Update sort state
+    tbody.dataset.sortKey = sortKey;
+    tbody.dataset.sortDir = newDir;
+
+    // Update sort button icons
+    contentArea.querySelectorAll('.th-sort-btn').forEach(btn => {
+      const icon = btn.querySelector('i');
+      if (btn.dataset.sort === sortKey) {
+        icon.className = `ph ${newDir === 'asc' ? 'ph-sort-ascending' : 'ph-sort-descending'}`;
+      } else {
+        icon.className = 'ph ph-arrows-down-up';
+      }
+    });
+
+    // Re-render table body
+    tbody.innerHTML = this._renderTermsTableRows(sortedTerms, termLinkages, definition.id);
+
+    // Re-attach link handlers
+    tbody.querySelectorAll('.term-link-action-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const termId = btn.dataset.termId;
+        const definitionId = btn.dataset.definitionId;
+        this._showLinkTermToSetModal(definitionId, termId);
+      });
+    });
+
+    // Re-apply current filters
+    this._filterTermsTable(definition);
   }
 
   /**
@@ -20920,7 +21565,9 @@ class EODataWorkbench {
   _renderCell(record, field, searchTerm = '') {
     try {
       const value = record.values[field.id];
-      const cellClass = `cell-${field.type} cell-editable`;
+      const historyCount = this._getFieldHistoryChangeCount(record.id, field.id);
+      const hasHistory = historyCount > 0;
+      const cellClass = `cell-${field.type} cell-editable${hasHistory ? ' has-history' : ''}`;
 
       let content = '';
 
@@ -21051,7 +21698,18 @@ class EODataWorkbench {
         }
     }
 
-      return `<td class="${cellClass}" data-field-id="${field.id}">${content}</td>`;
+      // Add history indicator if cell has changes
+      const historyIndicator = hasHistory ? `
+        <button class="cell-history-indicator"
+                data-record-id="${record.id}"
+                data-field-id="${field.id}"
+                data-history-count="${historyCount}"
+                title="${historyCount} change${historyCount !== 1 ? 's' : ''}">
+          <span class="history-dot${historyCount > 1 ? ' multiple' : ''}"></span>
+        </button>
+      ` : '';
+
+      return `<td class="${cellClass}" data-field-id="${field.id}">${content}${historyIndicator}</td>`;
     } catch (error) {
       console.error('[RenderCell Error]', { fieldId: field?.id, fieldName: field?.name, fieldType: field?.type, recordId: record?.id, error });
       return `<td class="cell-${field?.type || 'unknown'} cell-editable cell-error" data-field-id="${field?.id || 'unknown'}"><span class="cell-empty cell-render-error" title="Error rendering field">Error</span></td>`;
@@ -21185,6 +21843,18 @@ class EODataWorkbench {
       // Clear search button
       if (target.closest('#clear-search-btn')) {
         this._clearViewSearch();
+        return;
+      }
+
+      // Cell history indicator click
+      const historyIndicator = target.closest('.cell-history-indicator');
+      if (historyIndicator) {
+        e.stopPropagation(); // Prevent row click and cell edit
+        const recordId = historyIndicator.dataset.recordId;
+        const fieldId = historyIndicator.dataset.fieldId;
+        if (recordId && fieldId) {
+          this._showFieldHistoryPopover(recordId, fieldId, historyIndicator);
+        }
         return;
       }
 
@@ -25030,6 +25700,10 @@ class EODataWorkbench {
         <i class="ph ph-arrow-square-out"></i>
         <span>Open record</span>
       </div>
+      <div class="context-menu-item" data-action="view-history">
+        <i class="ph ph-clock-counter-clockwise"></i>
+        <span>View history</span>
+      </div>
       <div class="context-menu-item" data-action="pick-up">
         <i class="ph ph-hand-grabbing"></i>
         <span>Pick up record</span>
@@ -25081,6 +25755,9 @@ class EODataWorkbench {
         switch (action) {
           case 'open':
             this._showRecordDetail(recordId);
+            break;
+          case 'view-history':
+            this._showRecordHistoryDrawer(recordId);
             break;
           case 'pick-up':
             const set = this.getCurrentSet();
@@ -32072,6 +32749,102 @@ class EODataWorkbench {
   }
 
   /**
+   * Get count of field-specific history events (excludes record creation)
+   * Used for efficient history indicator rendering
+   */
+  _getFieldHistoryChangeCount(recordId, fieldId) {
+    const fieldHistory = this._getFieldHistory(recordId, fieldId);
+    // Count only actual field changes, not creation events
+    return fieldHistory.filter(event => {
+      const action = event.payload?.action;
+      return action === 'record_updated' || action === 'field_changed' || action === 'update';
+    }).length;
+  }
+
+  /**
+   * Check if a field has any history changes
+   * Fast check for rendering indicators
+   */
+  _hasFieldHistoryChanges(recordId, fieldId) {
+    return this._getFieldHistoryChangeCount(recordId, fieldId) > 0;
+  }
+
+  /**
+   * Build a cache of field history counts for all fields in a record
+   * Call once per record to avoid repeated event store queries
+   */
+  _buildRecordHistoryCache(recordId) {
+    const recordHistory = this._getRecordHistory(recordId);
+    const cache = {};
+
+    // Count changes per field
+    recordHistory.forEach(event => {
+      const action = event.payload?.action;
+      const fieldId = event.payload?.fieldId;
+
+      if (fieldId && (action === 'record_updated' || action === 'field_changed' || action === 'update')) {
+        cache[fieldId] = (cache[fieldId] || 0) + 1;
+      }
+    });
+
+    return cache;
+  }
+
+  /**
+   * Get the most recent changes for a field (for quick preview)
+   * @param {string} recordId - The record ID
+   * @param {string} fieldId - The field ID
+   * @param {number} limit - Max number of changes to return
+   * @returns {Array} Recent changes with oldValue, newValue, timestamp, actor
+   */
+  _getRecentFieldChanges(recordId, fieldId, limit = 3) {
+    const fieldHistory = this._getFieldHistory(recordId, fieldId);
+
+    return fieldHistory
+      .filter(event => {
+        const action = event.payload?.action;
+        return action === 'record_updated' || action === 'field_changed' || action === 'update';
+      })
+      .slice(0, limit)
+      .map(event => ({
+        oldValue: event.payload?.previousValue ?? event.payload?.oldValue,
+        newValue: event.payload?.newValue ?? event.payload?.value,
+        timestamp: event.timestamp,
+        actor: event.actor || 'system',
+        eventId: event.id
+      }));
+  }
+
+  /**
+   * Restore a field to a previous value
+   * Creates a new update event (never mutates history - Rule 3)
+   */
+  _restoreFieldValue(recordId, fieldId, previousValue, sourceEventId) {
+    const set = this.getCurrentSet();
+    const record = set?.records?.find(r => r.id === recordId);
+    const field = set?.fields?.find(f => f.id === fieldId);
+
+    if (!record || !field) {
+      this._showToast('Could not find record or field', 'error');
+      return;
+    }
+
+    const currentValue = record.values[fieldId];
+
+    // Update the value using existing method (which creates proper events)
+    this._updateRecordValue(recordId, fieldId, previousValue);
+
+    // Re-render the cell
+    const cell = document.querySelector(`tr[data-record-id="${recordId}"] td[data-field-id="${fieldId}"]`);
+    if (cell) {
+      cell.innerHTML = this._renderCellContent(field, previousValue);
+    }
+
+    this._showToast(`Restored to previous value`, 'success');
+    this._hideFieldHistoryPopover();
+  }
+
+  /**
    * Render field history popover/tooltip
    * Shows change history for a specific field with agent, timestamps, and value changes
    */
@@ -32171,7 +32944,7 @@ class EODataWorkbench {
 
           ${hasHistory ? `
             <div class="field-history-events">
-              ${fieldHistory.slice().reverse().map(event => this._renderFieldHistoryEvent(event, field.id)).join('')}
+              ${fieldHistory.slice().reverse().map(event => this._renderFieldHistoryEvent(event, field.id, record.id, true)).join('')}
             </div>
           ` : `
             <div class="field-history-empty">
@@ -32183,19 +32956,32 @@ class EODataWorkbench {
             </div>
           `}
         </div>
+
+        <div class="field-history-footer">
+          <button class="field-history-view-all-btn"
+                  data-record-id="${record.id}"
+                  data-field-id="${field.id}">
+            <i class="ph ph-clock-counter-clockwise"></i>
+            View Full Record History
+          </button>
+        </div>
       </div>
     `;
   }
 
   /**
    * Render a single field history event
+   * @param {Object} event - The history event
+   * @param {string} fieldId - The field ID
+   * @param {string} recordId - The record ID (for restore functionality)
+   * @param {boolean} showRestore - Whether to show restore button
    */
-  _renderFieldHistoryEvent(event, fieldId) {
+  _renderFieldHistoryEvent(event, fieldId, recordId = null, showRestore = true) {
     const action = event.payload?.action || 'unknown';
     const timestamp = event.timestamp ? new Date(event.timestamp) : null;
     const actor = event.actor || 'system';
-    const previousValue = event.payload?.previousValue;
-    const newValue = event.payload?.newValue || event.payload?.value;
+    const previousValue = event.payload?.previousValue ?? event.payload?.oldValue;
+    const newValue = event.payload?.newValue ?? event.payload?.value;
 
     // Determine event type and styling
     let icon = 'ph-circle';
@@ -32225,6 +33011,7 @@ class EODataWorkbench {
     }
 
     const isFieldSpecific = event.payload?.fieldId === fieldId;
+    const canRestore = isFieldSpecific && previousValue !== undefined && showRestore && recordId;
 
     return `
       <div class="field-history-event ${iconClass} ${isFieldSpecific ? 'field-specific' : 'record-level'}">
@@ -32245,9 +33032,22 @@ class EODataWorkbench {
               <span class="new-value" title="${this._escapeHtml(String(newValue))}">${this._escapeHtml(this._truncate(newValue, 25))}</span>
             </div>
           ` : ''}
-          <div class="event-actor">
-            <i class="ph ph-user"></i>
-            ${this._formatActor(actor)}
+          <div class="event-footer">
+            <div class="event-actor">
+              <i class="ph ph-user"></i>
+              ${this._formatActor(actor)}
+            </div>
+            ${canRestore ? `
+              <button class="event-restore-btn"
+                      data-record-id="${recordId}"
+                      data-field-id="${fieldId}"
+                      data-restore-value="${this._escapeHtml(JSON.stringify(previousValue))}"
+                      data-event-id="${event.id}"
+                      title="Restore to this value">
+                <i class="ph ph-arrow-counter-clockwise"></i>
+                Restore
+              </button>
+            ` : ''}
           </div>
         </div>
       </div>
@@ -32299,6 +33099,31 @@ class EODataWorkbench {
       this._hideFieldHistoryPopover();
     });
 
+    // Add restore button handlers
+    popover.querySelectorAll('.event-restore-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const restoreRecordId = btn.dataset.recordId;
+        const restoreFieldId = btn.dataset.fieldId;
+        const restoreValue = JSON.parse(btn.dataset.restoreValue);
+        const eventId = btn.dataset.eventId;
+
+        // Show confirmation
+        if (confirm(`Restore field to previous value?\n\nThis will create a new change event (history is preserved).`)) {
+          this._restoreFieldValue(restoreRecordId, restoreFieldId, restoreValue, eventId);
+        }
+      });
+    });
+
+    // Add "View Full History" button handler
+    popover.querySelector('.field-history-view-all-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const popoverRecordId = e.target.closest('.field-history-view-all-btn').dataset.recordId;
+      const popoverFieldId = e.target.closest('.field-history-view-all-btn').dataset.fieldId;
+      this._hideFieldHistoryPopover();
+      this._showRecordHistoryDrawer(popoverRecordId, popoverFieldId);
+    });
+
     // Close on click outside
     setTimeout(() => {
       document.addEventListener('click', this._fieldHistoryOutsideClickHandler = (e) => {
@@ -32321,6 +33146,255 @@ class EODataWorkbench {
       document.removeEventListener('click', this._fieldHistoryOutsideClickHandler);
       this._fieldHistoryOutsideClickHandler = null;
     }
+  }
+
+  /**
+   * Show record history drawer - full history view for a record
+   */
+  _showRecordHistoryDrawer(recordId, initialFieldFilter = null) {
+    const record = this._getRecordById(recordId);
+    const set = this.getCurrentSet();
+
+    if (!record || !set) {
+      this._showToast('Could not find record', 'error');
+      return;
+    }
+
+    // Get primary field value for title
+    const primaryField = set.fields?.find(f => f.isPrimary) || set.fields?.[0];
+    const recordName = record.values?.[primaryField?.id] || recordId;
+
+    // Get all history for this record
+    const history = this._getRecordHistory(recordId);
+
+    // Group by date
+    const groupedHistory = this._groupHistoryByDate(history);
+
+    // Get unique field IDs that have changes
+    const fieldsWithChanges = [...new Set(
+      history
+        .filter(e => e.payload?.fieldId)
+        .map(e => e.payload.fieldId)
+    )];
+
+    // Create drawer element
+    const overlay = document.createElement('div');
+    overlay.className = 'record-history-overlay';
+    overlay.id = 'record-history-overlay';
+
+    const drawer = document.createElement('div');
+    drawer.className = 'record-history-drawer';
+    drawer.id = 'record-history-drawer';
+    drawer.innerHTML = `
+      <div class="record-history-drawer-header">
+        <div class="record-history-drawer-title">
+          <i class="ph ph-clock-counter-clockwise"></i>
+          <span>History: ${this._escapeHtml(this._truncate(String(recordName), 30))}</span>
+        </div>
+        <button class="record-history-drawer-close" id="close-record-history">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+
+      <div class="record-history-drawer-filters">
+        <button class="record-history-filter ${!initialFieldFilter ? 'active' : ''}" data-filter="all">
+          <i class="ph ph-list"></i>
+          All Changes
+        </button>
+        ${fieldsWithChanges.map(fieldId => {
+          const field = set.fields?.find(f => f.id === fieldId);
+          if (!field) return '';
+          return `
+            <button class="record-history-filter ${initialFieldFilter === fieldId ? 'active' : ''}"
+                    data-filter="${fieldId}">
+              ${this._escapeHtml(field.name)}
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="record-history-drawer-content" id="record-history-content">
+        ${this._renderRecordHistoryContent(groupedHistory, set, recordId, initialFieldFilter)}
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(drawer);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible');
+      drawer.classList.add('open');
+    });
+
+    // Close handlers
+    const closeDrawer = () => {
+      overlay.classList.remove('visible');
+      drawer.classList.remove('open');
+      setTimeout(() => {
+        overlay.remove();
+        drawer.remove();
+      }, 300);
+    };
+
+    document.getElementById('close-record-history')?.addEventListener('click', closeDrawer);
+    overlay.addEventListener('click', closeDrawer);
+
+    // Filter handlers
+    drawer.querySelectorAll('.record-history-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const filter = btn.dataset.filter;
+        drawer.querySelectorAll('.record-history-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const filteredHistory = filter === 'all'
+          ? history
+          : history.filter(e => e.payload?.fieldId === filter ||
+              e.payload?.action === 'record_created' ||
+              e.payload?.action === 'import');
+
+        const grouped = this._groupHistoryByDate(filteredHistory);
+        const content = document.getElementById('record-history-content');
+        if (content) {
+          content.innerHTML = this._renderRecordHistoryContent(grouped, set, recordId, filter === 'all' ? null : filter);
+        }
+      });
+    });
+
+    // Escape key handler
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        closeDrawer();
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+  }
+
+  /**
+   * Group history events by date for display
+   */
+  _groupHistoryByDate(history) {
+    const groups = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    history.forEach(event => {
+      const date = new Date(event.timestamp);
+      date.setHours(0, 0, 0, 0);
+
+      let dateKey;
+      if (date.getTime() === today.getTime()) {
+        dateKey = 'Today';
+      } else if (date.getTime() === yesterday.getTime()) {
+        dateKey = 'Yesterday';
+      } else {
+        dateKey = date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+        });
+      }
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(event);
+    });
+
+    return groups;
+  }
+
+  /**
+   * Render content for record history drawer
+   */
+  _renderRecordHistoryContent(groupedHistory, set, recordId, fieldFilter = null) {
+    const dateKeys = Object.keys(groupedHistory);
+
+    if (dateKeys.length === 0) {
+      return `
+        <div class="record-history-empty">
+          <i class="ph ph-clock-afternoon"></i>
+          <div class="record-history-empty-title">No changes recorded</div>
+          <div class="record-history-empty-hint">
+            Changes will appear here as you edit this record
+          </div>
+        </div>
+      `;
+    }
+
+    return dateKeys.map(dateKey => `
+      <div class="record-history-date-group">
+        <div class="record-history-date-label">${dateKey}</div>
+        ${groupedHistory[dateKey].map(event => this._renderRecordHistoryEvent(event, set, recordId)).join('')}
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Render a single event in the record history drawer
+   */
+  _renderRecordHistoryEvent(event, set, recordId) {
+    const action = event.payload?.action || 'unknown';
+    const timestamp = event.timestamp ? new Date(event.timestamp) : null;
+    const actor = event.actor || 'system';
+    const fieldId = event.payload?.fieldId;
+    const field = fieldId ? set.fields?.find(f => f.id === fieldId) : null;
+    const previousValue = event.payload?.previousValue ?? event.payload?.oldValue;
+    const newValue = event.payload?.newValue ?? event.payload?.value;
+
+    let iconClass = 'modified';
+    let icon = 'ph-pencil-simple';
+    let label = field?.name || 'Field';
+
+    switch (action) {
+      case 'record_created':
+      case 'create':
+      case 'import':
+        iconClass = 'created';
+        icon = 'ph-plus-circle';
+        label = 'Record Created';
+        break;
+      case 'record_deleted':
+        iconClass = 'deleted';
+        icon = 'ph-trash';
+        label = 'Record Deleted';
+        break;
+    }
+
+    const timeStr = timestamp
+      ? timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      : '';
+
+    return `
+      <div class="record-history-event">
+        <div class="record-history-event-icon ${iconClass}">
+          <i class="ph ${icon}"></i>
+        </div>
+        <div class="record-history-event-content">
+          <div class="record-history-event-header">
+            <span class="record-history-event-field">${this._escapeHtml(label)}</span>
+            <span class="record-history-event-time">${timeStr}</span>
+          </div>
+          ${previousValue !== undefined || newValue !== undefined ? `
+            <div class="record-history-event-change">
+              ${previousValue !== undefined ? `
+                <span class="old-val" title="${this._escapeHtml(String(previousValue))}">${this._escapeHtml(this._truncate(previousValue, 20))}</span>
+                <span class="arrow">→</span>
+              ` : ''}
+              <span class="new-val" title="${this._escapeHtml(String(newValue))}">${this._escapeHtml(this._truncate(newValue, 20))}</span>
+            </div>
+          ` : ''}
+          <div class="record-history-event-actor">
+            <i class="ph ph-user"></i>
+            ${this._formatActor(actor)}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   /**
