@@ -295,8 +295,39 @@ class EOSyncAPI {
       syncInProgress: this.syncInProgress,
       lastSync: this.lastSync,
       lastError: this.lastError,
-      localEventCount: this.eventStore?.getAll()?.length || 0
+      localEventCount: this._getLocalDataCount()
     };
+  }
+
+  /**
+   * Count local workbench data items for status display
+   */
+  _getLocalDataCount() {
+    try {
+      const data = localStorage.getItem('eo_lake_data');
+      if (!data) return 0;
+
+      const parsed = JSON.parse(data);
+      let count = 0;
+
+      // Count sets
+      count += (parsed.sets || []).length;
+
+      // Count all records across sets
+      (parsed.sets || []).forEach(set => {
+        count += (set.records || []).length;
+      });
+
+      // Count sources
+      count += (parsed.sources || []).length;
+
+      // Count projects
+      count += (parsed.projects || []).length;
+
+      return count;
+    } catch (e) {
+      return 0;
+    }
   }
 
   /**
@@ -385,7 +416,8 @@ class EOSyncAPI {
 
     // Get all local events if not specified
     if (!events) {
-      events = this.eventStore.getAll();
+      // Convert workbench data from localStorage to events
+      events = this._getWorkbenchDataAsEvents();
     }
 
     if (events.length === 0) {
@@ -485,6 +517,160 @@ class EOSyncAPI {
   }
 
   /**
+   * Convert workbench localStorage data to events for syncing
+   * This bridges the gap between workbench storage and event-based sync
+   */
+  _getWorkbenchDataAsEvents() {
+    const events = [];
+
+    try {
+      const data = localStorage.getItem('eo_lake_data');
+      if (!data) return events;
+
+      const parsed = JSON.parse(data);
+      const timestamp = new Date().toISOString();
+      const actor = 'sync_client';
+      let clock = Date.now();
+
+      // Convert sets to events
+      (parsed.sets || []).forEach(set => {
+        // Set definition event
+        events.push({
+          id: `evt_set_${set.id}`,
+          epistemicType: 'given',
+          category: 'schema',
+          action: 'set_define',
+          actor,
+          timestamp,
+          logicalClock: clock++,
+          parents: [],
+          payload: {
+            action: 'set_define',
+            setId: set.id,
+            name: set.name,
+            fields: set.fields,
+            views: set.views,
+            derivation: set.derivation,
+            datasetProvenance: set.datasetProvenance
+          }
+        });
+
+        // Record events for each record in the set
+        (set.records || []).forEach(record => {
+          events.push({
+            id: `evt_rec_${record.id}`,
+            epistemicType: 'given',
+            category: 'data',
+            action: 'record_create',
+            actor,
+            timestamp,
+            logicalClock: clock++,
+            parents: [`evt_set_${set.id}`],
+            payload: {
+              action: 'record_create',
+              setId: set.id,
+              recordId: record.id,
+              values: record.values
+            }
+          });
+        });
+      });
+
+      // Convert sources to events
+      (parsed.sources || []).forEach(source => {
+        events.push({
+          id: `evt_src_${source.id}`,
+          epistemicType: 'given',
+          category: 'import',
+          action: 'source_import',
+          actor,
+          timestamp,
+          logicalClock: clock++,
+          parents: [],
+          payload: {
+            action: 'source_import',
+            sourceId: source.id,
+            name: source.name,
+            type: source.type,
+            filename: source.filename,
+            importedAt: source.importedAt,
+            rowCount: source.data?.length || 0,
+            columns: source.columns,
+            data: source.data
+          }
+        });
+      });
+
+      // Convert projects to events
+      (parsed.projects || []).forEach(project => {
+        events.push({
+          id: `evt_proj_${project.id}`,
+          epistemicType: 'given',
+          category: 'workspace',
+          action: 'project_create',
+          actor,
+          timestamp,
+          logicalClock: clock++,
+          parents: [],
+          payload: {
+            action: 'project_create',
+            projectId: project.id,
+            name: project.name,
+            description: project.description,
+            sourceIds: project.sourceIds,
+            setIds: project.setIds,
+            definitionIds: project.definitionIds,
+            exportIds: project.exportIds
+          }
+        });
+      });
+
+      // Convert definitions to events
+      (parsed.definitions || []).forEach(def => {
+        events.push({
+          id: `evt_def_${def.id}`,
+          epistemicType: 'given',
+          category: 'schema',
+          action: 'definition_create',
+          actor,
+          timestamp,
+          logicalClock: clock++,
+          parents: [],
+          payload: {
+            action: 'definition_create',
+            definitionId: def.id,
+            ...def
+          }
+        });
+      });
+
+      // Convert exports to events
+      (parsed.exports || []).forEach(exp => {
+        events.push({
+          id: `evt_exp_${exp.id}`,
+          epistemicType: 'given',
+          category: 'export',
+          action: 'export_create',
+          actor,
+          timestamp,
+          logicalClock: clock++,
+          parents: [],
+          payload: {
+            action: 'export_create',
+            exportId: exp.id,
+            ...exp
+          }
+        });
+      });
+
+    } catch (e) {
+      console.error('EOSyncAPI: Failed to convert workbench data to events', e);
+    }
+
+    return events;
+  }
+
+  /**
    * GET events from the server (pull remote events)
    *
    * For v1: Pull all events (simple backup/restore)
@@ -540,7 +726,8 @@ class EOSyncAPI {
   }
 
   /**
-   * Apply pulled events to local store
+   * Apply pulled events to local workbench storage
+   * Converts events back to workbench data format
    */
   applyPulledEvents(events) {
     const results = {
@@ -550,27 +737,158 @@ class EOSyncAPI {
       errors: []
     };
 
-    for (const event of events) {
-      try {
-        // Convert from API format to local format
-        const localEvent = this._convertFromAPIFormat(event);
+    try {
+      // Load existing workbench data
+      const existingData = localStorage.getItem('eo_lake_data');
+      const workbench = existingData ? JSON.parse(existingData) : {
+        sets: [],
+        sources: [],
+        projects: [],
+        definitions: [],
+        exports: [],
+        tossedItems: [],
+        activityLog: []
+      };
 
-        const result = this.eventStore.append(localEvent);
+      // Track what we've seen to avoid duplicates
+      const seenSets = new Set(workbench.sets.map(s => s.id));
+      const seenRecords = new Map(); // setId -> Set of recordIds
+      const seenSources = new Set(workbench.sources.map(s => s.id));
+      const seenProjects = new Set(workbench.projects.map(p => p.id));
+      const seenDefinitions = new Set(workbench.definitions.map(d => d.id));
+      const seenExports = new Set(workbench.exports.map(e => e.id));
 
-        if (result.success) {
-          if (result.duplicate) {
-            results.duplicates++;
-          } else if (result.parked) {
-            results.parked++;
-          } else {
-            results.applied++;
+      // Initialize record tracking for existing sets
+      workbench.sets.forEach(set => {
+        seenRecords.set(set.id, new Set((set.records || []).map(r => r.id)));
+      });
+
+      // Process events in order
+      for (const event of events) {
+        try {
+          const payload = event.payload || {};
+          const action = event.action || payload.action;
+
+          switch (action) {
+            case 'set_define':
+              if (!seenSets.has(payload.setId)) {
+                workbench.sets.push({
+                  id: payload.setId,
+                  name: payload.name,
+                  fields: payload.fields || [],
+                  records: [],
+                  views: payload.views || [],
+                  derivation: payload.derivation,
+                  datasetProvenance: payload.datasetProvenance
+                });
+                seenSets.add(payload.setId);
+                seenRecords.set(payload.setId, new Set());
+                results.applied++;
+              } else {
+                results.duplicates++;
+              }
+              break;
+
+            case 'record_create':
+              const setForRecord = workbench.sets.find(s => s.id === payload.setId);
+              if (setForRecord) {
+                const recordSet = seenRecords.get(payload.setId) || new Set();
+                if (!recordSet.has(payload.recordId)) {
+                  setForRecord.records = setForRecord.records || [];
+                  setForRecord.records.push({
+                    id: payload.recordId,
+                    values: payload.values || {}
+                  });
+                  recordSet.add(payload.recordId);
+                  seenRecords.set(payload.setId, recordSet);
+                  results.applied++;
+                } else {
+                  results.duplicates++;
+                }
+              } else {
+                results.parked++;
+              }
+              break;
+
+            case 'source_import':
+              if (!seenSources.has(payload.sourceId)) {
+                workbench.sources.push({
+                  id: payload.sourceId,
+                  name: payload.name,
+                  type: payload.type,
+                  filename: payload.filename,
+                  importedAt: payload.importedAt,
+                  columns: payload.columns,
+                  data: payload.data
+                });
+                seenSources.add(payload.sourceId);
+                results.applied++;
+              } else {
+                results.duplicates++;
+              }
+              break;
+
+            case 'project_create':
+              if (!seenProjects.has(payload.projectId)) {
+                workbench.projects.push({
+                  id: payload.projectId,
+                  name: payload.name,
+                  description: payload.description,
+                  sourceIds: payload.sourceIds,
+                  setIds: payload.setIds,
+                  definitionIds: payload.definitionIds,
+                  exportIds: payload.exportIds
+                });
+                seenProjects.add(payload.projectId);
+                results.applied++;
+              } else {
+                results.duplicates++;
+              }
+              break;
+
+            case 'definition_create':
+              if (!seenDefinitions.has(payload.definitionId)) {
+                const { action: _, definitionId, ...defData } = payload;
+                workbench.definitions.push({
+                  id: payload.definitionId,
+                  ...defData
+                });
+                seenDefinitions.add(payload.definitionId);
+                results.applied++;
+              } else {
+                results.duplicates++;
+              }
+              break;
+
+            case 'export_create':
+              if (!seenExports.has(payload.exportId)) {
+                const { action: _, exportId, ...expData } = payload;
+                workbench.exports.push({
+                  id: payload.exportId,
+                  ...expData
+                });
+                seenExports.add(payload.exportId);
+                results.applied++;
+              } else {
+                results.duplicates++;
+              }
+              break;
+
+            default:
+              // Unknown action type, skip
+              results.parked++;
           }
-        } else {
-          results.errors.push({ id: event.id, error: result.error });
+        } catch (error) {
+          results.errors.push({ id: event.id, error: error.message });
         }
-      } catch (error) {
-        results.errors.push({ id: event.id, error: error.message });
       }
+
+      // Save updated workbench data
+      localStorage.setItem('eo_lake_data', JSON.stringify(workbench));
+
+    } catch (error) {
+      console.error('EOSyncAPI: Failed to apply pulled events', error);
+      results.errors.push({ id: 'apply_all', error: error.message });
     }
 
     return results;
