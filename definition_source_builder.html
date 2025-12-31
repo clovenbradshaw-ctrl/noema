@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Definition Source Builder</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 24px;
+            background: #f8f9fa;
+            color: #202124;
+            line-height: 1.5;
+        }
+
+        h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 4px; }
+        .subtitle { color: #5f6368; font-size: 0.9rem; margin-bottom: 24px; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .tab {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            color: #5f6368;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .tab:hover { color: #1a73e8; }
+        .tab.active {
+            color: #1a73e8;
+            border-bottom-color: #1a73e8;
+            font-weight: 500;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .builder {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .section {
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .section-header h2 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .section-icon { font-size: 1.1rem; }
+        .section-hint {
+            font-size: 0.8rem;
+            color: #5f6368;
+            margin-bottom: 12px;
+        }
+
+        .field-group { margin-bottom: 14px; }
+        .field-group:last-child { margin-bottom: 0; }
+
+        .field-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #3c4043;
+            margin-bottom: 4px;
+        }
+        .field-group label .required { color: #dc2626; }
+        .field-group label .optional { color: #9ca3af; font-weight: 400; }
+        .field-group label code {
+            background: #f1f3f4;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            color: #5f6368;
+        }
+
+        .field-group input,
+        .field-group textarea,
+        .field-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        .field-group input:focus,
+        .field-group textarea:focus,
+        .field-group select:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+        }
+        .field-group textarea {
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .field-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+        .hint { font-size: 0.75rem; color: #80868b; margin-top: 4px; }
+
+        /* Term highlight box */
+        .term-box {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .term-box label { color: #2e7d32; }
+
+        /* Type pills */
+        .type-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .type-option {
+            padding: 8px 14px;
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .type-option:hover { border-color: #1a73e8; }
+        .type-option.selected {
+            background: #e8f0fe;
+            border-color: #1a73e8;
+            color: #1a73e8;
+        }
+
+        /* Output */
+        .output-section {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .output-section h3 {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin: 0 0 12px 0;
+            text-transform: uppercase;
+        }
+        .output-json {
+            color: #d4d4d4;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            margin: 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .output-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-copy { background: #374151; color: white; }
+        .btn-copy:hover { background: #4b5563; }
+        .btn-copy.copied { background: #059669; }
+        .btn-primary { background: #1a73e8; color: white; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-secondary { background: white; color: #3c4043; border: 1px solid #dadce0; }
+        .btn-secondary:hover { background: #f8f9fa; }
+
+        /* Import/Export Tab */
+        .import-export-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .import-export-section h3 {
+            font-size: 1rem;
+            margin: 0 0 8px 0;
+        }
+        .import-export-section p {
+            color: #5f6368;
+            font-size: 0.9rem;
+            margin: 0 0 16px 0;
+        }
+
+        .schema-display {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .schema-display pre {
+            color: #d4d4d4;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.75rem;
+            white-space: pre-wrap;
+            margin: 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .import-area {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .import-area textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 12px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        .import-area textarea:focus {
+            outline: none;
+            border-color: #1a73e8;
+        }
+
+        .import-status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+        }
+        .import-status.success { background: #dcfce7; color: #166534; }
+        .import-status.error { background: #fee2e2; color: #991b1b; }
+
+        /* Presets */
+        .presets {
+            margin-bottom: 16px;
+        }
+        .presets-label {
+            font-size: 0.75rem;
+            color: #5f6368;
+            margin-bottom: 8px;
+        }
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .preset-btn {
+            padding: 8px 14px;
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .preset-btn:hover { border-color: #1a73e8; background: #e8f0fe; }
+
+        /* Bulk import list */
+        .definitions-list {
+            margin-top: 16px;
+        }
+        .definition-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .definition-item .term {
+            font-weight: 500;
+            color: #1a73e8;
+        }
+        .definition-item .authority {
+            font-size: 0.85rem;
+            color: #5f6368;
+        }
+        .definition-item .actions {
+            display: flex;
+            gap: 8px;
+        }
+        .definition-item .btn-small {
+            padding: 4px 10px;
+            font-size: 0.8rem;
+        }
+
+        .validity-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .validity-status.current { background: #dcfce7; color: #166534; }
+        .validity-status.superseded { background: #fef3c7; color: #92400e; }
+
+        .inline-search {
+            display: flex;
+            gap: 8px;
+        }
+        .inline-search input { flex: 1; }
+        .inline-search button {
+            padding: 10px 16px;
+            background: #f1f3f4;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .inline-search button:hover { background: #e8f0fe; }
+    </style>
+</head>
+<body>
+    <h1>Definition Source Builder</h1>
+    <p class="subtitle">Reference regulatory, legal, or policy definitions - AI-compatible JSON schema</p>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab active" onclick="showTab('form')">Form Entry</button>
+        <button class="tab" onclick="showTab('import')">Import/Export JSON</button>
+        <button class="tab" onclick="showTab('schema')">JSON Schema</button>
+    </div>
+
+    <!-- Tab 1: Form Entry -->
+    <div id="tab-form" class="tab-content active">
+        <div class="builder">
+            <!-- Presets -->
+            <div class="presets">
+                <div class="presets-label">Quick Start</div>
+                <div class="preset-buttons">
+                    <button class="preset-btn" onclick="loadPreset('hud_homeless')">HUD Homelessness</button>
+                    <button class="preset-btn" onclick="loadPreset('hud_affordable')">HUD Affordable Housing</button>
+                    <button class="preset-btn" onclick="loadPreset('census_poverty')">Census Poverty</button>
+                    <button class="preset-btn" onclick="loadPreset('custom')">Custom</button>
+                </div>
+            </div>
+
+            <!-- Section 1: Term (TOP - maps to field) -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">🏷️</span>
+                    <h2>Term</h2>
+                </div>
+                <div class="section-hint">The term being defined — maps directly to your column/field name</div>
+
+                <div class="term-box">
+                    <div class="field-row">
+                        <div class="field-group">
+                            <label>Term <code>term.term</code> <span class="required">*</span></label>
+                            <input type="text" id="term" placeholder="homeless" />
+                            <div class="hint">This maps to your column/field key</div>
+                        </div>
+                        <div class="field-group">
+                            <label>Display Label <code>term.label</code></label>
+                            <input type="text" id="termLabel" placeholder="Housing Status" />
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label>As Written in Source <code>term.asWritten</code></label>
+                        <input type="text" id="termAsWritten" placeholder="Homeless (Category 1)" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Authority -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">🏛️</span>
+                    <h2>Authority</h2>
+                </div>
+                <div class="section-hint">Who governs this definition?</div>
+
+                <div class="field-group">
+                    <label>Authority Type <code>authority.type</code></label>
+                    <div class="type-options">
+                        <div class="type-option selected" data-type="federal_agency">Federal Agency</div>
+                        <div class="type-option" data-type="state_agency">State Agency</div>
+                        <div class="type-option" data-type="local_gov">Local Gov</div>
+                        <div class="type-option" data-type="standards_body">Standards Body</div>
+                        <div class="type-option" data-type="ngo">NGO</div>
+                        <div class="type-option" data-type="academic">Academic</div>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label>Authority Name <code>authority.name</code> <span class="required">*</span></label>
+                        <input type="text" id="authorityName" placeholder="U.S. Department of Housing and Urban Development" />
+                    </div>
+                    <div class="field-group">
+                        <label>Short Name <code>authority.shortName</code></label>
+                        <input type="text" id="authorityShortName" placeholder="HUD" />
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label>Authority URI <code>authority.uri</code> <span class="optional">(Wikidata)</span></label>
+                    <div class="inline-search">
+                        <input type="text" id="authorityUri" placeholder="http://www.wikidata.org/entity/Q596692" />
+                        <button onclick="searchAuthority()">Search</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Source Document -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">📄</span>
+                    <h2>Source Document</h2>
+                </div>
+
+                <div class="field-group">
+                    <label>Document Type <code>source.type</code></label>
+                    <div class="type-options" id="docTypeOptions">
+                        <div class="type-option selected" data-type="regulation">Regulation (CFR)</div>
+                        <div class="type-option" data-type="statute">Statute</div>
+                        <div class="type-option" data-type="guidance">Guidance</div>
+                        <div class="type-option" data-type="policy">Policy</div>
+                        <div class="type-option" data-type="standard">Standard</div>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label>Document Title <code>source.title</code></label>
+                    <input type="text" id="docTitle" placeholder="Continuum of Care Program" />
+                </div>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label>Legal Citation <code>source.citation</code> <span class="required">*</span></label>
+                        <input type="text" id="citation" placeholder="24 CFR 578.3" />
+                    </div>
+                    <div class="field-group">
+                        <label>Section <code>source.section</code></label>
+                        <input type="text" id="section" placeholder="§578.3 Definitions" />
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label>Document URL <code>source.url</code></label>
+                    <input type="text" id="docUrl" placeholder="https://www.ecfr.gov/current/title-24/..." />
+                </div>
+            </div>
+
+            <!-- Section 4: Definition Content -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">📝</span>
+                    <h2>Definition Content</h2>
+                </div>
+
+                <div class="field-group">
+                    <label>Definition Text <code>term.definitionText</code></label>
+                    <textarea id="definitionText" placeholder="An individual or family who lacks a fixed, regular, and adequate nighttime residence..."></textarea>
+                </div>
+
+                <div class="field-group">
+                    <label>Categories / Subdivisions <code>term.categories</code> <span class="optional">(comma-separated)</span></label>
+                    <input type="text" id="categories" placeholder="Category 1: Literally homeless, Category 2: Imminent risk" />
+                </div>
+            </div>
+
+            <!-- Section 5: Version & Validity -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">📅</span>
+                    <h2>Version & Validity</h2>
+                </div>
+
+                <div class="field-row-3">
+                    <div class="field-group">
+                        <label>Version <code>version.id</code></label>
+                        <input type="text" id="version" placeholder="2015 Final Rule" />
+                    </div>
+                    <div class="field-group">
+                        <label>Published Date <code>version.published</code></label>
+                        <input type="date" id="publishedDate" />
+                    </div>
+                    <div class="field-group">
+                        <label>Effective Date <code>validity.from</code> <span class="required">*</span></label>
+                        <input type="date" id="effectiveDate" />
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label>End Date <code>validity.to</code> <span class="optional">(if no longer in force)</span></label>
+                        <input type="date" id="endDate" />
+                    </div>
+                    <div class="field-group">
+                        <label>Supersedes <code>validity.supersedes</code></label>
+                        <input type="text" id="supersedes" placeholder="2012 Interim Rule" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 6: Jurisdiction -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-icon">🌍</span>
+                    <h2>Jurisdiction</h2>
+                </div>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label>Geographic <code>jurisdiction.geographic</code></label>
+                        <input type="text" id="geoJurisdiction" placeholder="United States" />
+                    </div>
+                    <div class="field-group">
+                        <label>Programs <code>jurisdiction.programs</code> <span class="optional">(comma-separated)</span></label>
+                        <input type="text" id="programScope" placeholder="CoC Program, ESG Program" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output -->
+            <div class="output-section">
+                <h3>Definition Object</h3>
+                <pre class="output-json" id="outputJson">{}</pre>
+                <div class="output-actions">
+                    <button class="btn btn-copy" onclick="copyOutput()">Copy JSON</button>
+                    <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 2: Import/Export -->
+    <div id="tab-import" class="tab-content">
+        <div class="import-export-section">
+            <h3>Export Schema for AI</h3>
+            <p>Copy this template and ask an AI to fill it out for multiple definitions in bulk.</p>
+
+            <div class="schema-display">
+                <pre id="exportTemplate"></pre>
+            </div>
+            <button class="btn btn-copy" onclick="copyExportTemplate()">Copy Template for AI</button>
+        </div>
+
+        <div class="import-export-section">
+            <h3>Import JSON</h3>
+            <p>Paste JSON from AI or other sources. Supports single definition or array of definitions.</p>
+
+            <textarea id="importJson" placeholder='Paste JSON here...
+
+Example (single):
+{
+  "term": { "term": "homeless", "label": "Housing Status" },
+  "authority": { "name": "HUD", "type": "federal_agency" },
+  ...
+}
+
+Example (array for bulk):
+[
+  { "term": { "term": "homeless" }, ... },
+  { "term": { "term": "affordable_housing" }, ... }
+]'></textarea>
+
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" onclick="importJson()">Import & Validate</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('importJson').value = ''">Clear</button>
+            </div>
+
+            <div id="importStatus"></div>
+
+            <div class="definitions-list" id="importedDefinitions"></div>
+        </div>
+    </div>
+
+    <!-- Tab 3: Schema Reference -->
+    <div id="tab-schema" class="tab-content">
+        <div class="import-export-section">
+            <h3>JSON Schema Reference</h3>
+            <p>Complete schema with all fields, types, and descriptions.</p>
+
+            <div class="schema-display">
+                <pre id="fullSchema"></pre>
+            </div>
+            <button class="btn btn-copy" onclick="copyFullSchema()">Copy Full Schema</button>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let authorityType = 'federal_agency';
+        let documentType = 'regulation';
+        let importedDefs = [];
+
+        // JSON Schema (for AI consumption)
+        const jsonSchema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": "DefinitionSource",
+            "description": "A regulatory, legal, or policy definition from an authoritative source",
+            "type": "object",
+            "required": ["term", "authority", "source", "validity"],
+            "properties": {
+                "term": {
+                    "type": "object",
+                    "description": "The term being defined",
+                    "required": ["term"],
+                    "properties": {
+                        "term": { "type": "string", "description": "The term/concept name (maps to column key)" },
+                        "label": { "type": "string", "description": "Human-readable display label" },
+                        "asWritten": { "type": "string", "description": "How the term appears in the source document" },
+                        "definitionText": { "type": "string", "description": "The actual definition text or summary" },
+                        "categories": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Sub-categories if the definition has multiple parts (e.g., HUD's 4 categories)"
+                        }
+                    }
+                },
+                "authority": {
+                    "type": "object",
+                    "description": "The governing body that defines this term",
+                    "required": ["name", "type"],
+                    "properties": {
+                        "name": { "type": "string", "description": "Full name of the authority" },
+                        "shortName": { "type": "string", "description": "Acronym or short name (e.g., HUD, IRS)" },
+                        "uri": { "type": "string", "format": "uri", "description": "Wikidata or other URI for the authority" },
+                        "type": {
+                            "type": "string",
+                            "enum": ["federal_agency", "state_agency", "local_gov", "standards_body", "ngo", "academic", "international", "other"],
+                            "description": "Type of authority"
+                        }
+                    }
+                },
+                "source": {
+                    "type": "object",
+                    "description": "The document where the definition is published",
+                    "required": ["citation"],
+                    "properties": {
+                        "title": { "type": "string", "description": "Document title" },
+                        "citation": { "type": "string", "description": "Legal citation (e.g., '24 CFR 578.3', '42 U.S.C. § 11302')" },
+                        "section": { "type": "string", "description": "Specific section or paragraph" },
+                        "url": { "type": "string", "format": "uri", "description": "Direct URL to the source" },
+                        "type": {
+                            "type": "string",
+                            "enum": ["regulation", "statute", "guidance", "policy", "standard", "manual", "other"],
+                            "description": "Type of source document"
+                        }
+                    }
+                },
+                "version": {
+                    "type": "object",
+                    "description": "Version information for the definition",
+                    "properties": {
+                        "id": { "type": "string", "description": "Version identifier (e.g., '2015 Final Rule')" },
+                        "published": { "type": "string", "format": "date", "description": "Publication date (YYYY-MM-DD)" }
+                    }
+                },
+                "validity": {
+                    "type": "object",
+                    "description": "When this definition is/was in force",
+                    "required": ["from"],
+                    "properties": {
+                        "from": { "type": "string", "format": "date", "description": "Effective date (YYYY-MM-DD)" },
+                        "to": { "type": "string", "format": "date", "description": "End date if no longer in force" },
+                        "supersedes": { "type": "string", "description": "Previous version this replaces" },
+                        "supersededBy": { "type": "string", "description": "Newer version that replaced this" }
+                    }
+                },
+                "jurisdiction": {
+                    "type": "object",
+                    "description": "Where this definition applies",
+                    "properties": {
+                        "geographic": { "type": "string", "description": "Geographic scope (e.g., 'United States', 'California')" },
+                        "programs": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Specific programs this applies to (e.g., ['CoC Program', 'ESG Program'])"
+                        }
+                    }
+                }
+            }
+        };
+
+        // AI-friendly export template
+        const exportTemplate = {
+            "_instructions": "Fill in the fields below. Required fields are marked. Return as JSON array if creating multiple definitions.",
+            "_example_terms": ["homeless", "affordable_housing", "poverty", "disability", "veteran"],
+            "term": {
+                "term": "REQUIRED: term name (snake_case, maps to column)",
+                "label": "Human readable label",
+                "asWritten": "How it appears in source document",
+                "definitionText": "The actual definition text",
+                "categories": ["Optional array of sub-categories"]
+            },
+            "authority": {
+                "name": "REQUIRED: Full authority name",
+                "shortName": "Acronym",
+                "uri": "Wikidata URI if known",
+                "type": "REQUIRED: federal_agency|state_agency|local_gov|standards_body|ngo|academic"
+            },
+            "source": {
+                "title": "Document title",
+                "citation": "REQUIRED: Legal citation (e.g., 24 CFR 578.3)",
+                "section": "Specific section",
+                "url": "Direct URL",
+                "type": "regulation|statute|guidance|policy|standard"
+            },
+            "version": {
+                "id": "Version name",
+                "published": "YYYY-MM-DD"
+            },
+            "validity": {
+                "from": "REQUIRED: YYYY-MM-DD effective date",
+                "to": "YYYY-MM-DD if no longer in force",
+                "supersedes": "Previous version"
+            },
+            "jurisdiction": {
+                "geographic": "e.g., United States",
+                "programs": ["Program names"]
+            }
+        };
+
+        // Presets
+        const presets = {
+            hud_homeless: {
+                term: 'homeless',
+                termLabel: 'Homelessness Status',
+                termAsWritten: 'Homeless',
+                authorityName: 'U.S. Department of Housing and Urban Development',
+                authorityShortName: 'HUD',
+                authorityUri: 'http://www.wikidata.org/entity/Q596692',
+                authorityType: 'federal_agency',
+                docTitle: 'Continuum of Care Program',
+                citation: '24 CFR 578.3',
+                section: '§578.3 Definitions',
+                docUrl: 'https://www.ecfr.gov/current/title-24/subtitle-B/chapter-V/subchapter-C/part-578/subpart-A/section-578.3',
+                documentType: 'regulation',
+                definitionText: 'An individual or family who lacks a fixed, regular, and adequate nighttime residence...',
+                categories: 'Category 1: Literally homeless, Category 2: Imminent risk, Category 3: Other federal statutes, Category 4: Fleeing DV',
+                version: '2015 Final Rule',
+                publishedDate: '2015-12-04',
+                effectiveDate: '2015-12-04',
+                geoJurisdiction: 'United States',
+                programScope: 'CoC Program, ESG Program'
+            },
+            hud_affordable: {
+                term: 'affordable_housing',
+                termLabel: 'Affordable Housing',
+                termAsWritten: 'Qualification as affordable housing',
+                authorityName: 'U.S. Department of Housing and Urban Development',
+                authorityShortName: 'HUD',
+                authorityUri: 'http://www.wikidata.org/entity/Q596692',
+                authorityType: 'federal_agency',
+                docTitle: 'HOME Investment Partnerships Program',
+                citation: '24 CFR 92.252',
+                section: '§92.252',
+                docUrl: 'https://www.ecfr.gov/current/title-24/subtitle-A/part-92/subpart-F/section-92.252',
+                documentType: 'regulation',
+                definitionText: 'Housing occupied by low-income families paying no more than 30 percent of adjusted income...',
+                geoJurisdiction: 'United States',
+                programScope: 'HOME Program'
+            },
+            census_poverty: {
+                term: 'poverty',
+                termLabel: 'Poverty Status',
+                termAsWritten: 'Poverty Threshold',
+                authorityName: 'U.S. Census Bureau',
+                authorityShortName: 'Census',
+                authorityUri: 'http://www.wikidata.org/entity/Q637413',
+                authorityType: 'federal_agency',
+                docTitle: 'Poverty Thresholds',
+                citation: '',
+                docUrl: 'https://www.census.gov/topics/income-poverty/poverty/guidance/poverty-measures.html',
+                documentType: 'standard',
+                definitionText: 'The poverty thresholds are updated each year by the Census Bureau based on CPI...',
+                geoJurisdiction: 'United States',
+                programScope: 'Statistical reporting'
+            },
+            custom: {
+                term: '', termLabel: '', termAsWritten: '',
+                authorityName: '', authorityShortName: '', authorityUri: '',
+                authorityType: 'federal_agency',
+                docTitle: '', citation: '', section: '', docUrl: '',
+                documentType: 'regulation',
+                definitionText: '', categories: '',
+                version: '', publishedDate: '', effectiveDate: '',
+                geoJurisdiction: '', programScope: ''
+            }
+        };
+
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        // Load preset
+        function loadPreset(key) {
+            const p = presets[key];
+            if (!p) return;
+
+            document.getElementById('term').value = p.term || '';
+            document.getElementById('termLabel').value = p.termLabel || '';
+            document.getElementById('termAsWritten').value = p.termAsWritten || '';
+            document.getElementById('authorityName').value = p.authorityName || '';
+            document.getElementById('authorityShortName').value = p.authorityShortName || '';
+            document.getElementById('authorityUri').value = p.authorityUri || '';
+            document.getElementById('docTitle').value = p.docTitle || '';
+            document.getElementById('citation').value = p.citation || '';
+            document.getElementById('section').value = p.section || '';
+            document.getElementById('docUrl').value = p.docUrl || '';
+            document.getElementById('definitionText').value = p.definitionText || '';
+            document.getElementById('categories').value = p.categories || '';
+            document.getElementById('version').value = p.version || '';
+            document.getElementById('publishedDate').value = p.publishedDate || '';
+            document.getElementById('effectiveDate').value = p.effectiveDate || '';
+            document.getElementById('geoJurisdiction').value = p.geoJurisdiction || '';
+            document.getElementById('programScope').value = p.programScope || '';
+
+            if (p.authorityType) {
+                authorityType = p.authorityType;
+                document.querySelectorAll('.type-options:first-of-type .type-option').forEach(o => {
+                    o.classList.toggle('selected', o.dataset.type === authorityType);
+                });
+            }
+            if (p.documentType) {
+                documentType = p.documentType;
+                document.querySelectorAll('#docTypeOptions .type-option').forEach(o => {
+                    o.classList.toggle('selected', o.dataset.type === documentType);
+                });
+            }
+
+            updateOutput();
+        }
+
+        // Event listeners
+        document.querySelectorAll('.type-options').forEach(container => {
+            container.querySelectorAll('.type-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    container.querySelectorAll('.type-option').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    if (container.id === 'docTypeOptions') {
+                        documentType = opt.dataset.type;
+                    } else {
+                        authorityType = opt.dataset.type;
+                    }
+                    updateOutput();
+                });
+            });
+        });
+
+        document.querySelectorAll('input, textarea').forEach(el => {
+            el.addEventListener('input', updateOutput);
+        });
+
+        // Search Wikidata for authority
+        async function searchAuthority() {
+            const name = document.getElementById('authorityName').value || document.getElementById('authorityShortName').value;
+            if (!name) return alert('Enter authority name first');
+
+            try {
+                const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&limit=1&format=json&origin=*`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.search?.[0]) {
+                    document.getElementById('authorityUri').value = `http://www.wikidata.org/entity/${data.search[0].id}`;
+                    updateOutput();
+                }
+            } catch (e) {
+                alert('Search failed');
+            }
+        }
+
+        // Build output JSON
+        function buildJson() {
+            const def = {
+                term: {
+                    term: document.getElementById('term').value || undefined,
+                    label: document.getElementById('termLabel').value || undefined,
+                    asWritten: document.getElementById('termAsWritten').value || undefined,
+                    definitionText: document.getElementById('definitionText').value || undefined,
+                    categories: document.getElementById('categories').value ?
+                        document.getElementById('categories').value.split(',').map(s => s.trim()) : undefined
+                },
+                authority: {
+                    name: document.getElementById('authorityName').value || undefined,
+                    shortName: document.getElementById('authorityShortName').value || undefined,
+                    uri: document.getElementById('authorityUri').value || undefined,
+                    type: authorityType
+                },
+                source: {
+                    title: document.getElementById('docTitle').value || undefined,
+                    citation: document.getElementById('citation').value || undefined,
+                    section: document.getElementById('section').value || undefined,
+                    url: document.getElementById('docUrl').value || undefined,
+                    type: documentType
+                },
+                version: {
+                    id: document.getElementById('version').value || undefined,
+                    published: document.getElementById('publishedDate').value || undefined
+                },
+                validity: {
+                    from: document.getElementById('effectiveDate').value || undefined,
+                    to: document.getElementById('endDate').value || undefined,
+                    supersedes: document.getElementById('supersedes').value || undefined
+                },
+                jurisdiction: {
+                    geographic: document.getElementById('geoJurisdiction').value || undefined,
+                    programs: document.getElementById('programScope').value ?
+                        document.getElementById('programScope').value.split(',').map(s => s.trim()) : undefined
+                }
+            };
+
+            // Clean undefined
+            const clean = obj => {
+                Object.keys(obj).forEach(k => {
+                    if (obj[k] === undefined) delete obj[k];
+                    else if (typeof obj[k] === 'object' && !Array.isArray(obj[k])) {
+                        clean(obj[k]);
+                        if (Object.keys(obj[k]).length === 0) delete obj[k];
+                    }
+                });
+                return obj;
+            };
+
+            return clean(def);
+        }
+
+        function updateOutput() {
+            document.getElementById('outputJson').textContent = JSON.stringify(buildJson(), null, 2);
+        }
+
+        function copyOutput() {
+            const json = document.getElementById('outputJson').textContent;
+            navigator.clipboard.writeText(json).then(() => {
+                const btn = document.querySelector('#tab-form .btn-copy');
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy JSON'; btn.classList.remove('copied'); }, 2000);
+            });
+        }
+
+        function clearForm() {
+            loadPreset('custom');
+        }
+
+        // Import/Export
+        function copyExportTemplate() {
+            const template = JSON.stringify(exportTemplate, null, 2);
+            navigator.clipboard.writeText(template).then(() => {
+                const btn = document.querySelector('#tab-import .btn-copy');
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy Template for AI'; btn.classList.remove('copied'); }, 2000);
+            });
+        }
+
+        function copyFullSchema() {
+            navigator.clipboard.writeText(JSON.stringify(jsonSchema, null, 2));
+        }
+
+        function importJson() {
+            const input = document.getElementById('importJson').value.trim();
+            const statusDiv = document.getElementById('importStatus');
+            const listDiv = document.getElementById('importedDefinitions');
+
+            if (!input) {
+                statusDiv.innerHTML = '<div class="import-status error">Please paste JSON first</div>';
+                return;
+            }
+
+            try {
+                let data = JSON.parse(input);
+
+                // Normalize to array
+                if (!Array.isArray(data)) data = [data];
+
+                // Validate each
+                const valid = [];
+                const errors = [];
+
+                data.forEach((def, i) => {
+                    const issues = validateDefinition(def);
+                    if (issues.length === 0) {
+                        valid.push(def);
+                    } else {
+                        errors.push({ index: i, term: def.term?.term || `Item ${i}`, issues });
+                    }
+                });
+
+                // Show status
+                if (errors.length === 0) {
+                    statusDiv.innerHTML = `<div class="import-status success">✓ ${valid.length} definition(s) validated successfully</div>`;
+                } else {
+                    statusDiv.innerHTML = `<div class="import-status error">⚠ ${errors.length} error(s): ${errors.map(e => `${e.term}: ${e.issues.join(', ')}`).join('; ')}</div>`;
+                }
+
+                // Show imported list
+                importedDefs = valid;
+                listDiv.innerHTML = valid.map((def, i) => `
+                    <div class="definition-item">
+                        <div>
+                            <span class="term">${def.term?.term || 'unnamed'}</span>
+                            <span class="authority"> — ${def.authority?.shortName || def.authority?.name || 'unknown'}</span>
+                        </div>
+                        <div class="actions">
+                            <button class="btn btn-secondary btn-small" onclick="loadImported(${i})">Edit</button>
+                            <button class="btn btn-primary btn-small" onclick="useDefinition(${i})">Use</button>
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                statusDiv.innerHTML = `<div class="import-status error">Invalid JSON: ${e.message}</div>`;
+            }
+        }
+
+        function validateDefinition(def) {
+            const issues = [];
+            if (!def.term?.term) issues.push('missing term.term');
+            if (!def.authority?.name && !def.authority?.shortName) issues.push('missing authority');
+            if (!def.source?.citation && !def.source?.title) issues.push('missing source');
+            if (!def.validity?.from) issues.push('missing validity.from');
+            return issues;
+        }
+
+        function loadImported(index) {
+            const def = importedDefs[index];
+            if (!def) return;
+
+            // Fill form from imported definition
+            document.getElementById('term').value = def.term?.term || '';
+            document.getElementById('termLabel').value = def.term?.label || '';
+            document.getElementById('termAsWritten').value = def.term?.asWritten || '';
+            document.getElementById('definitionText').value = def.term?.definitionText || '';
+            document.getElementById('categories').value = def.term?.categories?.join(', ') || '';
+
+            document.getElementById('authorityName').value = def.authority?.name || '';
+            document.getElementById('authorityShortName').value = def.authority?.shortName || '';
+            document.getElementById('authorityUri').value = def.authority?.uri || '';
+            if (def.authority?.type) {
+                authorityType = def.authority.type;
+                document.querySelectorAll('.type-options:first-of-type .type-option').forEach(o => {
+                    o.classList.toggle('selected', o.dataset.type === authorityType);
+                });
+            }
+
+            document.getElementById('docTitle').value = def.source?.title || '';
+            document.getElementById('citation').value = def.source?.citation || '';
+            document.getElementById('section').value = def.source?.section || '';
+            document.getElementById('docUrl').value = def.source?.url || '';
+            if (def.source?.type) {
+                documentType = def.source.type;
+                document.querySelectorAll('#docTypeOptions .type-option').forEach(o => {
+                    o.classList.toggle('selected', o.dataset.type === documentType);
+                });
+            }
+
+            document.getElementById('version').value = def.version?.id || '';
+            document.getElementById('publishedDate').value = def.version?.published || '';
+            document.getElementById('effectiveDate').value = def.validity?.from || '';
+            document.getElementById('endDate').value = def.validity?.to || '';
+            document.getElementById('supersedes').value = def.validity?.supersedes || '';
+
+            document.getElementById('geoJurisdiction').value = def.jurisdiction?.geographic || '';
+            document.getElementById('programScope').value = def.jurisdiction?.programs?.join(', ') || '';
+
+            updateOutput();
+            showTab('form');
+        }
+
+        function useDefinition(index) {
+            const def = importedDefs[index];
+            console.log('Using definition:', def);
+            alert(`Definition "${def.term?.term}" ready to use!`);
+        }
+
+        // Initialize
+        document.getElementById('exportTemplate').textContent = JSON.stringify(exportTemplate, null, 2);
+        document.getElementById('fullSchema').textContent = JSON.stringify(jsonSchema, null, 2);
+        updateOutput();
+    </script>
+</body>
+</html>
