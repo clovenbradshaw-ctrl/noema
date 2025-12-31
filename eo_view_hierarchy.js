@@ -74,6 +74,189 @@ function generateViewId(prefix) {
 }
 
 // ============================================================================
+// Level 0: Project (Super Object - Contains Sources, Sets, Definitions, etc.)
+// ============================================================================
+
+class ProjectConfig {
+  /**
+   * Projects are the top-level organizational container.
+   * They contain Sources, Sets, Definitions, and Exports.
+   * Definitions can be cited/referenced across projects.
+   *
+   * @param {Object} options
+   * @param {string} options.id - Unique identifier
+   * @param {string} options.name - Human-readable name
+   * @param {string} options.description - Project description
+   * @param {string} options.icon - Phosphor icon class
+   * @param {string} options.color - Project color for visual distinction
+   * @param {string[]} options.sourceIds - IDs of sources in this project
+   * @param {string[]} options.setIds - IDs of sets in this project
+   * @param {string[]} options.definitionIds - IDs of definitions owned by this project
+   * @param {string[]} options.exportIds - IDs of exports in this project
+   * @param {Object} options.settings - Project-specific settings
+   */
+  constructor(options) {
+    // Rule 1: Explicitly typed as 'meant' (project is an interpretation/organization)
+    this.type = 'meant';
+    this.viewType = 'project';
+
+    this.id = options.id || generateViewId('proj');
+    this.name = options.name || 'Untitled Project';
+    this.description = options.description || '';
+    this.icon = options.icon || 'ph-folder-simple-dashed';
+    this.color = options.color || '#3B82F6'; // Default blue
+
+    // Child entities - organized within this project
+    this.sourceIds = options.sourceIds || [];
+    this.setIds = options.setIds || [];
+    this.definitionIds = options.definitionIds || []; // Owned definitions
+    this.exportIds = options.exportIds || [];
+
+    // Workspaces within this project (optional - for sub-organization)
+    this.workspaceIds = options.workspaceIds || [];
+
+    // Project-level settings
+    this.settings = {
+      defaultWorkspace: options.settings?.defaultWorkspace || null,
+      isDefault: options.settings?.isDefault || false, // Is this the default project?
+      ...options.settings
+    };
+
+    // Rule 9: Defeasibility metadata
+    this.epistemicStatus = options.epistemicStatus || ViewEpistemicStatus.PRELIMINARY;
+    this.supersedes = options.supersedes || null;
+    this.supersededBy = options.supersededBy || null;
+
+    // Timestamps
+    this.createdAt = options.createdAt || new Date().toISOString();
+    this.createdBy = options.createdBy || null;
+    this.updatedAt = options.updatedAt || new Date().toISOString();
+
+    // Archive status
+    this.status = options.status || 'active';
+  }
+
+  /**
+   * Add a source to this project
+   */
+  addSource(sourceId) {
+    if (!this.sourceIds.includes(sourceId)) {
+      this.sourceIds.push(sourceId);
+      this.updatedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Add a set to this project
+   */
+  addSet(setId) {
+    if (!this.setIds.includes(setId)) {
+      this.setIds.push(setId);
+      this.updatedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Add a definition to this project
+   */
+  addDefinition(definitionId) {
+    if (!this.definitionIds.includes(definitionId)) {
+      this.definitionIds.push(definitionId);
+      this.updatedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Add an export to this project
+   */
+  addExport(exportId) {
+    if (!this.exportIds.includes(exportId)) {
+      this.exportIds.push(exportId);
+      this.updatedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Remove a source from this project
+   */
+  removeSource(sourceId) {
+    const idx = this.sourceIds.indexOf(sourceId);
+    if (idx !== -1) {
+      this.sourceIds.splice(idx, 1);
+      this.updatedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Remove a set from this project
+   */
+  removeSet(setId) {
+    const idx = this.setIds.indexOf(setId);
+    if (idx !== -1) {
+      this.setIds.splice(idx, 1);
+      this.updatedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Remove a definition from this project
+   */
+  removeDefinition(definitionId) {
+    const idx = this.definitionIds.indexOf(definitionId);
+    if (idx !== -1) {
+      this.definitionIds.splice(idx, 1);
+      this.updatedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Get total item count
+   */
+  getItemCount() {
+    return this.sourceIds.length + this.setIds.length +
+           this.definitionIds.length + this.exportIds.length;
+  }
+
+  /**
+   * Validate compliance
+   */
+  validate() {
+    const errors = [];
+
+    if (!this.name || this.name.trim() === '') {
+      errors.push(new ViewHierarchyError(1, 'Project must have a name'));
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  toJSON() {
+    return {
+      type: this.type,
+      viewType: this.viewType,
+      id: this.id,
+      name: this.name,
+      description: this.description,
+      icon: this.icon,
+      color: this.color,
+      sourceIds: [...this.sourceIds],
+      setIds: [...this.setIds],
+      definitionIds: [...this.definitionIds],
+      exportIds: [...this.exportIds],
+      workspaceIds: [...this.workspaceIds],
+      settings: { ...this.settings },
+      epistemicStatus: this.epistemicStatus,
+      supersedes: this.supersedes,
+      supersededBy: this.supersededBy,
+      createdAt: this.createdAt,
+      createdBy: this.createdBy,
+      updatedAt: this.updatedAt,
+      status: this.status
+    };
+  }
+}
+
+// ============================================================================
 // Level 1: Workspace (Contextual Boundary)
 // ============================================================================
 
@@ -579,6 +762,7 @@ class ViewRegistry {
     this.store = eventStore;
 
     // View storage by type
+    this.projects = new Map();     // Level 0: Projects (super objects)
     this.workspaces = new Map();
     this.sets = new Map();
     this.lenses = new Map();
@@ -586,6 +770,7 @@ class ViewRegistry {
     this.exports = new Map();
 
     // Active selections
+    this.activeProjectId = null;   // Currently selected project
     this.activeWorkspaceId = null;
     this.activeSetId = null;
     this.activeLensId = null;
@@ -593,6 +778,162 @@ class ViewRegistry {
 
     // Subscribers for reactive updates
     this._subscribers = new Set();
+  }
+
+  // --------------------------------------------------------------------------
+  // Project Operations (Level 0 - Super Objects)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Create a new project
+   * @param {Object} config - Project configuration
+   */
+  createProject(config) {
+    const project = new ProjectConfig(config);
+
+    const validation = project.validate();
+    if (!validation.valid) {
+      throw validation.errors[0];
+    }
+
+    this.projects.set(project.id, project);
+    this._recordViewEvent('project_created', project);
+    this._notify('project_created', project);
+
+    return project;
+  }
+
+  /**
+   * Get a project by ID
+   */
+  getProject(projectId) {
+    return this.projects.get(projectId);
+  }
+
+  /**
+   * Get all active projects
+   */
+  getAllProjects() {
+    return Array.from(this.projects.values())
+      .filter(p => p.status !== 'archived' && p.epistemicStatus !== ViewEpistemicStatus.SUPERSEDED);
+  }
+
+  /**
+   * Set the active project
+   */
+  setActiveProject(projectId) {
+    if (projectId && !this.projects.has(projectId)) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+    this.activeProjectId = projectId;
+    this._notify('project_activated', projectId ? this.projects.get(projectId) : null);
+  }
+
+  /**
+   * Get the default project, or create one if none exists
+   */
+  getOrCreateDefaultProject() {
+    // Find existing default project
+    const defaultProject = Array.from(this.projects.values())
+      .find(p => p.settings?.isDefault && p.status !== 'archived');
+
+    if (defaultProject) {
+      return defaultProject;
+    }
+
+    // Create default project
+    const project = this.createProject({
+      name: 'Default Project',
+      description: 'Default project for organizing your data',
+      icon: 'ph-folder-simple',
+      settings: { isDefault: true }
+    });
+
+    return project;
+  }
+
+  /**
+   * Update a project
+   */
+  updateProject(projectId, updates) {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    // Apply updates
+    if (updates.name !== undefined) project.name = updates.name;
+    if (updates.description !== undefined) project.description = updates.description;
+    if (updates.icon !== undefined) project.icon = updates.icon;
+    if (updates.color !== undefined) project.color = updates.color;
+    if (updates.settings !== undefined) {
+      project.settings = { ...project.settings, ...updates.settings };
+    }
+    project.updatedAt = new Date().toISOString();
+
+    this._recordViewEvent('project_updated', project);
+    this._notify('project_updated', project);
+
+    return project;
+  }
+
+  /**
+   * Archive a project (soft delete)
+   */
+  archiveProject(projectId) {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    project.status = 'archived';
+    project.updatedAt = new Date().toISOString();
+
+    // If this was the active project, clear it
+    if (this.activeProjectId === projectId) {
+      this.activeProjectId = null;
+    }
+
+    this._recordViewEvent('project_archived', project);
+    this._notify('project_archived', project);
+
+    return project;
+  }
+
+  /**
+   * Add a source to a project
+   */
+  addSourceToProject(projectId, sourceId) {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+    project.addSource(sourceId);
+    this._notify('project_updated', project);
+  }
+
+  /**
+   * Add a set to a project
+   */
+  addSetToProject(projectId, setId) {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+    project.addSet(setId);
+    this._notify('project_updated', project);
+  }
+
+  /**
+   * Add a definition to a project
+   */
+  addDefinitionToProject(projectId, definitionId) {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+    project.addDefinition(definitionId);
+    this._notify('project_updated', project);
   }
 
   // --------------------------------------------------------------------------
@@ -1138,14 +1479,16 @@ class ViewRegistry {
 
   export() {
     return {
-      version: '1.0',
+      version: '1.1',
       exportedAt: new Date().toISOString(),
+      projects: Array.from(this.projects.values()).map(p => p.toJSON()),
       workspaces: Array.from(this.workspaces.values()).map(w => w.toJSON()),
       sets: Array.from(this.sets.values()).map(s => s.toJSON()),
       lenses: Array.from(this.lenses.values()).map(l => l.toJSON()),
       focuses: Array.from(this.focuses.values()).map(f => f.toJSON()),
       exports: Array.from(this.exports.values()).map(e => e.toJSON()),
       active: {
+        projectId: this.activeProjectId,
         workspaceId: this.activeWorkspaceId,
         setId: this.activeSetId,
         lensId: this.activeLensId,
@@ -1156,6 +1499,13 @@ class ViewRegistry {
 
   import(data) {
     if (!data) return;
+
+    // Import projects (Level 0)
+    if (data.projects) {
+      for (const p of data.projects) {
+        this.projects.set(p.id, new ProjectConfig(p));
+      }
+    }
 
     // Import workspaces
     if (data.workspaces) {
@@ -1194,6 +1544,7 @@ class ViewRegistry {
 
     // Restore active selections
     if (data.active) {
+      this.activeProjectId = data.active.projectId;
       this.activeWorkspaceId = data.active.workspaceId;
       this.activeSetId = data.active.setId;
       this.activeLensId = data.active.lensId;
@@ -1206,12 +1557,14 @@ class ViewRegistry {
    */
   getStats() {
     return {
+      projects: this.projects.size,
       workspaces: this.workspaces.size,
       sets: this.sets.size,
       lenses: this.lenses.size,
       focuses: this.focuses.size,
       exports: this.exports.size,
       active: {
+        projectId: this.activeProjectId,
         workspaceId: this.activeWorkspaceId,
         setId: this.activeSetId,
         lensId: this.activeLensId,
@@ -1247,6 +1600,7 @@ if (typeof module !== 'undefined' && module.exports) {
     LensType,
     LensTypeInfo,
     generateViewId,
+    ProjectConfig,
     WorkspaceConfig,
     SetConfig,
     LensConfig,
@@ -1264,6 +1618,7 @@ if (typeof window !== 'undefined') {
   window.LensType = LensType;
   window.LensTypeInfo = LensTypeInfo;
   window.generateViewId = generateViewId;
+  window.ProjectConfig = ProjectConfig;
   window.WorkspaceConfig = WorkspaceConfig;
   window.SetConfig = SetConfig;
   window.LensConfig = LensConfig;

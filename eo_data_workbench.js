@@ -442,10 +442,12 @@ class EODataWorkbench {
     this.viewRegistry = null;
 
     // Legacy State (for backward compatibility)
+    this.projects = []; // Projects are super objects containing sources, sets, definitions, exports
     this.sets = [];
     this.sources = []; // CRITICAL: Initialize sources array for imports
     this.definitions = []; // Definition schemas for columns/keys from URIs
     this.exports = []; // Immutable frozen captures (downloads and records)
+    this.currentProjectId = null; // Track the currently selected project
     this.currentSetId = null;
     this.currentViewId = null;
     this.currentSourceId = null; // Track when viewing a source (GIVEN data)
@@ -497,6 +499,7 @@ class EODataWorkbench {
     this.calendarDate = new Date();
 
     // Panel view modes (list vs table)
+    this.projectsViewMode = 'list'; // 'list' or 'table'
     this.sourcesViewMode = 'list'; // 'list' or 'table'
     this.setsViewMode = 'list'; // 'list' or 'table'
     this.definitionsViewMode = 'list'; // 'list' or 'table'
@@ -1027,6 +1030,11 @@ class EODataWorkbench {
       });
     });
 
+    // New project button
+    document.getElementById('btn-new-project')?.addEventListener('click', () => {
+      this._showNewProjectModal();
+    });
+
     // New set button
     document.getElementById('btn-new-set')?.addEventListener('click', () => {
       this._showNewSetModal();
@@ -1294,6 +1302,17 @@ class EODataWorkbench {
       if (data) {
         const parsed = JSON.parse(data);
 
+        // Load projects (super objects containing sources, sets, definitions, exports)
+        this.projects = (parsed.projects || []).map(p => ({
+          ...p,
+          // Restore helper method
+          getItemCount() {
+            return (this.sourceIds?.length || 0) + (this.setIds?.length || 0) +
+                   (this.definitionIds?.length || 0) + (this.exportIds?.length || 0);
+          }
+        }));
+        this.currentProjectId = parsed.currentProjectId || null;
+
         // Load sources (CRITICAL for import functionality)
         this.sources = parsed.sources || [];
 
@@ -1391,7 +1410,15 @@ class EODataWorkbench {
         this._fullSetData = setsToSave;
       }
 
+      // Serialize projects (strip helper methods)
+      const projectsToSave = (this.projects || []).map(p => {
+        const { getItemCount, ...cleanProject } = p;
+        return cleanProject;
+      });
+
       localStorage.setItem('eo_lake_data', JSON.stringify({
+        projects: projectsToSave, // Save projects (super objects)
+        currentProjectId: this.currentProjectId, // Save current project selection
         sources: this.sources || [], // CRITICAL: Save sources for import functionality
         definitions: this.definitions || [], // Save definition schemas
         exports: this.exports || [], // Save exports (frozen captures)
@@ -1645,8 +1672,10 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderSidebar() {
-    // Four-panel navigation: Sources (GIVEN) / Sets (SCHEMA) / Definitions (DICT) / Exports (FROZEN)
+    // Five-panel navigation: Projects / Sources (GIVEN) / Sets (SCHEMA) / Definitions (DICT) / Exports (FROZEN)
+    // Projects are super objects that contain all other entities
     // Views are shown nested under sets in sidebar (Airtable-style)
+    this._renderProjectsNav();
     this._renderSourcesNav();
     this._renderSetsNavFlat();
     this._renderDefinitionsNav();
@@ -4030,6 +4059,471 @@ class EODataWorkbench {
    * EO Principle: Sources are GIVEN (immutable external data)
    * Sets are MEANT (interpretive schema definitions)
    */
+  // --------------------------------------------------------------------------
+  // Projects Panel Rendering
+  // --------------------------------------------------------------------------
+
+  /**
+   * Render Projects navigation panel
+   * Projects are super objects that contain Sources, Sets, Definitions, and Exports.
+   * Definitions can be cited/referenced across projects.
+   */
+  _renderProjectsNav() {
+    const container = document.getElementById('projects-nav');
+    if (!container) return;
+
+    // Ensure projects array exists
+    if (!Array.isArray(this.projects)) {
+      this.projects = [];
+    }
+
+    // Get all active projects
+    const activeProjects = this.projects.filter(p => p.status !== 'archived');
+
+    // Sort projects by creation date (newest first)
+    const sortedProjects = activeProjects.sort((a, b) => {
+      if (!a.createdAt) return 1;
+      if (!b.createdAt) return -1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    // Empty state - no projects yet
+    if (sortedProjects.length === 0) {
+      container.innerHTML = `
+        <div class="nav-empty-state">
+          <i class="ph ph-folder-simple-dashed"></i>
+          <span>No projects yet</span>
+          <button class="btn-link" id="btn-first-project">Create a project</button>
+        </div>
+      `;
+      container.querySelector('#btn-first-project')?.addEventListener('click', () => {
+        this._showNewProjectModal();
+      });
+      return;
+    }
+
+    // Build HTML for projects
+    let html = '';
+
+    // "All Items" option to show everything without project filter
+    html += `
+      <div class="all-projects-item ${!this.currentProjectId ? 'active' : ''}" data-project-id="">
+        <i class="ph ph-stack"></i>
+        <span>All Items</span>
+      </div>
+    `;
+
+    // Render each project
+    for (const project of sortedProjects) {
+      const isActive = this.currentProjectId === project.id;
+      const itemCount = project.getItemCount ? project.getItemCount() :
+        (project.sourceIds?.length || 0) + (project.setIds?.length || 0) +
+        (project.definitionIds?.length || 0) + (project.exportIds?.length || 0);
+      const createdDate = project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '';
+
+      html += `
+        <div class="project-item ${isActive ? 'active' : ''}"
+             data-project-id="${project.id}"
+             title="${this._escapeHtml(project.description || project.name)}">
+          <span class="project-color-dot" style="background-color: ${project.color || '#3B82F6'}"></span>
+          <i class="ph ${project.icon || 'ph-folder-simple-dashed'} project-icon"></i>
+          <div class="project-info">
+            <span class="project-name">${this._escapeHtml(this._truncateName(project.name, 18))}</span>
+            <span class="project-meta-inline">${createdDate}</span>
+          </div>
+          <span class="nav-item-count" title="${itemCount} items">${itemCount}</span>
+        </div>
+      `;
+    }
+
+    container.innerHTML = html;
+
+    // Attach event handlers
+    this._attachProjectsNavEventHandlers(container);
+  }
+
+  /**
+   * Attach event handlers for projects navigation
+   */
+  _attachProjectsNavEventHandlers(container) {
+    // All Items option
+    container.querySelector('.all-projects-item')?.addEventListener('click', () => {
+      this._selectProject(null);
+    });
+
+    // Project items
+    container.querySelectorAll('.project-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const projectId = item.dataset.projectId;
+        this._selectProject(projectId);
+      });
+
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this._showProjectContextMenu(e, item.dataset.projectId);
+      });
+    });
+  }
+
+  /**
+   * Select a project (or null for "All Items")
+   */
+  _selectProject(projectId) {
+    this.currentProjectId = projectId;
+
+    // Clear other selections when switching projects
+    this.currentSourceId = null;
+    this.currentDefinitionId = null;
+    this.currentExportId = null;
+
+    // Re-render sidebar to show filtered content
+    this._renderSidebar();
+
+    // Update breadcrumb
+    this._updateBreadcrumb();
+
+    // Save state
+    this._saveData();
+  }
+
+  /**
+   * Get sources for the current project (or all if no project selected)
+   */
+  _getProjectSources() {
+    if (!this.currentProjectId) {
+      return this.sources.filter(s => s.status !== 'archived');
+    }
+    const project = this.projects.find(p => p.id === this.currentProjectId);
+    if (!project) return [];
+    return this.sources.filter(s =>
+      s.status !== 'archived' && project.sourceIds?.includes(s.id)
+    );
+  }
+
+  /**
+   * Get sets for the current project (or all if no project selected)
+   */
+  _getProjectSets() {
+    if (!this.currentProjectId) {
+      return this.sets;
+    }
+    const project = this.projects.find(p => p.id === this.currentProjectId);
+    if (!project) return [];
+    return this.sets.filter(s => project.setIds?.includes(s.id));
+  }
+
+  /**
+   * Get definitions for the current project (or all if no project selected)
+   */
+  _getProjectDefinitions() {
+    if (!this.currentProjectId) {
+      return this.definitions.filter(d => d.status !== 'archived');
+    }
+    const project = this.projects.find(p => p.id === this.currentProjectId);
+    if (!project) return [];
+    return this.definitions.filter(d =>
+      d.status !== 'archived' && project.definitionIds?.includes(d.id)
+    );
+  }
+
+  /**
+   * Get exports for the current project (or all if no project selected)
+   */
+  _getProjectExports() {
+    if (!this.currentProjectId) {
+      return this.exports;
+    }
+    const project = this.projects.find(p => p.id === this.currentProjectId);
+    if (!project) return [];
+    return this.exports.filter(e => project.exportIds?.includes(e.id));
+  }
+
+  /**
+   * Show project context menu
+   */
+  _showProjectContextMenu(e, projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const menuItems = [
+      {
+        label: 'Rename',
+        icon: 'ph-pencil-simple',
+        action: () => this._renameProject(projectId)
+      },
+      {
+        label: 'Edit Color',
+        icon: 'ph-palette',
+        action: () => this._editProjectColor(projectId)
+      },
+      { divider: true },
+      {
+        label: 'Archive Project',
+        icon: 'ph-archive',
+        danger: true,
+        action: () => this._archiveProject(projectId)
+      }
+    ];
+
+    this._showContextMenu(e, menuItems);
+  }
+
+  /**
+   * Show modal for creating a new project
+   */
+  _showNewProjectModal() {
+    const modal = document.getElementById('modal-overlay');
+    const modalTitle = modal?.querySelector('.modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const modalFooter = document.getElementById('modal-footer');
+    if (!modal || !modalBody) return;
+
+    // Project colors
+    const colors = [
+      '#3B82F6', // Blue
+      '#10B981', // Green
+      '#F59E0B', // Amber
+      '#EF4444', // Red
+      '#8B5CF6', // Purple
+      '#EC4899', // Pink
+      '#06B6D4', // Cyan
+      '#84CC16', // Lime
+    ];
+
+    modalTitle.textContent = 'New Project';
+    modalBody.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Project Name</label>
+        <input type="text" id="new-project-name" class="form-input" placeholder="My Project" autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description (optional)</label>
+        <textarea id="new-project-description" class="form-textarea" rows="2" placeholder="What is this project about?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Color</label>
+        <div class="color-picker-grid">
+          ${colors.map((color, i) => `
+            <button class="color-picker-item ${i === 0 ? 'selected' : ''}"
+                    data-color="${color}"
+                    style="background-color: ${color}">
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Color picker interaction
+    let selectedColor = colors[0];
+    modalBody.querySelectorAll('.color-picker-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        modalBody.querySelectorAll('.color-picker-item').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedColor = btn.dataset.color;
+      });
+    });
+
+    modalFooter.innerHTML = `
+      <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Create Project</button>
+    `;
+
+    modal.classList.add('active');
+
+    // Focus the name input
+    setTimeout(() => document.getElementById('new-project-name')?.focus(), 100);
+
+    // Handle confirm
+    const confirmBtn = document.getElementById('modal-confirm');
+    const cancelBtn = document.getElementById('modal-cancel');
+
+    confirmBtn.addEventListener('click', () => {
+      const name = document.getElementById('new-project-name').value.trim();
+      const description = document.getElementById('new-project-description').value.trim();
+
+      if (!name) {
+        this._showToast('Please enter a project name', 'error');
+        return;
+      }
+
+      this._createProject({
+        name,
+        description,
+        color: selectedColor
+      });
+
+      modal.classList.remove('active');
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
+
+    // Enter key to submit
+    document.getElementById('new-project-name').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        confirmBtn.click();
+      }
+    });
+  }
+
+  /**
+   * Create a new project
+   */
+  _createProject(config) {
+    const project = {
+      id: 'proj_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9),
+      name: config.name || 'Untitled Project',
+      description: config.description || '',
+      icon: config.icon || 'ph-folder-simple-dashed',
+      color: config.color || '#3B82F6',
+      sourceIds: [],
+      setIds: [],
+      definitionIds: [],
+      exportIds: [],
+      settings: {
+        isDefault: this.projects.length === 0 // First project is default
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'active',
+      // Helper method
+      getItemCount() {
+        return (this.sourceIds?.length || 0) + (this.setIds?.length || 0) +
+               (this.definitionIds?.length || 0) + (this.exportIds?.length || 0);
+      }
+    };
+
+    this.projects.push(project);
+    this._selectProject(project.id);
+    this._renderSidebar();
+    this._saveData();
+    this._showToast(`Created project "${project.name}"`, 'success');
+
+    return project;
+  }
+
+  /**
+   * Rename a project
+   */
+  _renameProject(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const newName = prompt('Rename project:', project.name);
+    if (newName && newName.trim()) {
+      project.name = newName.trim();
+      project.updatedAt = new Date().toISOString();
+      this._renderProjectsNav();
+      this._updateBreadcrumb();
+      this._saveData();
+      this._showToast(`Project renamed to "${project.name}"`, 'success');
+    }
+  }
+
+  /**
+   * Edit project color
+   */
+  _editProjectColor(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+    const currentIndex = colors.indexOf(project.color);
+    const nextIndex = (currentIndex + 1) % colors.length;
+
+    project.color = colors[nextIndex];
+    project.updatedAt = new Date().toISOString();
+    this._renderProjectsNav();
+    this._saveData();
+  }
+
+  /**
+   * Archive a project
+   */
+  _archiveProject(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    if (!confirm(`Archive project "${project.name}"? Items in this project will still be accessible under "All Items".`)) {
+      return;
+    }
+
+    project.status = 'archived';
+    project.updatedAt = new Date().toISOString();
+
+    // If this was the current project, clear selection
+    if (this.currentProjectId === projectId) {
+      this.currentProjectId = null;
+    }
+
+    this._renderSidebar();
+    this._updateBreadcrumb();
+    this._saveData();
+    this._showToast(`Archived project "${project.name}"`, 'success');
+  }
+
+  /**
+   * Add a source to the current project (or a specific project)
+   */
+  _addSourceToProject(sourceId, projectId = null) {
+    const targetProjectId = projectId || this.currentProjectId;
+    if (!targetProjectId) return;
+
+    const project = this.projects.find(p => p.id === targetProjectId);
+    if (!project) return;
+
+    if (!project.sourceIds) project.sourceIds = [];
+    if (!project.sourceIds.includes(sourceId)) {
+      project.sourceIds.push(sourceId);
+      project.updatedAt = new Date().toISOString();
+      this._renderProjectsNav();
+      this._saveData();
+    }
+  }
+
+  /**
+   * Add a set to the current project (or a specific project)
+   */
+  _addSetToProject(setId, projectId = null) {
+    const targetProjectId = projectId || this.currentProjectId;
+    if (!targetProjectId) return;
+
+    const project = this.projects.find(p => p.id === targetProjectId);
+    if (!project) return;
+
+    if (!project.setIds) project.setIds = [];
+    if (!project.setIds.includes(setId)) {
+      project.setIds.push(setId);
+      project.updatedAt = new Date().toISOString();
+      this._renderProjectsNav();
+      this._saveData();
+    }
+  }
+
+  /**
+   * Add a definition to the current project (or a specific project)
+   */
+  _addDefinitionToProject(definitionId, projectId = null) {
+    const targetProjectId = projectId || this.currentProjectId;
+    if (!targetProjectId) return;
+
+    const project = this.projects.find(p => p.id === targetProjectId);
+    if (!project) return;
+
+    if (!project.definitionIds) project.definitionIds = [];
+    if (!project.definitionIds.includes(definitionId)) {
+      project.definitionIds.push(definitionId);
+      project.updatedAt = new Date().toISOString();
+      this._renderProjectsNav();
+      this._saveData();
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Sources Panel Rendering
+  // --------------------------------------------------------------------------
+
   /**
    * Render Sources Navigation - REBUILT FROM SCRATCH
    *
@@ -11533,6 +12027,7 @@ class EODataWorkbench {
   }
 
   _updateBreadcrumb() {
+    const project = this.projects?.find(p => p.id === this.currentProjectId);
     const workspace = this.viewRegistry?.getWorkspace?.(this.currentWorkspaceId);
     const set = this.getCurrentSet();
     const view = this.getCurrentView();
@@ -11542,6 +12037,28 @@ class EODataWorkbench {
     const totalRecords = set?.records?.length || 0;
     const visibleRecords = focus ? this._getFilteredRecordCount(focus) : totalRecords;
     const restrictionRatio = totalRecords > 0 ? `${visibleRecords} of ${totalRecords}` : '';
+
+    // Project breadcrumb - CLICKABLE (switch projects)
+    const projectBreadcrumb = document.getElementById('current-project-name');
+    const projectSeparator = document.querySelector('.breadcrumb-separator.project-separator');
+    if (projectBreadcrumb) {
+      if (project) {
+        projectBreadcrumb.innerHTML = `
+          <span class="project-color-dot" style="background-color: ${project.color || '#3B82F6'}; width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px;"></span>
+          <i class="ph ${project.icon || 'ph-folder-simple-dashed'}"></i>
+          ${this._escapeHtml(project.name)}
+          <i class="ph ph-caret-down breadcrumb-dropdown-icon"></i>
+        `;
+      } else {
+        projectBreadcrumb.innerHTML = `
+          <i class="ph ph-stack"></i>
+          All Items
+          <i class="ph ph-caret-down breadcrumb-dropdown-icon"></i>
+        `;
+      }
+      projectBreadcrumb.classList.add('breadcrumb-clickable');
+      projectBreadcrumb.onclick = () => this._showProjectBreadcrumbMenu(projectBreadcrumb);
+    }
 
     // Workspace breadcrumb - CLICKABLE (ascend hierarchy)
     const workspaceBreadcrumb = document.getElementById('current-workspace-name');
@@ -11688,6 +12205,34 @@ class EODataWorkbench {
       'superseded': '<span class="epistemic-badge superseded" title="Superseded (see newer version)">⊘</span>'
     };
     return badges[status] || badges['preliminary'];
+  }
+
+  /**
+   * Show project breadcrumb dropdown menu (switch projects)
+   */
+  _showProjectBreadcrumbMenu(element) {
+    const projects = (this.projects || []).filter(p => p.status !== 'archived');
+
+    // Build items list with "All Items" at the top
+    const items = [
+      {
+        id: null,
+        name: 'All Items',
+        icon: 'ph-stack',
+        active: !this.currentProjectId,
+        onClick: () => this._selectProject(null)
+      },
+      ...projects.map(p => ({
+        id: p.id,
+        name: p.name,
+        icon: p.icon || 'ph-folder-simple-dashed',
+        color: p.color,
+        active: p.id === this.currentProjectId,
+        onClick: () => this._selectProject(p.id)
+      }))
+    ];
+
+    this._showBreadcrumbDropdown(element, items, 'Projects');
   }
 
   /**
@@ -20267,6 +20812,9 @@ class EODataWorkbench {
       dropdown.style.display = 'none';
 
       switch (action) {
+        case 'project':
+          this._showNewProjectModal();
+          break;
         case 'source':
           this._showImportModal();
           break;

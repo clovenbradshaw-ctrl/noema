@@ -73,6 +73,14 @@
           <i class="ph ph-caret-down new-action-caret"></i>
         </button>
         <div class="new-action-dropdown" id="new-action-dropdown" style="display: none;">
+          <button class="new-action-item" id="new-action-project" data-action="project">
+            <i class="ph ph-folder-simple-dashed"></i>
+            <div class="new-action-item-content">
+              <span class="new-action-item-label">New Project</span>
+              <span class="new-action-item-hint">Organize sources, sets & definitions</span>
+            </div>
+            <span class="new-action-shortcut">Ctrl+Shift+P</span>
+          </button>
           <button class="new-action-item" id="new-action-source" data-action="source">
             <i class="ph ph-download-simple"></i>
             <div class="new-action-item-content">
@@ -117,8 +125,31 @@
         </div>
       </div>
 
-      <!-- Three-Panel Navigation: Sources (GIVEN) / Sets (Schema) / Views (MEANT) -->
+      <!-- Five-Panel Navigation: Projects / Sources (GIVEN) / Sets (Schema) / Definitions (DICT) / Exports (FROZEN) -->
       <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Panel 0: PROJECTS (Super Object - Organizational Container) -->
+        <div class="nav-panel projects-panel" data-panel="projects">
+          <div class="nav-panel-header">
+            <div class="nav-panel-title">
+              <i class="ph ph-folder-simple-dashed"></i>
+              <span>Projects</span>
+              <span class="nav-panel-badge project-badge">ORG</span>
+            </div>
+            <div class="nav-panel-actions">
+              <button class="nav-panel-action" id="btn-projects-view-toggle" title="Toggle view mode">
+                <i class="ph ph-list"></i>
+              </button>
+              <button class="nav-panel-action-labeled" id="btn-new-project" title="Create new project">
+                <i class="ph ph-plus"></i>
+                <span class="nav-panel-action-label">New</span>
+              </button>
+            </div>
+          </div>
+          <div class="nav-panel-content" id="projects-nav">
+            <!-- Projects tree rendered dynamically -->
+          </div>
+        </div>
+
         <!-- Panel 1: SOURCES (Given - Physical Origins) -->
         <div class="nav-panel sources-panel" data-panel="sources">
           <div class="nav-panel-header">
@@ -255,6 +286,11 @@
             <i class="ph ph-list"></i>
           </button>
           <div class="breadcrumb">
+            <span class="breadcrumb-item" id="current-project-name" title="Project">
+              <i class="ph ph-folder-simple-dashed"></i>
+              All Items
+            </span>
+            <i class="ph ph-caret-right breadcrumb-separator project-separator"></i>
             <span class="breadcrumb-item" id="current-workspace-name" title="Workspace (Rule 4)">
               <i class="ph ph-folder-simple"></i>
               Workspace
