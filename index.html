@@ -1044,38 +1044,6 @@
   <!-- Principles Transparency Panel Container -->
   <div id="principles-panel" class="principles-panel"></div>
 
-  <!-- Architecture Mini-Map (collapsible) -->
-  <div class="architecture-minimap" id="architecture-minimap">
-    <div class="minimap-header">
-      <span>Architecture</span>
-      <button class="minimap-toggle" id="minimap-toggle" title="Toggle mini-map">
-        <i class="ph ph-caret-down"></i>
-      </button>
-    </div>
-    <div class="minimap-content" id="minimap-content">
-      <div class="minimap-item source" id="minimap-source">
-        <i class="ph ph-download-simple"></i>
-        <span>SOURCE</span>
-        <span class="minimap-label">(GIVEN)</span>
-      </div>
-      <div class="minimap-item set" id="minimap-set">
-        <i class="ph ph-database"></i>
-        <span>SET</span>
-        <span class="minimap-label">(SCHEMA)</span>
-      </div>
-      <div class="minimap-item lens" id="minimap-lens">
-        <i class="ph ph-funnel"></i>
-        <span>LENS</span>
-        <span class="minimap-label">(SLICE)</span>
-      </div>
-      <div class="minimap-item view active" id="minimap-view">
-        <i class="ph ph-eye"></i>
-        <span>VIEW</span>
-        <span class="minimap-label">(WORK)</span>
-      </div>
-    </div>
-  </div>
-
   <!-- Scripts - Core EO Modules (Strict EO-Aligned) -->
   <script src="eo_types.js"></script>         <!-- Core Types: EpistemicType, GroundingKind, Frame, Supersession -->
   <script src="eo_operators.js"></script>     <!-- EO Operators: Entry, Restrictive, Shape, Compute, etc. -->
@@ -1176,30 +1144,6 @@
         themeToggle.addEventListener('click', toggleTheme);
         // Update UI to reflect current theme
         updateThemeToggleUI(getCurrentTheme());
-      }
-
-      // Initialize mini-map toggle
-      const minimapToggle = document.getElementById('minimap-toggle');
-      if (minimapToggle) {
-        minimapToggle.addEventListener('click', () => {
-          const minimap = document.getElementById('architecture-minimap');
-          const icon = minimapToggle.querySelector('i');
-          minimap.classList.toggle('collapsed');
-          if (minimap.classList.contains('collapsed')) {
-            icon.className = 'ph ph-caret-up';
-          } else {
-            icon.className = 'ph ph-caret-down';
-          }
-          // Save preference
-          localStorage.setItem('eo-lake-minimap-collapsed', minimap.classList.contains('collapsed'));
-        });
-        // Restore saved preference
-        if (localStorage.getItem('eo-lake-minimap-collapsed') === 'true') {
-          const minimap = document.getElementById('architecture-minimap');
-          const icon = minimapToggle.querySelector('i');
-          minimap.classList.add('collapsed');
-          icon.className = 'ph ph-caret-up';
-        }
       }
 
       // Initialize the main application
