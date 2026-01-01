@@ -140,115 +140,132 @@
         </div>
       </div>
 
-      <!-- Five-Panel Navigation: Projects / Sources (GIVEN) / Definitions (TERMS) / Sets (SCHEMA) / Exports (SNAPSHOT) -->
-      <!-- Reordered for workflow: Organize → Input (Sources + Definitions) → Transform (Sets) → Output (Exports) -->
+      <!-- Project-Centric Navigation: Sources → Sets → Lenses → Views nested under Projects -->
+      <!-- Data flow: Import (Sources) → Transform (Sets/Lenses) → View (Views) → Export (Exports) -->
       <nav class="sidebar-nav" id="sidebar-nav">
-        <!-- Panel 0: PROJECTS (Super Object - Organizational Container) -->
-        <div class="nav-panel projects-panel" data-panel="projects">
+        <!-- Project Selector (compact dropdown or list at top) -->
+        <div class="nav-panel project-selector-panel" data-panel="project-selector">
           <div class="nav-panel-header">
             <div class="nav-panel-title">
               <i class="ph ph-folder-simple-dashed"></i>
-              <span>Projects</span>
-              <span class="nav-panel-badge project-badge">ORG</span>
+              <span>Project</span>
             </div>
             <div class="nav-panel-actions">
-              <button class="nav-panel-action" id="btn-projects-view-toggle" title="Toggle view mode">
-                <i class="ph ph-list"></i>
+              <button class="nav-panel-action" id="btn-new-project" title="Create new project">
+                <i class="ph ph-plus"></i>
               </button>
             </div>
           </div>
-          <div class="nav-panel-content" id="projects-nav">
-            <!-- Projects tree rendered dynamically -->
+          <div class="nav-panel-content" id="project-selector-nav">
+            <!-- Project selector dropdown rendered dynamically -->
           </div>
         </div>
 
-        <!-- Panel 1: SOURCES (Given - Physical Origins) -->
-        <div class="nav-panel sources-panel given-panel" data-panel="sources">
-          <div class="nav-panel-header">
-            <div class="nav-panel-title">
-              <i class="ph ph-download-simple"></i>
-              <span>Sources</span>
-              <span class="nav-panel-badge given-badge">GIVEN</span>
+        <!-- Project Hierarchy: All content nested under selected project -->
+        <div class="nav-panel project-hierarchy-panel" data-panel="project-hierarchy">
+          <!-- Sources Section (GIVEN - Immutable) -->
+          <div class="project-section sources-section" data-section="sources">
+            <div class="project-section-header" data-collapsible="true">
+              <div class="project-section-title">
+                <i class="ph ph-caret-down project-section-caret"></i>
+                <i class="ph ph-download-simple"></i>
+                <span>Sources</span>
+                <span class="epistemic-badge given-badge" title="GIVEN: Immutable imported data">
+                  <i class="ph ph-lock-simple"></i>
+                </span>
+                <span class="section-count-badge" id="sources-count-badge">0</span>
+              </div>
+              <div class="project-section-actions">
+                <button class="project-section-action" id="btn-file-explorer" title="Open File Explorer">
+                  <i class="ph ph-folder-open"></i>
+                </button>
+              </div>
             </div>
-            <div class="nav-panel-actions">
-              <button class="nav-panel-action" id="btn-file-explorer" title="Open File Explorer">
-                <i class="ph ph-folder-open"></i>
-              </button>
+            <div class="project-section-content" id="sources-nav">
+              <!-- Sources rendered dynamically -->
             </div>
           </div>
-          <div class="nav-panel-content" id="sources-nav">
-            <!-- Sources tree rendered dynamically -->
-          </div>
-        </div>
 
-        <!-- Panel 2: DEFINITIONS (Column/Key Schemas from URIs) - MEANT: Semantic layer -->
-        <div class="nav-panel definitions-panel meant-panel" data-panel="definitions">
-          <div class="nav-panel-header" data-collapsible="true">
-            <div class="nav-panel-title">
-              <i class="ph ph-caret-right nav-panel-collapse-icon"></i>
-              <i class="ph ph-book-open"></i>
-              <span>Definitions</span>
-              <span class="nav-panel-badge dictionary-badge">MEANT</span>
-              <span class="nav-panel-count-badge" id="definitions-count-badge" style="display: none;">0</span>
+          <!-- Sets Section (SCHEMA - Editable structure + views) -->
+          <div class="project-section sets-section" data-section="sets">
+            <div class="project-section-header" data-collapsible="true">
+              <div class="project-section-title">
+                <i class="ph ph-caret-down project-section-caret"></i>
+                <i class="ph ph-database"></i>
+                <span>Sets</span>
+                <span class="epistemic-badge schema-badge" title="SCHEMA: Editable data collections">
+                  <i class="ph ph-pencil-simple"></i>
+                </span>
+                <span class="section-count-badge" id="sets-count-badge">0</span>
+              </div>
+              <div class="project-section-actions">
+                <button class="project-section-action" id="btn-sets-explorer" title="Open Sets Explorer">
+                  <i class="ph ph-folder-open"></i>
+                </button>
+              </div>
             </div>
-            <div class="nav-panel-actions">
-              <button class="nav-panel-action" id="btn-definitions-explorer" title="Open Definitions Explorer">
-                <i class="ph ph-folder-open"></i>
-              </button>
+            <div class="project-section-content" id="sets-nav">
+              <!-- Sets with nested Schema/Lenses/Views rendered dynamically -->
             </div>
           </div>
-          <div class="nav-panel-content" id="definitions-nav">
-            <!-- Definition schemas rendered dynamically -->
-          </div>
-        </div>
 
-        <!-- Panel 3: SETS (Data Collections) - Hybrid: GIVEN structure + MEANT interpretation -->
-        <div class="nav-panel sets-panel hybrid-panel" data-panel="sets">
-          <div class="nav-panel-header">
-            <div class="nav-panel-title">
-              <i class="ph ph-database"></i>
-              <span>Sets</span>
-              <span class="nav-panel-badge schema-badge">SCHEMA</span>
+          <!-- Definitions Section (MEANT - Semantic layer) -->
+          <div class="project-section definitions-section collapsed" data-section="definitions">
+            <div class="project-section-header" data-collapsible="true">
+              <div class="project-section-title">
+                <i class="ph ph-caret-right project-section-caret"></i>
+                <i class="ph ph-book-open"></i>
+                <span>Definitions</span>
+                <span class="epistemic-badge meant-badge" title="MEANT: Semantic vocabulary">
+                  <i class="ph ph-pencil-simple"></i>
+                </span>
+                <span class="section-count-badge" id="definitions-count-badge">0</span>
+              </div>
+              <div class="project-section-actions">
+                <button class="project-section-action" id="btn-definitions-explorer" title="Open Definitions Explorer">
+                  <i class="ph ph-folder-open"></i>
+                </button>
+                <button class="project-section-action" id="btn-add-definition" title="Add Definition">
+                  <i class="ph ph-plus"></i>
+                </button>
+              </div>
             </div>
-            <div class="nav-panel-actions">
-              <button class="nav-panel-action" id="btn-sets-explorer" title="Open Sets Explorer">
-                <i class="ph ph-folder-open"></i>
-              </button>
+            <div class="project-section-content" id="definitions-nav">
+              <!-- Definitions rendered dynamically -->
             </div>
           </div>
-          <div class="nav-panel-content" id="sets-nav">
-            <!-- Sets with nested views rendered dynamically -->
-          </div>
-        </div>
 
-        <!-- Panel 4: EXPORTS (Immutable Snapshot Captures) - GIVEN: Frozen in time -->
-        <div class="nav-panel exports-panel given-panel" data-panel="exports">
-          <div class="nav-panel-header" data-collapsible="true">
-            <div class="nav-panel-title">
-              <i class="ph ph-caret-right nav-panel-collapse-icon"></i>
-              <i class="ph ph-export"></i>
-              <span>Exports</span>
-              <span class="nav-panel-badge export-badge">GIVEN</span>
-              <span class="nav-panel-count-badge" id="exports-count-badge" style="display: none;">0</span>
+          <!-- Exports Section (GIVEN - Immutable snapshots) -->
+          <div class="project-section exports-section collapsed" data-section="exports">
+            <div class="project-section-header" data-collapsible="true">
+              <div class="project-section-title">
+                <i class="ph ph-caret-right project-section-caret"></i>
+                <i class="ph ph-export"></i>
+                <span>Exports</span>
+                <span class="epistemic-badge given-badge" title="GIVEN: Immutable snapshots">
+                  <i class="ph ph-lock-simple"></i>
+                </span>
+                <span class="section-count-badge" id="exports-count-badge">0</span>
+              </div>
+              <div class="project-section-actions">
+                <button class="project-section-action" id="btn-exports-explorer" title="Open Exports Explorer">
+                  <i class="ph ph-folder-open"></i>
+                </button>
+              </div>
             </div>
-            <div class="nav-panel-actions">
-              <button class="nav-panel-action" id="btn-exports-explorer" title="Open Exports Explorer">
-                <i class="ph ph-folder-open"></i>
-              </button>
+            <div class="project-section-content" id="exports-nav">
+              <!-- Exports rendered dynamically -->
             </div>
-          </div>
-          <div class="nav-panel-content" id="exports-nav">
-            <!-- Exports rendered dynamically -->
           </div>
         </div>
 
       </nav>
 
-      <!-- Sidebar Footer -->
-      <div class="sidebar-footer" data-collapsible="true">
+      <!-- Sidebar Footer - Collapsed by default to reduce clutter -->
+      <div class="sidebar-footer collapsed" data-collapsible="true">
         <div class="sidebar-footer-header" id="sidebar-footer-toggle" title="Click to expand/collapse">
           <span class="sidebar-footer-title">
-            <i class="ph ph-caret-down sidebar-footer-caret"></i>
+            <i class="ph ph-caret-right sidebar-footer-caret"></i>
             <span>Menu</span>
           </span>
         </div>
@@ -293,25 +310,43 @@
           <button class="header-btn mobile-menu" id="mobile-menu-btn">
             <i class="ph ph-list"></i>
           </button>
-          <div class="breadcrumb">
+          <!-- Data-flow chain: Source → Set → Lens → View -->
+          <div class="data-flow-chain" id="data-flow-chain">
+            <span class="data-flow-step" data-step="source" id="flow-source" title="Imported data (GIVEN - immutable)">
+              <i class="ph ph-download-simple"></i>
+              <span class="flow-label">Source</span>
+            </span>
+            <i class="ph ph-arrow-right data-flow-arrow"></i>
+            <span class="data-flow-step" data-step="set" id="flow-set" title="Data collection (SCHEMA)">
+              <i class="ph ph-database"></i>
+              <span class="flow-label">Set</span>
+            </span>
+            <i class="ph ph-arrow-right data-flow-arrow"></i>
+            <span class="data-flow-step" data-step="lens" id="flow-lens" title="Filtered view of set">
+              <i class="ph ph-funnel"></i>
+              <span class="flow-label">Lens</span>
+            </span>
+            <i class="ph ph-arrow-right data-flow-arrow"></i>
+            <span class="data-flow-step active" data-step="view" id="flow-view" title="Visual representation">
+              <i class="ph ph-eye"></i>
+              <span class="flow-label">View</span>
+            </span>
+          </div>
+          <!-- Context breadcrumb with current selection -->
+          <div class="breadcrumb" id="context-breadcrumb">
             <span class="breadcrumb-item" id="current-project-name" title="Project">
               <i class="ph ph-folder-simple-dashed"></i>
               All Items
             </span>
-            <i class="ph ph-caret-right breadcrumb-separator project-separator"></i>
-            <span class="breadcrumb-item" id="current-workspace-name" title="Workspace (Rule 4)">
-              <i class="ph ph-folder-simple"></i>
-              Workspace
-            </span>
-            <i class="ph ph-caret-right"></i>
-            <span class="breadcrumb-item" id="current-set-name">All Records</span>
-            <i class="ph ph-caret-right"></i>
-            <span class="breadcrumb-item" id="current-view-name">Lens</span>
-            <span class="breadcrumb-item active focus-breadcrumb" id="current-focus-name" style="display: none;">
-              <i class="ph ph-caret-right"></i>
-              <i class="ph ph-funnel"></i>
-              Focus
-            </span>
+            <i class="ph ph-caret-right breadcrumb-separator"></i>
+            <span class="breadcrumb-item" id="current-set-name" title="Current set">Set</span>
+            <i class="ph ph-caret-right breadcrumb-separator"></i>
+            <span class="breadcrumb-item active" id="current-view-name" title="Current view">View</span>
+          </div>
+          <!-- Epistemic status banner -->
+          <div class="epistemic-banner" id="epistemic-banner" style="display: none;">
+            <i class="ph ph-info epistemic-banner-icon"></i>
+            <span class="epistemic-banner-text" id="epistemic-banner-text">Read-only: browse your source</span>
           </div>
         </div>
         <div class="header-center">

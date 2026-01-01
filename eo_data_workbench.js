@@ -2667,30 +2667,9 @@ class EODataWorkbench {
       this._showExportsExplorer();
     });
 
-    // Panel title click handlers - clicking panel names opens explorer views
-    // Projects panel title click - show projects explorer
-    const projectsPanel = document.querySelector('.projects-panel .nav-panel-title');
-    projectsPanel?.addEventListener('click', () => {
-      this._showProjectsExplorer();
-    });
-
-    // Sources panel title click - show file explorer
-    const sourcesPanel = document.querySelector('.sources-panel .nav-panel-title');
-    sourcesPanel?.addEventListener('click', () => {
-      this._showFileExplorer();
-    });
-
-    // Definitions panel title click - show definitions explorer
-    const definitionsPanel = document.querySelector('.definitions-panel .nav-panel-title');
-    definitionsPanel?.addEventListener('click', () => {
-      this._showDefinitionsExplorer();
-    });
-
-    // Sets panel title click - show sets table view
-    const setsPanel = document.querySelector('.sets-panel .nav-panel-title');
-    setsPanel?.addEventListener('click', () => {
-      this._showSetsTableView();
-    });
+    // Panel title click handlers - clicking section titles opens explorer views
+    // Note: These are now fallbacks; section headers have their own handlers for collapse
+    // The explorer buttons in section actions are the primary way to open explorers
 
     // New export button
     document.getElementById('btn-new-export')?.addEventListener('click', () => {
@@ -3353,115 +3332,368 @@ class EODataWorkbench {
   // --------------------------------------------------------------------------
 
   _renderSidebar() {
-    // Five-panel navigation: Projects / Sources (GIVEN) / Definitions (TERMS) / Sets (SCHEMA) / Exports (SNAPSHOT)
-    // Reordered for workflow: Organize → Input (Sources + Definitions) → Transform (Sets) → Output (Exports)
-    // Projects are super objects that contain all other entities
-    // Views are shown nested under sets in sidebar (Airtable-style)
-    this._renderProjectsNav();
+    // Project-centric navigation: All content nested under project
+    // Data flow: Sources (GIVEN) → Sets (SCHEMA) → Lenses → Views
+    // Definitions (MEANT) provide semantic layer
+    // Exports (GIVEN) are immutable snapshots
+    this._renderProjectSelector();
     this._renderSourcesNav();
-    this._renderDefinitionsNav();  // Moved before Sets - definitions inform data structure
     this._renderSetsNavFlat();
+    this._renderDefinitionsNav();
     this._renderExportsNav();
-    // Update collapsible panel states (progressive disclosure)
-    this._updateCollapsiblePanels();
-    // Update tab bar (view disclosure removed - views in sidebar only)
+    // Update collapsible section states (progressive disclosure)
+    this._updateCollapsibleSections();
+    // Update data-flow chain indicator
+    this._updateDataFlowChain();
+    // Update tab bar
     this._renderTabBar();
   }
 
   /**
-   * Progressive Disclosure: Update collapsible panel states
-   * Auto-collapses empty Definitions and Exports panels
-   * Expands panels when they have content or user manually expands
+   * Render the project selector at the top of the sidebar
+   * Shows current project with dropdown to switch
    */
-  _updateCollapsiblePanels() {
-    // Initialize panel expansion state if not exists
-    if (!this.panelExpansionState) {
-      this.panelExpansionState = {
-        definitions: false,  // false = collapsed by default
-        exports: null        // null = auto (collapsed when empty)
+  _renderProjectSelector() {
+    const container = document.getElementById('project-selector-nav');
+    if (!container) return;
+
+    // Ensure projects array exists
+    if (!Array.isArray(this.projects)) {
+      this.projects = [];
+    }
+
+    // Get all active projects
+    const activeProjects = this.projects.filter(p => p.status !== 'archived');
+
+    // Sort projects by creation date (newest first)
+    const sortedProjects = activeProjects.sort((a, b) => {
+      if (!a.createdAt) return 1;
+      if (!b.createdAt) return -1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    // Get current project
+    const currentProject = this.currentProjectId
+      ? this.projects.find(p => p.id === this.currentProjectId)
+      : null;
+
+    // Build project selector HTML
+    let html = `
+      <div class="project-selector-current" id="project-selector-current">
+        <span class="project-selector-dot" style="background-color: ${currentProject?.color || '#6b7280'}"></span>
+        <i class="ph ${currentProject?.icon || 'ph-stack'} project-selector-icon"></i>
+        <span class="project-selector-name">${this._escapeHtml(currentProject?.name || 'All Items')}</span>
+        <i class="ph ph-caret-down project-selector-caret"></i>
+      </div>
+      <div class="project-selector-dropdown" id="project-selector-dropdown" style="display: none;">
+        <div class="project-selector-option ${!this.currentProjectId ? 'active' : ''}" data-project-id="">
+          <i class="ph ph-stack"></i>
+          <span>All Items</span>
+        </div>
+    `;
+
+    // Add project options
+    for (const project of sortedProjects) {
+      const isActive = this.currentProjectId === project.id;
+      const itemCount = project.getItemCount ? project.getItemCount() :
+        (project.sourceIds?.length || 0) + (project.setIds?.length || 0) +
+        (project.definitionIds?.length || 0) + (project.exportIds?.length || 0);
+
+      html += `
+        <div class="project-selector-option ${isActive ? 'active' : ''}"
+             data-project-id="${project.id}"
+             title="${this._escapeHtml(project.description || project.name)}">
+          <span class="project-selector-dot" style="background-color: ${project.color || '#3B82F6'}"></span>
+          <i class="ph ${project.icon || 'ph-folder-simple-dashed'}"></i>
+          <span>${this._escapeHtml(this._truncateName(project.name, 20))}</span>
+          <span class="project-selector-count">${itemCount}</span>
+        </div>
+      `;
+    }
+
+    html += `</div>`;
+    container.innerHTML = html;
+
+    // Attach event handlers
+    this._attachProjectSelectorHandlers(container);
+  }
+
+  /**
+   * Attach event handlers for project selector
+   */
+  _attachProjectSelectorHandlers(container) {
+    const current = container.querySelector('#project-selector-current');
+    const dropdown = container.querySelector('#project-selector-dropdown');
+
+    if (current && dropdown) {
+      // Toggle dropdown on click
+      current.addEventListener('click', () => {
+        const isVisible = dropdown.style.display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) {
+          dropdown.style.display = 'none';
+        }
+      });
+    }
+
+    // Project option clicks
+    container.querySelectorAll('.project-selector-option').forEach(option => {
+      option.addEventListener('click', () => {
+        const projectId = option.dataset.projectId || null;
+        this._selectProject(projectId);
+        if (dropdown) dropdown.style.display = 'none';
+      });
+
+      option.addEventListener('contextmenu', (e) => {
+        if (option.dataset.projectId) {
+          e.preventDefault();
+          this._showProjectContextMenu(e, option.dataset.projectId);
+        }
+      });
+    });
+
+    // New project button
+    const newProjectBtn = document.getElementById('btn-new-project');
+    if (newProjectBtn) {
+      newProjectBtn.addEventListener('click', () => {
+        this._showNewProjectModal();
+      });
+    }
+  }
+
+  /**
+   * Progressive Disclosure: Update collapsible section states
+   * Uses project-section structure for Sources, Sets, Definitions, Exports
+   */
+  _updateCollapsibleSections() {
+    // Initialize section expansion state if not exists
+    if (!this.sectionExpansionState) {
+      this.sectionExpansionState = {
+        sources: true,      // Expanded by default
+        sets: true,         // Expanded by default
+        definitions: false, // Collapsed by default
+        exports: null       // null = auto (collapsed when empty)
       };
     }
 
-    // Get counts
-    const definitionsCount = (this.definitions || []).filter(d => d.status !== 'archived').length;
-    const exportsCount = (this.exports || []).length;
+    // Get counts for each section (filtered by current project)
+    const sourcesCount = this._getProjectSources().length;
+    const setsCount = this._getProjectSets().length;
+    const definitionsCount = this._getProjectDefinitions().length;
+    const exportsCount = this._getProjectExports().length;
 
-    // Update definitions panel
-    const definitionsPanel = document.querySelector('.definitions-panel');
-    if (definitionsPanel) {
-      definitionsPanel.setAttribute('data-collapsible', 'true');
-      const isExpanded = this.panelExpansionState.definitions === true;
-      definitionsPanel.classList.toggle('collapsed', !isExpanded);
-      definitionsPanel.classList.toggle('expanded', isExpanded);
+    // Update count badges
+    const sourcesCountBadge = document.getElementById('sources-count-badge');
+    if (sourcesCountBadge) sourcesCountBadge.textContent = sourcesCount;
 
-      // Update count badge
-      const countBadge = document.getElementById('definitions-count-badge');
-      if (countBadge) {
-        countBadge.textContent = definitionsCount;
-        countBadge.style.display = definitionsCount > 0 || !isExpanded ? '' : 'none';
+    const setsCountBadge = document.getElementById('sets-count-badge');
+    if (setsCountBadge) setsCountBadge.textContent = setsCount;
+
+    const definitionsCountBadge = document.getElementById('definitions-count-badge');
+    if (definitionsCountBadge) definitionsCountBadge.textContent = definitionsCount;
+
+    const exportsCountBadge = document.getElementById('exports-count-badge');
+    if (exportsCountBadge) exportsCountBadge.textContent = exportsCount;
+
+    // Update section collapse states
+    const sections = ['sources', 'sets', 'definitions', 'exports'];
+    sections.forEach(sectionName => {
+      const section = document.querySelector(`.${sectionName}-section`);
+      if (!section) return;
+
+      let isExpanded;
+      if (this.sectionExpansionState[sectionName] === null) {
+        // Auto mode - expand if has content
+        const count = sectionName === 'sources' ? sourcesCount :
+                      sectionName === 'sets' ? setsCount :
+                      sectionName === 'definitions' ? definitionsCount : exportsCount;
+        isExpanded = count > 0;
+      } else {
+        isExpanded = this.sectionExpansionState[sectionName];
+      }
+
+      section.classList.toggle('collapsed', !isExpanded);
+      section.classList.toggle('expanded', isExpanded);
+
+      // Update caret icon
+      const caret = section.querySelector('.project-section-caret');
+      if (caret) {
+        caret.classList.toggle('ph-caret-right', !isExpanded);
+        caret.classList.toggle('ph-caret-down', isExpanded);
+      }
+    });
+
+    // Attach click handlers for section headers (once)
+    this._attachSectionCollapseHandlers();
+  }
+
+  /**
+   * Attach click handlers to collapsible section headers
+   */
+  _attachSectionCollapseHandlers() {
+    // Only attach once
+    if (this._sectionHandlersAttached) return;
+    this._sectionHandlersAttached = true;
+
+    const sections = ['sources', 'sets', 'definitions', 'exports'];
+    sections.forEach(sectionName => {
+      const header = document.querySelector(`.${sectionName}-section .project-section-header`);
+      if (header) {
+        header.addEventListener('click', (e) => {
+          // Don't toggle if clicking on action buttons
+          if (e.target.closest('.project-section-actions')) return;
+
+          const section = header.closest('.project-section');
+          const isCurrentlyExpanded = section.classList.contains('expanded');
+
+          // Toggle state
+          this.sectionExpansionState[sectionName] = !isCurrentlyExpanded;
+          this._updateCollapsibleSections();
+        });
+      }
+    });
+
+    // Add Definition button handler
+    const addDefBtn = document.getElementById('btn-add-definition');
+    if (addDefBtn) {
+      addDefBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._showImportDefinitionModal();
+      });
+    }
+  }
+
+  /**
+   * Update the data-flow chain indicator to show current context
+   * Highlights: Source → Set → Lens → View based on what's currently active
+   */
+  _updateDataFlowChain() {
+    const flowSource = document.getElementById('flow-source');
+    const flowSet = document.getElementById('flow-set');
+    const flowLens = document.getElementById('flow-lens');
+    const flowView = document.getElementById('flow-view');
+    const epistemicBanner = document.getElementById('epistemic-banner');
+    const epistemicText = document.getElementById('epistemic-banner-text');
+
+    // Remove all active states
+    [flowSource, flowSet, flowLens, flowView].forEach(el => {
+      if (el) el.classList.remove('active');
+    });
+
+    // Determine current context and set active state
+    if (this.currentSourceId) {
+      // Viewing a source
+      if (flowSource) flowSource.classList.add('active');
+      if (epistemicBanner) {
+        epistemicBanner.style.display = 'flex';
+        epistemicBanner.className = 'epistemic-banner given';
+      }
+      if (epistemicText) {
+        epistemicText.textContent = 'Read-only: browse your source data';
+      }
+    } else if (this.currentViewId) {
+      // Viewing a view
+      if (flowView) flowView.classList.add('active');
+      if (epistemicBanner) {
+        epistemicBanner.style.display = 'flex';
+        epistemicBanner.className = 'epistemic-banner editable';
+      }
+      if (epistemicText) {
+        epistemicText.textContent = 'Editing live data; changes update the Set';
+      }
+    } else if (this.currentLensId) {
+      // Viewing a lens
+      if (flowLens) flowLens.classList.add('active');
+      if (epistemicBanner) epistemicBanner.style.display = 'none';
+    } else if (this.currentSetId) {
+      // Viewing a set
+      if (flowSet) flowSet.classList.add('active');
+      if (epistemicBanner) {
+        epistemicBanner.style.display = 'flex';
+        epistemicBanner.className = 'epistemic-banner editable';
+      }
+      if (epistemicText) {
+        epistemicText.textContent = 'Editing set data; changes are saved automatically';
+      }
+    } else {
+      // No specific context
+      if (epistemicBanner) epistemicBanner.style.display = 'none';
+    }
+
+    // Update context breadcrumb
+    this._updateContextBreadcrumb();
+  }
+
+  /**
+   * Update the context breadcrumb with current selection
+   */
+  _updateContextBreadcrumb() {
+    const projectName = document.getElementById('current-project-name');
+    const setName = document.getElementById('current-set-name');
+    const viewName = document.getElementById('current-view-name');
+
+    // Update project name
+    if (projectName) {
+      const project = this.currentProjectId
+        ? this.projects.find(p => p.id === this.currentProjectId)
+        : null;
+      projectName.innerHTML = `
+        <i class="ph ${project?.icon || 'ph-stack'}"></i>
+        ${this._escapeHtml(project?.name || 'All Items')}
+      `;
+    }
+
+    // Update set name
+    if (setName) {
+      const set = this.currentSetId
+        ? this.sets.find(s => s.id === this.currentSetId)
+        : null;
+      if (set) {
+        setName.textContent = this._escapeHtml(set.name);
+        setName.style.display = '';
+      } else if (this.currentSourceId) {
+        const source = this.sources.find(s => s.id === this.currentSourceId);
+        setName.textContent = source ? this._escapeHtml(source.name) : 'Source';
+        setName.style.display = '';
+      } else {
+        setName.style.display = 'none';
       }
     }
 
-    // Update exports panel
-    const exportsPanel = document.querySelector('.exports-panel');
-    if (exportsPanel) {
-      exportsPanel.setAttribute('data-collapsible', 'true');
-      const isExpanded = this.panelExpansionState.exports === true ||
-                        (this.panelExpansionState.exports === null && exportsCount > 0);
-      exportsPanel.classList.toggle('collapsed', !isExpanded);
-      exportsPanel.classList.toggle('expanded', isExpanded);
-
-      // Update count badge
-      const countBadge = document.getElementById('exports-count-badge');
-      if (countBadge) {
-        countBadge.textContent = exportsCount;
-        countBadge.style.display = exportsCount > 0 || !isExpanded ? '' : 'none';
+    // Update view name
+    if (viewName) {
+      if (this.currentViewId && this.currentSetId) {
+        const set = this.sets.find(s => s.id === this.currentSetId);
+        const view = set?.views?.find(v => v.id === this.currentViewId);
+        viewName.textContent = view ? this._escapeHtml(view.name) : 'View';
+        viewName.style.display = '';
+      } else {
+        viewName.style.display = 'none';
       }
     }
+  }
 
-    // Attach click handlers for collapsible headers (once)
-    this._attachCollapsiblePanelHandlers();
+  // Legacy compatibility: Keep _renderProjectsNav as alias
+  _renderProjectsNav() {
+    this._renderProjectSelector();
+  }
+
+  // Legacy compatibility: Keep _updateCollapsiblePanels as alias
+  _updateCollapsiblePanels() {
+    this._updateCollapsibleSections();
   }
 
   /**
    * Attach click handlers to collapsible panel headers
+   * Legacy function - now delegates to _attachSectionCollapseHandlers
    */
   _attachCollapsiblePanelHandlers() {
-    // Only attach once
-    if (this._collapsibleHandlersAttached) return;
-    this._collapsibleHandlersAttached = true;
-
-    // Definitions panel header click
-    const definitionsHeader = document.querySelector('.definitions-panel .nav-panel-header');
-    if (definitionsHeader) {
-      definitionsHeader.addEventListener('click', (e) => {
-        // Don't toggle if clicking on action buttons
-        if (e.target.closest('.nav-panel-actions')) return;
-
-        const panel = definitionsHeader.closest('.nav-panel');
-        const isCurrentlyExpanded = panel.classList.contains('expanded');
-
-        // Toggle state - set explicit user preference
-        this.panelExpansionState.definitions = !isCurrentlyExpanded;
-        this._updateCollapsiblePanels();
-      });
-    }
-
-    // Exports panel header click
-    const exportsHeader = document.querySelector('.exports-panel .nav-panel-header');
-    if (exportsHeader) {
-      exportsHeader.addEventListener('click', (e) => {
-        // Don't toggle if clicking on action buttons
-        if (e.target.closest('.nav-panel-actions')) return;
-
-        const panel = exportsHeader.closest('.nav-panel');
-        const isCurrentlyExpanded = panel.classList.contains('expanded');
-
-        // Toggle state - set explicit user preference
-        this.panelExpansionState.exports = !isCurrentlyExpanded;
-        this._updateCollapsiblePanels();
-      });
-    }
+    // Delegate to new section-based handlers
+    this._attachSectionCollapseHandlers();
   }
 
   /**
@@ -6619,8 +6851,41 @@ class EODataWorkbench {
   /**
    * Update panel header with project context indicator
    * Shows "in [Project Name]" or item count when filtering by project
+   * Updated to work with new section-based structure
    */
   _updatePanelProjectContext(panelType, filteredCount, totalCount) {
+    // Map panel types to new section-based selectors
+    const sectionMap = {
+      sources: '.sources-section',
+      sets: '.sets-section',
+      definitions: '.definitions-section',
+      exports: '.exports-section'
+    };
+
+    const selector = sectionMap[panelType];
+    if (!selector) return;
+
+    const section = document.querySelector(selector);
+    if (!section) return;
+
+    // Update section count badge instead of adding context element
+    const countBadge = section.querySelector('.section-count-badge');
+    if (countBadge) {
+      countBadge.textContent = filteredCount;
+      countBadge.title = this.currentProjectId
+        ? `${filteredCount} of ${totalCount} in current project`
+        : `${totalCount} total`;
+    }
+
+    // Project context is now shown in the project selector at the top
+    // No need for per-section context badges
+  }
+
+  /**
+   * Legacy _updatePanelProjectContext for backward compatibility
+   * Previously showed "in [Project Name]" badge in each panel
+   */
+  _updatePanelProjectContextLegacy(panelType, filteredCount, totalCount) {
     const panelMap = {
       sources: '.sources-panel',
       sets: '.sets-panel',
@@ -7227,18 +7492,22 @@ class EODataWorkbench {
   }
 
   /**
-   * Update the definitions panel header to show pending count
+   * Update the definitions panel/section header to show pending count
+   * Updated to work with new section-based structure
    */
   _updateDefinitionsPanelHeaderPendingCount(pendingCount) {
-    const definitionsPanel = document.querySelector('.definitions-panel');
-    if (!definitionsPanel) return;
+    // Try new section-based selector first, fall back to legacy panel
+    const definitionsSection = document.querySelector('.definitions-section') ||
+                               document.querySelector('.definitions-panel');
+    if (!definitionsSection) return;
 
-    // Find or create the pending badge element
-    const panelTitle = definitionsPanel.querySelector('.nav-panel-title');
-    if (!panelTitle) return;
+    // Find the title element (different class in new vs old structure)
+    const sectionTitle = definitionsSection.querySelector('.project-section-title') ||
+                         definitionsSection.querySelector('.nav-panel-title');
+    if (!sectionTitle) return;
 
     // Remove existing pending indicator
-    const existingBadge = panelTitle.querySelector('.definition-pending-indicator');
+    const existingBadge = sectionTitle.querySelector('.definition-pending-indicator');
     if (existingBadge) {
       existingBadge.remove();
     }
@@ -7249,7 +7518,7 @@ class EODataWorkbench {
       badge.className = 'definition-pending-indicator';
       badge.title = `${pendingCount} definition${pendingCount !== 1 ? 's' : ''} pending approval`;
       badge.textContent = pendingCount > 99 ? '99+' : pendingCount;
-      panelTitle.appendChild(badge);
+      sectionTitle.appendChild(badge);
     }
   }
 
