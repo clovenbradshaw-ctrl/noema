@@ -12640,6 +12640,10 @@ class EODataWorkbench {
             </div>
           </div>
           <div class="definitions-panel-actions">
+            <button class="btn btn-secondary" id="def-panel-auto-import-btn" title="Auto-import keys from all SET fields">
+              <i class="ph ph-arrows-in"></i>
+              Import from Sets
+            </button>
             <button class="btn btn-secondary" id="def-panel-import-btn">
               <i class="ph ph-link"></i>
               Import from URI
@@ -12956,6 +12960,11 @@ class EODataWorkbench {
   _attachDefinitionsPanelHandlers(definitions, sets) {
     const contentArea = this.elements.contentArea;
 
+    // Auto-import from Sets button
+    contentArea.querySelector('#def-panel-auto-import-btn')?.addEventListener('click', () => {
+      this._autoImportKeysFromSets();
+    });
+
     // Import button
     contentArea.querySelector('#def-panel-import-btn')?.addEventListener('click', () => {
       this._showImportDefinitionModal();
@@ -13087,6 +13096,137 @@ class EODataWorkbench {
         this._startInlineEdit(definitionId, field, cell);
       });
     });
+  }
+
+  /**
+   * Auto-import keys from all SET fields as stub definitions
+   * Creates stub definitions for any SET fields that don't already have a matching definition
+   */
+  _autoImportKeysFromSets() {
+    const sets = this.sets.filter(s => s.status !== 'archived');
+    if (sets.length === 0) {
+      this._showNotification('No sets available to import keys from', 'info');
+      return;
+    }
+
+    // Build a map of existing definition terms (normalized) to avoid duplicates
+    const existingTerms = new Set(
+      this.definitions.map(d => {
+        const term = d.term?.term || d.discoveredFrom?.fieldName || d.name || '';
+        return term.toLowerCase().replace(/[\s_-]+/g, '_');
+      })
+    );
+
+    const newDefinitions = [];
+    const processedFields = new Set(); // Track field names to avoid duplicates across sets
+
+    for (const set of sets) {
+      const fields = set.fields || [];
+      const records = set.records || [];
+
+      for (const field of fields) {
+        const fieldName = field.name;
+        const normalizedName = fieldName.toLowerCase().replace(/[\s_-]+/g, '_');
+
+        // Skip if we already have a definition for this term or already processed
+        if (existingTerms.has(normalizedName) || processedFields.has(normalizedName)) {
+          continue;
+        }
+
+        // Extract sample values from records for this field
+        const samples = [];
+        const uniqueValuesSet = new Set();
+        for (const record of records.slice(0, 100)) { // Sample from first 100 records
+          const value = record.values?.[field.id];
+          if (value !== undefined && value !== null && value !== '') {
+            if (samples.length < 10) {
+              samples.push(String(value));
+            }
+            if (uniqueValuesSet.size < 50) {
+              uniqueValuesSet.add(String(value));
+            }
+          }
+        }
+
+        // Get field options for SELECT types
+        const fieldOptions = field.options?.choices ? { choices: field.options.choices } : null;
+
+        // Use existing unique values from options if available (for SELECT fields)
+        let fieldUniqueValues = Array.from(uniqueValuesSet);
+        if (field.options?.choices?.length > 0) {
+          fieldUniqueValues = field.options.choices.map(c => c.name);
+        }
+
+        // Create stub definition using the EO.createStubDefinition factory
+        const stubDef = window.EO.createStubDefinition({
+          term: fieldName,
+          fieldType: field.type,
+          fieldConfidence: field.confidence || 1.0,
+          fieldIsPrimary: field.isPrimary || false,
+          fieldSamples: samples.length > 0 ? samples : null,
+          fieldOptions: fieldOptions,
+          fieldUniqueValues: fieldUniqueValues.length > 0 ? fieldUniqueValues : null,
+          discoveredFrom: {
+            sourceId: set.id,
+            sourceName: set.name,
+            fieldId: field.id,
+            fieldName: fieldName,
+            fieldType: field.type,
+            fieldConfidence: field.confidence || 1.0,
+            fieldIsPrimary: field.isPrimary || false,
+            fieldSamples: samples.length > 0 ? samples : null,
+            fieldOptions: fieldOptions,
+            fieldUniqueValues: fieldUniqueValues.length > 0 ? fieldUniqueValues : null,
+            fieldSampleCount: samples.length,
+            fieldUniqueCount: fieldUniqueValues.length,
+            discoveredAt: new Date().toISOString()
+          }
+        });
+
+        // Convert to internal format for workbench storage
+        const internalDef = {
+          id: stubDef.id,
+          name: stubDef.term?.label || fieldName,
+          description: `Auto-imported from SET: ${set.name}`,
+          format: 'stub',
+          status: stubDef.status || 'stub',
+          populationMethod: stubDef.populationMethod || 'pending',
+          term: stubDef.term,
+          discoveredFrom: stubDef.discoveredFrom,
+          apiSuggestions: [],
+          terms: [{
+            id: stubDef.id + '_term',
+            name: fieldName,
+            label: stubDef.term?.label || fieldName,
+            type: field.type
+          }],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        newDefinitions.push(internalDef);
+        processedFields.add(normalizedName);
+        existingTerms.add(normalizedName);
+      }
+    }
+
+    if (newDefinitions.length === 0) {
+      this._showNotification('All SET fields already have definitions', 'info');
+      return;
+    }
+
+    // Add new definitions to the workbench
+    this.definitions.push(...newDefinitions);
+    this._saveData();
+
+    // Refresh the definitions panel to show new definitions
+    this._showDefinitionsPanel();
+
+    // Show success notification
+    this._showNotification(
+      `Imported ${newDefinitions.length} key${newDefinitions.length !== 1 ? 's' : ''} from ${sets.length} set${sets.length !== 1 ? 's' : ''}`,
+      'success'
+    );
   }
 
   /**
