@@ -179,7 +179,13 @@ class EOModal {
   setButtons(buttons) {
     this.buttons = buttons;
     if (this.element) {
-      const footer = this.element.querySelector('.eo-modal-footer');
+      let footer = this.element.querySelector('.eo-modal-footer');
+      if (!footer && buttons.length > 0) {
+        // Create footer if it doesn't exist but we have buttons to render
+        footer = document.createElement('div');
+        footer.className = 'eo-modal-footer';
+        this.element.appendChild(footer);
+      }
       if (footer) {
         footer.innerHTML = this._renderButtons();
         this._attachButtonHandlers(footer);
