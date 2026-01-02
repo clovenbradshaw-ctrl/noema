@@ -535,6 +535,10 @@ class EODataWorkbench {
     this.eventBus = null;
     this.eoApp = null;
 
+    // Formula Engine - Pipeline-based formula evaluation
+    this.formulaEngine = null;
+    this._initFormulaEngine();
+
     // Event handlers
     this._handlers = {};
 
@@ -26074,15 +26078,175 @@ class EODataWorkbench {
     }
   }
 
+  /**
+   * Initialize the formula engine with data access hooks
+   */
+  _initFormulaEngine() {
+    // Only initialize if EOFormulaEngine is available
+    if (typeof EOFormulaEngine === 'undefined') {
+      console.warn('EOFormulaEngine not loaded - formula evaluation will be limited');
+      return;
+    }
+
+    this.formulaEngine = new EOFormulaEngine({
+      workbench: this,
+      getSet: (name) => {
+        return this.sets?.find(s => s.name === name || s.id === name);
+      },
+      getLinkedRecords: (record, fieldName) => {
+        return this._getLinkedRecordsForFormula(record, fieldName);
+      }
+    });
+  }
+
+  /**
+   * Get linked records for formula evaluation
+   */
+  _getLinkedRecordsForFormula(record, fieldName) {
+    if (!record) return [];
+
+    const currentSet = this.getCurrentSet();
+    if (!currentSet) return [];
+
+    // Find the link field
+    const field = currentSet.fields?.find(f =>
+      f.name === fieldName || f.id === fieldName
+    );
+
+    if (!field || field.type !== 'link') return [];
+
+    // Get linked record IDs
+    const values = record.values || record;
+    const linkedData = values[field.id] || values[field.name];
+
+    if (!linkedData) return [];
+
+    // Find the linked set
+    const linkedSetId = field.options?.linked?.setId;
+    if (!linkedSetId) return [];
+
+    const linkedSet = this.sets?.find(s => s.id === linkedSetId);
+    if (!linkedSet) return [];
+
+    // Get linked record IDs from the array
+    const linkedIds = Array.isArray(linkedData)
+      ? linkedData.map(l => l.recordId || l)
+      : [linkedData.recordId || linkedData];
+
+    // Return matching records
+    return (linkedSet.records || []).filter(r => linkedIds.includes(r.id));
+  }
+
+  /**
+   * Evaluate a formula against a record using the pipeline-based formula engine
+   */
   _evaluateFormula(formula, record) {
-    // Simple formula evaluation - can be extended
     try {
       if (!formula) return '';
-      // This is a placeholder - real implementation would use FormulaEngine
-      return formula;
+
+      // Use the formula engine if available
+      if (this.formulaEngine) {
+        const result = this.formulaEngine.evaluateFormula(formula, record, {
+          set: this.getCurrentSet()
+        });
+
+        if (result.error) {
+          console.warn('Formula evaluation error:', result.error);
+          return '#ERROR';
+        }
+
+        // Format the result for display
+        return this._formatFormulaResult(result.value);
+      }
+
+      // Fallback: Simple field reference replacement
+      return this._evaluateFormulaFallback(formula, record);
     } catch (e) {
+      console.error('Formula evaluation exception:', e);
       return '#ERROR';
     }
+  }
+
+  /**
+   * Format formula result for display
+   */
+  _formatFormulaResult(value) {
+    if (value === null || value === undefined) return '';
+
+    // Handle superposition objects
+    if (value && typeof value === 'object' && value._type === 'superposition') {
+      if (typeof FORMAT_SUP !== 'undefined') {
+        return FORMAT_SUP(value, 'list');
+      }
+      const states = value.states?.map(s => s.value) || [];
+      return states.join(' | ');
+    }
+
+    // Handle arrays
+    if (Array.isArray(value)) {
+      return value.map(v => this._formatFormulaResult(v)).join(', ');
+    }
+
+    // Handle objects
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+
+    // Handle booleans
+    if (typeof value === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
+
+    // Handle numbers with reasonable precision
+    if (typeof value === 'number') {
+      if (Number.isInteger(value)) {
+        return String(value);
+      }
+      // Limit decimal places for display
+      return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    }
+
+    return String(value);
+  }
+
+  /**
+   * Fallback formula evaluation using simple field reference replacement
+   */
+  _evaluateFormulaFallback(formula, record) {
+    if (!formula || !record) return '';
+
+    const currentSet = this.getCurrentSet();
+    const values = record.values || record;
+
+    // Build field lookup map
+    const fieldMap = new Map();
+    if (currentSet?.fields) {
+      for (const field of currentSet.fields) {
+        const value = values[field.id] ?? values[field.name] ?? '';
+        fieldMap.set(field.name, value);
+        fieldMap.set(field.id, value);
+      }
+    }
+
+    // Replace {Field Name} references with actual values
+    let result = formula.replace(/\{([^}]+)\}/g, (match, fieldRef) => {
+      const value = fieldMap.get(fieldRef.trim());
+      if (value === undefined || value === null) return '';
+      return String(value);
+    });
+
+    // Try to evaluate as expression if it looks like one
+    if (/^[\d\s+\-*/.()]+$/.test(result)) {
+      try {
+        // Safe evaluation of numeric expressions only
+        const evaluated = Function('"use strict"; return (' + result + ')')();
+        return this._formatFormulaResult(evaluated);
+      } catch {
+        // Return as-is if evaluation fails
+      }
+    }
+
+    return result;
   }
 
   _attachTableEventListeners() {
