@@ -22587,9 +22587,11 @@ body.has-picked-up .browser-tab:hover {
 .formula-editor-v2 {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  min-height: 420px;
-  max-height: 70vh;
+  gap: 20px;
+  width: 900px;
+  height: 600px;
+  min-height: 600px;
+  max-height: 600px;
 }
 
 /* Header: Field Name + Result Type in one row */
@@ -22680,9 +22682,10 @@ body.has-picked-up .browser-tab:hover {
 /* Main Body: Editor + Reference Panel */
 .formula-editor-body {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .formula-editor-v2 .formula-editor-main {
@@ -22739,12 +22742,12 @@ body.has-picked-up .browser-tab:hover {
 .formula-editor-v2 .formula-editor-textarea {
   flex: 1;
   width: 100%;
-  min-height: 180px;
-  padding: 14px;
+  min-height: 200px;
+  padding: 16px;
   border: none;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   background: var(--bg-primary);
   color: var(--text-primary);
   resize: none;
@@ -22800,11 +22803,14 @@ body.has-picked-up .browser-tab:hover {
 
 /* Reference Panel */
 .formula-reference-panel {
-  width: 280px;
+  width: 340px;
+  min-width: 340px;
+  max-width: 340px;
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
   overflow: hidden;
 }
 
@@ -22862,8 +22868,8 @@ body.has-picked-up .browser-tab:hover {
 .formula-field-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 12px;
+  gap: 8px;
+  padding: 16px;
   overflow-y: auto;
   align-content: flex-start;
 }
@@ -23025,6 +23031,106 @@ body.has-picked-up .browser-tab:hover {
   margin-top: 4px;
 }
 
+/* Function Disclosure List */
+.formula-fn-disclosure-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+/* Disclosure/Accordion Sections */
+.formula-fn-disclosure {
+  border-radius: var(--radius-md);
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.formula-fn-disclosure-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.formula-fn-disclosure-header:hover {
+  background: var(--bg-hover);
+}
+
+.formula-fn-disclosure-header > i:first-child {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.formula-fn-disclosure-title {
+  flex: 1;
+}
+
+.formula-fn-disclosure-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.formula-fn-disclosure-arrow {
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.formula-fn-disclosure.expanded .formula-fn-disclosure-arrow {
+  transform: rotate(90deg);
+}
+
+.formula-fn-disclosure-content {
+  display: none;
+  padding: 4px 0 8px 0;
+}
+
+.formula-fn-disclosure.expanded .formula-fn-disclosure-content {
+  display: block;
+}
+
+.formula-fn-disclosure .formula-fn-item {
+  padding: 8px 14px 8px 40px;
+  margin: 0;
+  border-radius: 0;
+}
+
+.formula-fn-disclosure .formula-fn-item:hover {
+  background: var(--primary-50);
+}
+
+.formula-fn-disclosure .formula-fn-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-600);
+}
+
+.formula-fn-disclosure .formula-fn-syntax {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.formula-fn-disclosure .formula-fn-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
 /* Empty State */
 .formula-editor-v2 .formula-empty-state {
   display: flex;
@@ -23038,9 +23144,12 @@ body.has-picked-up .browser-tab:hover {
 }
 
 /* Responsive V2 */
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .formula-editor-v2 {
-    max-height: none;
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    max-height: 80vh;
   }
 
   .formula-editor-header {
@@ -23064,6 +23173,8 @@ body.has-picked-up .browser-tab:hover {
 
   .formula-reference-panel {
     width: 100%;
+    min-width: 100%;
+    max-width: 100%;
     max-height: 300px;
   }
 }
