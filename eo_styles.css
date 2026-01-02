@@ -32011,16 +32011,29 @@ body.has-picked-up .browser-tab:hover {
    ============================================================================ */
 
 .activity-page {
-  max-width: 700px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 40px;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .activity-header {
-  margin-bottom: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
-.activity-header h1 {
+.activity-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.activity-header-left h1 {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -32030,15 +32043,208 @@ body.has-picked-up .browser-tab:hover {
   margin: 0;
 }
 
-.activity-header h1 i {
+.activity-header-left h1 i {
   font-size: 28px;
   color: var(--text-secondary, #6b7280);
 }
 
-.activity-content {
-  min-height: 300px;
+.activity-count-badge {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  background: var(--surface-secondary, #f3f4f6);
+  padding: 4px 10px;
+  border-radius: 12px;
 }
 
+.activity-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.activity-tab-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.activity-view-toggle {
+  display: flex;
+  background: var(--surface-secondary, #f3f4f6);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.activity-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.activity-view-btn:hover {
+  color: var(--text-primary, #111827);
+  background: var(--surface-primary, #ffffff);
+}
+
+.activity-view-btn.active {
+  background: var(--surface-primary, #ffffff);
+  color: var(--accent-primary, #2563eb);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.activity-view-btn i {
+  font-size: 16px;
+}
+
+.activity-content {
+  flex: 1;
+  min-height: 300px;
+  overflow: auto;
+}
+
+.activity-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+  color: var(--text-secondary, #6b7280);
+}
+
+.activity-empty-state i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+
+.activity-empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  margin: 0 0 8px 0;
+}
+
+.activity-empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Activity Table in Tab */
+.activity-table-wrapper {
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.activity-table-wrapper .activity-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.activity-table-wrapper .activity-table thead {
+  background: var(--surface-secondary, #f9fafb);
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.activity-table-wrapper .activity-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #6b7280);
+}
+
+.activity-table-wrapper .activity-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-secondary, #f3f4f6);
+}
+
+.activity-table-wrapper .activity-table tbody tr:hover {
+  background: var(--surface-secondary, #f9fafb);
+}
+
+.activity-table-wrapper .activity-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Activity JSON View */
+.activity-json-view {
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 200px);
+  min-height: 400px;
+}
+
+.activity-json-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface-secondary, #f9fafb);
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.activity-json-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  background: var(--surface-primary, #ffffff);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.activity-json-copy-btn:hover {
+  color: var(--text-primary, #111827);
+  border-color: var(--border-secondary, #d1d5db);
+  background: var(--surface-secondary, #f9fafb);
+}
+
+.activity-json-copy-btn i {
+  font-size: 14px;
+}
+
+.activity-json-info {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.activity-json-content {
+  flex: 1;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  background: var(--surface-primary, #ffffff);
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-primary, #111827);
+}
+
+.activity-json-content code {
+  font-family: inherit;
+}
+
+/* Legacy activity-empty for backwards compatibility */
 .activity-empty {
   display: flex;
   flex-direction: column;
