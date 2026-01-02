@@ -1969,6 +1969,611 @@ window.EOFormulaFunctions = (function() {
   });
 
   // ═══════════════════════════════════════════════════════════════
+  // AV-INSPIRED SEMANTIC FORMULAS
+  // Meaning-aware operations: scope, assumptions, equivalence, convergence
+  // Based on Advaita Vedānta epistemic patterns
+  // ═══════════════════════════════════════════════════════════════
+
+  // ─────────────────────────────────────────────────────────────────
+  // NETI-NETI PATTERN: Truth by elimination
+  // "Not this, not this" - define validity by what disqualifies
+  // ─────────────────────────────────────────────────────────────────
+
+  register('EXCEPT', {
+    category: 'Semantic',
+    description: 'Start with a value, subtract violations (Neti-Neti pattern)',
+    eoDecomposition: [Op.NUL, Op.SEG, Op.ALT],
+    eoExplanation: 'NUL(detect) → SEG(violations) → ALT(subtract) - Truth by elimination',
+    avOrigin: 'Neti-Neti (not this, not this)',
+    args: [
+      { name: 'baseValue', type: ArgType.ANY, required: true, description: 'Value if no violations' },
+      { name: 'violations', type: ArgType.ARRAY, required: true, description: 'Array of UNLESS() conditions' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (baseValue, ...violations) => {
+      const violationResults = violations.flat();
+      const failed = violationResults.filter(v => v && v.failed);
+      if (failed.length === 0) {
+        return { value: baseValue, reasons: [], valid: true };
+      }
+      return {
+        value: null,
+        reasons: failed.map(v => v.reason),
+        valid: false,
+        eliminatedBy: 'EXCEPT'
+      };
+    },
+    toPipeline: (args) => [
+      { operator: Op.NUL, params: { mode: 'DETECT_VIOLATIONS', violations: args?.violations } },
+      { operator: Op.SEG, params: { mode: 'FILTER_FAILURES' } },
+      { operator: Op.ALT, params: { mode: 'SUBTRACT_FROM_BASE', base: args?.baseValue } },
+    ],
+    examples: [
+      'EXCEPT("Valid", UNLESS({HasLicense}, "No license"), UNLESS({Insured}, "Not insured"))',
+      'EXCEPT("Approved", UNLESS({CreditScore} > 600, "Low credit"), UNLESS({Income} > 30000, "Insufficient income"))',
+    ],
+  });
+
+  register('UNLESS', {
+    category: 'Semantic',
+    description: 'Define a violation condition for EXCEPT (true = pass, false = fail)',
+    eoDecomposition: [Op.SEG, Op.NUL],
+    eoExplanation: 'SEG(test condition) → NUL(mark violation) - Elimination clause',
+    avOrigin: 'Neti-Neti component',
+    args: [
+      { name: 'condition', type: ArgType.BOOLEAN, required: true, description: 'Condition that must be true' },
+      { name: 'reason', type: ArgType.TEXT, required: true, description: 'Reason if condition fails' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (condition, reason) => ({
+      failed: !condition,
+      reason: reason,
+      _type: 'unless_clause'
+    }),
+    toPipeline: (args) => [
+      { operator: Op.SEG, params: { condition: args?.condition } },
+      { operator: Op.NUL, params: { mode: 'MARK_VIOLATION', reason: args?.reason } },
+    ],
+    examples: [
+      'UNLESS({HasLicense}, "Missing license")',
+      'UNLESS({Age} >= 18, "Must be 18 or older")',
+    ],
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // PROVISIONAL TRUTH: Scoped validity
+  // Values that are only true within specific contexts
+  // ─────────────────────────────────────────────────────────────────
+
+  register('VALID_WHEN', {
+    category: 'Semantic',
+    description: 'Attach scope to a value - value is only valid within scope',
+    eoDecomposition: [Op.DES],
+    eoExplanation: 'DES(attach scope) - Provisional truth within context',
+    avOrigin: 'Vyāvahārika satya (practical/contextual truth)',
+    args: [
+      { name: 'value', type: ArgType.ANY, required: true, description: 'The value to scope' },
+      { name: 'scopeCondition', type: ArgType.BOOLEAN, required: true, description: 'Condition defining valid scope' },
+      { name: 'scopeDescription', type: ArgType.TEXT, required: false, description: 'Human-readable scope description' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (value, scopeCondition, scopeDescription) => ({
+      value: value,
+      scope: scopeCondition,
+      scopeDescription: scopeDescription || String(scopeCondition),
+      portable: false,
+      _type: 'scoped_value'
+    }),
+    toPipeline: (args) => [
+      { operator: Op.DES, params: { mode: 'ATTACH_SCOPE', scope: args?.scopeCondition } },
+    ],
+    examples: [
+      'VALID_WHEN({Revenue}, {Region} = "US", "US region only")',
+      'VALID_WHEN(SUM(#Orders.Total), {FiscalYear} = 2024, "FY2024")',
+    ],
+  });
+
+  register('ASSUMING', {
+    category: 'Semantic',
+    description: 'Attach explicit assumptions to a computed value',
+    eoDecomposition: [Op.DES, Op.SUP],
+    eoExplanation: 'DES(attach assumptions) - Makes hidden assumptions visible',
+    avOrigin: 'Adhyāsa awareness (superimposition audit)',
+    args: [
+      { name: 'value', type: ArgType.ANY, required: true, description: 'The computed value' },
+      { name: 'assumptions', type: ArgType.ARRAY, required: true, description: 'List of assumption strings' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (value, ...assumptions) => ({
+      value: value,
+      assumptions: assumptions.flat(),
+      assumptionCount: assumptions.flat().length,
+      _type: 'assumed_value'
+    }),
+    toPipeline: (args) => [
+      { operator: Op.DES, params: { mode: 'ATTACH_ASSUMPTIONS', assumptions: args?.assumptions } },
+    ],
+    examples: [
+      'ASSUMING({Price} * {Qty}, "Currency is USD", "Price includes tax")',
+      'ASSUMING({ExchangeRate} * {Amount}, "Spot rate as of today", "No fees applied")',
+    ],
+  });
+
+  register('SCOPE_COMPATIBLE', {
+    category: 'Semantic',
+    description: 'Check if a scoped value can be used in current context',
+    eoDecomposition: [Op.SEG, Op.DES],
+    eoExplanation: 'SEG(compare scopes) → DES(compatibility result)',
+    avOrigin: 'Context compatibility check',
+    args: [
+      { name: 'scopedValue', type: ArgType.ANY, required: true, description: 'A value created with VALID_WHEN' },
+      { name: 'targetContext', type: ArgType.ANY, required: true, description: 'Context to check compatibility against' },
+    ],
+    returns: ArgType.BOOLEAN,
+    implementation: (scopedValue, targetContext) => {
+      // No scope = universal compatibility
+      if (!scopedValue || scopedValue._type !== 'scoped_value') return true;
+      if (!scopedValue.scope) return true;
+
+      // If scope is a boolean, return it directly
+      if (typeof scopedValue.scope === 'boolean') return scopedValue.scope;
+
+      // Otherwise, compare context objects if possible
+      if (typeof targetContext === 'object' && typeof scopedValue.scope === 'object') {
+        // Check if all scope requirements are met in target context
+        for (const [key, value] of Object.entries(scopedValue.scope)) {
+          if (targetContext[key] !== value) return false;
+        }
+        return true;
+      }
+
+      return scopedValue.scope === targetContext;
+    },
+    toPipeline: (args) => [
+      { operator: Op.SEG, params: { mode: 'COMPARE_SCOPES' } },
+    ],
+    examples: [
+      'IF(SCOPE_COMPATIBLE({ScopedRevenue}, {CurrentContext}), {ScopedRevenue}, BLANK())',
+    ],
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // PARTIAL IDENTITY: Purpose-bound equivalence
+  // Things can be "the same" for some purposes but not others
+  // ─────────────────────────────────────────────────────────────────
+
+  register('EQUIVALENT_WHEN', {
+    category: 'Semantic',
+    description: 'Test equivalence under projection (purpose-bound identity)',
+    eoDecomposition: [Op.CON, Op.SEG, Op.ALT],
+    eoExplanation: 'CON(both values) → SEG(project retained fields) → ALT(compare)',
+    avOrigin: 'Jahadajahallakṣaṇā (partial identity)',
+    args: [
+      { name: 'valueA', type: ArgType.ANY, required: true, description: 'First value to compare' },
+      { name: 'valueB', type: ArgType.ANY, required: true, description: 'Second value to compare' },
+      { name: 'retaining', type: ArgType.ARRAY, required: true, description: 'Fields to use for comparison' },
+      { name: 'ignoring', type: ArgType.ARRAY, required: false, description: 'Fields to explicitly ignore' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (valueA, valueB, retaining, ignoring = []) => {
+      // Handle simple values
+      if (typeof valueA !== 'object' || typeof valueB !== 'object') {
+        const equivalent = valueA === valueB;
+        return { equivalent, forPurpose: 'direct_comparison', _type: 'equivalence_result' };
+      }
+
+      // Project to retained fields
+      const projectFields = (obj, fields) => {
+        if (!obj || !fields) return obj;
+        const result = {};
+        for (const field of fields) {
+          if (obj.hasOwnProperty(field)) {
+            result[field] = obj[field];
+          }
+        }
+        return result;
+      };
+
+      // Find differences in ignored fields
+      const findIgnoredDifferences = (objA, objB, ignored) => {
+        const diffs = [];
+        for (const field of ignored) {
+          if (objA?.[field] !== objB?.[field]) {
+            diffs.push(`${field}: ${objA?.[field]} vs ${objB?.[field]}`);
+          }
+        }
+        return diffs;
+      };
+
+      const projA = projectFields(valueA, retaining);
+      const projB = projectFields(valueB, retaining);
+
+      // Deep equality check
+      const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      const equivalent = deepEqual(projA, projB);
+
+      return {
+        equivalent,
+        forPurpose: retaining.join('+'),
+        ignoredDifferences: findIgnoredDifferences(valueA, valueB, ignoring || []),
+        retainedFields: retaining,
+        projectedA: projA,
+        projectedB: projB,
+        _type: 'equivalence_result'
+      };
+    },
+    toPipeline: (args) => [
+      { operator: Op.SEG, params: { mode: 'PROJECT', fields: args?.retaining } },
+      { operator: Op.ALT, params: { mode: 'COMPARE_PROJECTED' } },
+    ],
+    examples: [
+      'EQUIVALENT_WHEN({CustomerA}, {CustomerB}, ["TaxID", "Name"], ["SourceSystem"])',
+      'EQUIVALENT_WHEN({RecordA}, {RecordB}, ["Email", "Phone"])',
+    ],
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // SELF-CORRECTING: Explicit assumptions with fragility assessment
+  // Values that know their own weakness
+  // ─────────────────────────────────────────────────────────────────
+
+  register('WITH_ASSUMPTIONS', {
+    category: 'Semantic',
+    description: 'Compute value with explicit queryable assumptions',
+    eoDecomposition: [Op.ALT, Op.DES, Op.SUP],
+    eoExplanation: 'ALT(compute) → DES(attach assumptions) → SUP(if fragile, hold as uncertain)',
+    avOrigin: 'Adhyāsa (superimposition) awareness',
+    args: [
+      { name: 'value', type: ArgType.ANY, required: true, description: 'The computed value' },
+      { name: 'assumptions', type: ArgType.ARRAY, required: true, description: 'List of assumption strings' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (value, ...assumptions) => ({
+      value: value,
+      assumptions: assumptions.flat(),
+      assumptionCount: assumptions.flat().length,
+      queryable: true,
+      _type: 'self_aware_value'
+    }),
+    toPipeline: (args) => [
+      { operator: Op.ALT, params: { mode: 'COMPUTE' } },
+      { operator: Op.DES, params: { mode: 'ATTACH_ASSUMPTIONS', assumptions: args?.assumptions } },
+    ],
+    examples: [
+      'WITH_ASSUMPTIONS({Price} * {Quantity} * {ExchangeRate}, "IDs are globally unique", "Currency converts at spot rate")',
+    ],
+  });
+
+  register('FRAGILITY', {
+    category: 'Semantic',
+    description: 'Assess fragility/confidence of a computed value',
+    eoDecomposition: [Op.SEG, Op.DES],
+    eoExplanation: 'SEG(check conditions) → DES(attach fragility score)',
+    avOrigin: 'Adhyāsa (superimposition) awareness',
+    args: [
+      { name: 'value', type: ArgType.ANY, required: true, description: 'Value to assess' },
+      { name: 'conditions', type: ArgType.ARRAY, required: true, description: 'Fragility conditions as {level, condition, reason}' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (value, ...conditions) => {
+      const allConditions = conditions.flat();
+      const triggered = allConditions.filter(c => c && c.triggered);
+
+      const fragilityLevels = { 'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 4 };
+      const fragilityLabels = ['STABLE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+
+      const maxLevel = triggered.reduce((max, c) => {
+        const level = fragilityLevels[c.level?.toUpperCase()] || 0;
+        return Math.max(max, level);
+      }, 0);
+
+      return {
+        value: value,
+        fragility: fragilityLabels[maxLevel] || 'STABLE',
+        fragilityLevel: maxLevel,
+        fragilityReasons: triggered.map(c => c.reason),
+        conditionsChecked: allConditions.length,
+        _type: 'fragile_value'
+      };
+    },
+    toPipeline: (args) => [
+      { operator: Op.SEG, params: { mode: 'CHECK_FRAGILITY', conditions: args?.conditions } },
+      { operator: Op.DES, params: { mode: 'ATTACH_FRAGILITY' } },
+    ],
+    examples: [
+      'FRAGILITY({DerivedValue}, HIGH_IF({DataAge} > 24, "Data is stale"), MEDIUM_IF({Confidence} < 0.8, "Low confidence"))',
+    ],
+  });
+
+  register('HIGH_IF', {
+    category: 'Semantic',
+    description: 'Create a HIGH fragility condition',
+    eoDecomposition: [Op.SEG],
+    eoExplanation: 'SEG(condition) - Fragility check',
+    avOrigin: 'Fragility assessment component',
+    args: [
+      { name: 'condition', type: ArgType.BOOLEAN, required: true },
+      { name: 'reason', type: ArgType.TEXT, required: true },
+    ],
+    returns: ArgType.ANY,
+    implementation: (condition, reason) => ({
+      level: 'HIGH',
+      triggered: !!condition,
+      reason: reason,
+      _type: 'fragility_condition'
+    }),
+    toPipeline: () => [
+      { operator: Op.SEG, params: { mode: 'FRAGILITY_CHECK', level: 'HIGH' } },
+    ],
+  });
+
+  register('MEDIUM_IF', {
+    category: 'Semantic',
+    description: 'Create a MEDIUM fragility condition',
+    eoDecomposition: [Op.SEG],
+    eoExplanation: 'SEG(condition) - Fragility check',
+    avOrigin: 'Fragility assessment component',
+    args: [
+      { name: 'condition', type: ArgType.BOOLEAN, required: true },
+      { name: 'reason', type: ArgType.TEXT, required: true },
+    ],
+    returns: ArgType.ANY,
+    implementation: (condition, reason) => ({
+      level: 'MEDIUM',
+      triggered: !!condition,
+      reason: reason,
+      _type: 'fragility_condition'
+    }),
+    toPipeline: () => [
+      { operator: Op.SEG, params: { mode: 'FRAGILITY_CHECK', level: 'MEDIUM' } },
+    ],
+  });
+
+  register('LOW_IF', {
+    category: 'Semantic',
+    description: 'Create a LOW fragility condition',
+    eoDecomposition: [Op.SEG],
+    eoExplanation: 'SEG(condition) - Fragility check',
+    avOrigin: 'Fragility assessment component',
+    args: [
+      { name: 'condition', type: ArgType.BOOLEAN, required: true },
+      { name: 'reason', type: ArgType.TEXT, required: true },
+    ],
+    returns: ArgType.ANY,
+    implementation: (condition, reason) => ({
+      level: 'LOW',
+      triggered: !!condition,
+      reason: reason,
+      _type: 'fragility_condition'
+    }),
+    toPipeline: () => [
+      { operator: Op.SEG, params: { mode: 'FRAGILITY_CHECK', level: 'LOW' } },
+    ],
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // NON-ASSERTIVE: Values for observation only
+  // Cannot drive decisions or automations
+  // ─────────────────────────────────────────────────────────────────
+
+  register('DIAGNOSTIC', {
+    category: 'Semantic',
+    description: 'Mark a value as non-assertive (cannot drive decisions)',
+    eoDecomposition: [Op.DES],
+    eoExplanation: 'DES(mark non-assertive) - Value for observation only',
+    avOrigin: 'Illuminative but non-binding cognition',
+    args: [
+      { name: 'value', type: ArgType.ANY, required: true, description: 'The diagnostic value' },
+      { name: 'reason', type: ArgType.TEXT, required: false, description: 'Why this is diagnostic-only' },
+    ],
+    returns: ArgType.ANY,
+    implementation: (value, reason) => ({
+      value: value,
+      _diagnostic: true,
+      _nonAssertive: true,
+      reason: reason || 'For investigation only',
+      _type: 'diagnostic_value'
+    }),
+    toPipeline: () => [
+      { operator: Op.DES, params: { mode: 'MARK_DIAGNOSTIC' } },
+    ],
+    examples: [
+      'DIAGNOSTIC(COMPARE(#SystemA.Balance, #SystemB.Balance), "For investigation only")',
+      'DIAGNOSTIC({SuspiciousFlag}, "Requires human review")',
+    ],
+  });
+
+  register('IS_DIAGNOSTIC', {
+    category: 'Semantic',
+    description: 'Check if a value is marked as diagnostic/non-assertive',
+    eoDecomposition: [Op.DES],
+    eoExplanation: 'DES(check diagnostic flag)',
+    avOrigin: 'Non-assertive detection',
+    args: [
+      { name: 'value', type: ArgType.ANY, required: true },
+    ],
+    returns: ArgType.BOOLEAN,
+    implementation: (value) => !!(value && value._diagnostic),
+    toPipeline: () => [
+      { operator: Op.DES, params: { mode: 'CHECK_DIAGNOSTIC' } },
+    ],
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // RECURSIVE STABILIZATION: Convergent refinement
+  // Iteratively refine until stable (fixed point)
+  // ─────────────────────────────────────────────────────────────────
+
+  register('REFINE_UNTIL', {
+    category: 'Semantic',
+    description: 'Iteratively refine a value until stable',
+    eoDecomposition: [Op.REC, Op.SEG, Op.SYN],
+    eoExplanation: 'REC(iterate) until fixed point - Convergent truth',
+    avOrigin: 'Truth via repeated correction',
+    args: [
+      { name: 'initial', type: ArgType.ANY, required: true, description: 'Starting value' },
+      { name: 'refineFn', type: ArgType.LAMBDA, required: true, description: 'Function to apply each iteration' },
+      { name: 'stableCondition', type: ArgType.TEXT, required: false, default: 'NO_CHANGE', options: ['NO_CHANGE', 'STABLE', 'CONVERGED'] },
+      { name: 'maxIterations', type: ArgType.NUMBER, required: false, default: 10 },
+    ],
+    returns: ArgType.ANY,
+    implementation: (initial, refineFn, stableCondition = 'NO_CHANGE', maxIterations = 10) => {
+      let current = initial;
+      let iterations = 0;
+      const changes = [];
+      const maxIter = Math.min(Number(maxIterations) || 10, 100); // Cap at 100 for safety
+
+      while (iterations < maxIter) {
+        let next;
+        try {
+          next = typeof refineFn === 'function' ? refineFn(current) : current;
+        } catch (e) {
+          return {
+            value: current,
+            iterations: iterations,
+            stable: false,
+            error: e.message,
+            changesPerIteration: changes,
+            _type: 'refined_value'
+          };
+        }
+
+        // Count changes (simple comparison)
+        const changed = JSON.stringify(current) !== JSON.stringify(next);
+        changes.push(changed ? 1 : 0);
+
+        if (!changed) {
+          return {
+            value: next,
+            iterations: iterations + 1,
+            stable: true,
+            converged: true,
+            changesPerIteration: changes,
+            _type: 'refined_value'
+          };
+        }
+
+        current = next;
+        iterations++;
+      }
+
+      return {
+        value: current,
+        iterations: maxIter,
+        stable: false,
+        converged: false,
+        changesPerIteration: changes,
+        warning: 'Max iterations reached without convergence',
+        _type: 'refined_value'
+      };
+    },
+    toPipeline: (args) => [
+      { operator: Op.REC, params: {
+        mode: 'REFINE',
+        until: args?.stableCondition,
+        maxIterations: args?.maxIterations,
+      }},
+    ],
+    examples: [
+      'REFINE_UNTIL({RawData}, $.normalize(), "STABLE", 5)',
+    ],
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // SEMANTIC HELPERS
+  // ─────────────────────────────────────────────────────────────────
+
+  register('GET_ASSUMPTIONS', {
+    category: 'Semantic',
+    description: 'Extract assumptions from an assumed value',
+    eoDecomposition: [Op.DES],
+    eoExplanation: 'DES(property:assumptions) - Retrieve attached assumptions',
+    avOrigin: 'Assumption introspection',
+    args: [
+      { name: 'assumedValue', type: ArgType.ANY, required: true },
+    ],
+    returns: ArgType.ARRAY,
+    implementation: (assumedValue) => {
+      if (!assumedValue) return [];
+      return assumedValue.assumptions || [];
+    },
+    toPipeline: () => [
+      { operator: Op.DES, params: { property: 'assumptions' } },
+    ],
+  });
+
+  register('GET_SCOPE', {
+    category: 'Semantic',
+    description: 'Extract scope from a scoped value',
+    eoDecomposition: [Op.DES],
+    eoExplanation: 'DES(property:scope) - Retrieve attached scope',
+    avOrigin: 'Scope introspection',
+    args: [
+      { name: 'scopedValue', type: ArgType.ANY, required: true },
+    ],
+    returns: ArgType.ANY,
+    implementation: (scopedValue) => {
+      if (!scopedValue) return null;
+      return {
+        scope: scopedValue.scope,
+        description: scopedValue.scopeDescription,
+        portable: scopedValue.portable
+      };
+    },
+    toPipeline: () => [
+      { operator: Op.DES, params: { property: 'scope' } },
+    ],
+  });
+
+  register('GET_FRAGILITY', {
+    category: 'Semantic',
+    description: 'Extract fragility assessment from a value',
+    eoDecomposition: [Op.DES],
+    eoExplanation: 'DES(property:fragility) - Retrieve fragility info',
+    avOrigin: 'Fragility introspection',
+    args: [
+      { name: 'fragileValue', type: ArgType.ANY, required: true },
+    ],
+    returns: ArgType.ANY,
+    implementation: (fragileValue) => {
+      if (!fragileValue) return { fragility: 'UNKNOWN' };
+      return {
+        fragility: fragileValue.fragility || 'STABLE',
+        level: fragileValue.fragilityLevel || 0,
+        reasons: fragileValue.fragilityReasons || []
+      };
+    },
+    toPipeline: () => [
+      { operator: Op.DES, params: { property: 'fragility' } },
+    ],
+  });
+
+  register('UNWRAP', {
+    category: 'Semantic',
+    description: 'Extract the raw value from any semantic wrapper',
+    eoDecomposition: [Op.DES],
+    eoExplanation: 'DES(property:value) - Extract unwrapped value',
+    avOrigin: 'Value extraction',
+    args: [
+      { name: 'wrappedValue', type: ArgType.ANY, required: true },
+    ],
+    returns: ArgType.ANY,
+    implementation: (wrappedValue) => {
+      if (!wrappedValue) return wrappedValue;
+      if (typeof wrappedValue !== 'object') return wrappedValue;
+      if ('value' in wrappedValue) return wrappedValue.value;
+      return wrappedValue;
+    },
+    toPipeline: () => [
+      { operator: Op.DES, params: { property: 'value' } },
+    ],
+    examples: [
+      'UNWRAP(ASSUMING({Price}, "USD"))',
+      'UNWRAP(VALID_WHEN({Revenue}, {Region} = "US"))',
+    ],
+  });
+
+  // ═══════════════════════════════════════════════════════════════
   // PUBLIC API
   // ═══════════════════════════════════════════════════════════════
 
