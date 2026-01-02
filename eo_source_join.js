@@ -744,7 +744,7 @@ class SetCreator {
 
     // Apply filters to source records
     let records = [...source.records];
-    if (filters.length > 0) {
+    if (filters?.length > 0) {
       records = this._applyFilters(records, filters);
     }
 
@@ -822,7 +822,7 @@ class SetCreator {
 
     // Apply filters
     let records = [...source.records];
-    if (filters.length > 0) {
+    if (filters?.length > 0) {
       records = this._applyFilters(records, filters);
     }
 
