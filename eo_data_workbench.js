@@ -35209,12 +35209,18 @@ class EODataWorkbench {
 
   /**
    * Show the formula editor modal for creating or editing formula fields
+   * Uses the EO-native V3 editor with vertical epistemic flow
    * @param {Object|null} field - Existing field to edit, or null for creating new
    * @param {Function|null} callback - Callback when changing an existing field's type
    */
   _showFormulaEditor(field, callback = null) {
+    // Use V3 EO-native editor if available, fallback to V2
     if (!this.formulaEditor) {
-      this.formulaEditor = new EOFormulaEditor(this);
+      if (window.EOFormulaEditorV3) {
+        this.formulaEditor = new EOFormulaEditorV3(this);
+      } else {
+        this.formulaEditor = new EOFormulaEditor(this);
+      }
     }
 
     if (field) {
@@ -35225,11 +35231,17 @@ class EODataWorkbench {
         field.options.formula = data.formula;
         field.options.resultType = data.resultType;
 
+        // V3 editor provides evaluationContext (frame-aware settings)
+        if (data.evaluationContext) {
+          field.options.evaluationContext = data.evaluationContext;
+        }
+
         // Record field history event
         this._recordFieldEvent(field.id, 'field.updated', {
           name: data.name,
           formula: data.formula,
-          resultType: data.resultType
+          resultType: data.resultType,
+          evaluationContext: data.evaluationContext
         });
 
         this._saveData();
@@ -35241,18 +35253,21 @@ class EODataWorkbench {
     } else {
       // Creating new formula field
       this.formulaEditor.showCreate((data) => {
+        // Build field options with evaluationContext if present (V3 editor)
+        const fieldOptions = {
+          formula: data.formula,
+          resultType: data.resultType
+        };
+        if (data.evaluationContext) {
+          fieldOptions.evaluationContext = data.evaluationContext;
+        }
+
         if (callback) {
           // This is for type change scenarios
-          callback(FieldTypes.FORMULA, {
-            formula: data.formula,
-            resultType: data.resultType
-          });
+          callback(FieldTypes.FORMULA, fieldOptions);
         } else {
           // Adding a new field directly
-          this._addField(FieldTypes.FORMULA, data.name, {
-            formula: data.formula,
-            resultType: data.resultType
-          });
+          this._addField(FieldTypes.FORMULA, data.name, fieldOptions);
           this._showToast(`Created formula field "${data.name}"`, 'success');
         }
       }, () => {
