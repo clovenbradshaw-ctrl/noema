@@ -604,8 +604,28 @@ function setupGlobalHandlers() {
   const searchInput = document.getElementById('global-search');
   if (searchInput) {
     searchInput.addEventListener('input', debounce((e) => {
+      showingHistory = false;
       handleGlobalSearch(e.target.value);
     }, 300));
+
+    // Show search history on focus when empty
+    searchInput.addEventListener('focus', () => {
+      if (!searchInput.value.trim()) {
+        showSearchHistory();
+      }
+    });
+
+    // Keyboard navigation
+    searchInput.addEventListener('keydown', handleSearchKeyboard);
+
+    // Hide results on blur (with delay for click handling)
+    searchInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (!document.activeElement?.closest('.search-results-dropdown')) {
+          hideSearchResults();
+        }
+      }, 200);
+    });
   }
 
   // Settings button
@@ -644,6 +664,40 @@ const SEARCH_PREFIXES = {
   '!': { name: 'provenance', icon: 'ph-git-branch', description: 'Search by provenance' }
 };
 
+// Search state
+const SEARCH_HISTORY_KEY = 'eo_search_history';
+const MAX_SEARCH_HISTORY = 10;
+let searchSelectedIndex = -1;
+let currentSearchResults = [];
+let showingHistory = false;
+
+// Get search history from localStorage
+function getSearchHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+// Add to search history
+function addToSearchHistory(query) {
+  if (!query || query.length < 2) return;
+  let history = getSearchHistory();
+  // Remove if exists
+  history = history.filter(h => h.query !== query);
+  // Add to front
+  history.unshift({ query, timestamp: Date.now() });
+  // Keep max items
+  history = history.slice(0, MAX_SEARCH_HISTORY);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+}
+
+// Clear search history
+function clearSearchHistory() {
+  localStorage.removeItem(SEARCH_HISTORY_KEY);
+}
+
 function parseSearchQuery(query) {
   const firstChar = query.charAt(0);
   if (SEARCH_PREFIXES[firstChar]) {
@@ -675,9 +729,186 @@ function updateSearchPrefixHint(prefix) {
   }
 }
 
+// Keyboard navigation handler for search
+function handleSearchKeyboard(e) {
+  const dropdown = document.getElementById('search-results');
+  if (!dropdown || dropdown.style.display === 'none') {
+    if (e.key === 'Escape') {
+      hideSearchResults();
+      e.target.blur();
+    }
+    return;
+  }
+
+  const items = dropdown.querySelectorAll('.search-result-item, .search-history-item');
+  const maxIndex = items.length - 1;
+
+  switch (e.key) {
+    case 'ArrowDown':
+      e.preventDefault();
+      searchSelectedIndex = Math.min(searchSelectedIndex + 1, maxIndex);
+      updateSearchSelection(items);
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      searchSelectedIndex = Math.max(searchSelectedIndex - 1, -1);
+      updateSearchSelection(items);
+      break;
+    case 'Enter':
+      e.preventDefault();
+      if (searchSelectedIndex >= 0 && items[searchSelectedIndex]) {
+        const item = items[searchSelectedIndex];
+        if (item.classList.contains('search-history-item')) {
+          // Apply history query
+          const query = item.dataset.query;
+          e.target.value = query;
+          showingHistory = false;
+          handleGlobalSearch(query);
+        } else {
+          handleSearchResultClick(item);
+          addToSearchHistory(e.target.value);
+        }
+      }
+      break;
+    case 'Escape':
+      e.preventDefault();
+      hideSearchResults();
+      e.target.blur();
+      break;
+    case 'Tab':
+      // Allow tab to cycle through results
+      if (items.length > 0) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          searchSelectedIndex = searchSelectedIndex <= 0 ? maxIndex : searchSelectedIndex - 1;
+        } else {
+          searchSelectedIndex = searchSelectedIndex >= maxIndex ? 0 : searchSelectedIndex + 1;
+        }
+        updateSearchSelection(items);
+      }
+      break;
+  }
+}
+
+// Update visual selection in dropdown
+function updateSearchSelection(items) {
+  items.forEach((item, index) => {
+    item.classList.toggle('selected', index === searchSelectedIndex);
+    if (index === searchSelectedIndex) {
+      item.scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
+// Show search history dropdown
+function showSearchHistory() {
+  const history = getSearchHistory();
+  if (history.length === 0) {
+    showSearchSuggestions();
+    return;
+  }
+
+  showingHistory = true;
+  searchSelectedIndex = -1;
+
+  let dropdown = document.getElementById('search-results');
+  if (!dropdown) {
+    dropdown = document.createElement('div');
+    dropdown.id = 'search-results';
+    dropdown.className = 'search-results-dropdown';
+    document.querySelector('.sidebar-search')?.appendChild(dropdown);
+  }
+
+  dropdown.innerHTML = `
+    <div class="search-history-header">
+      <span><i class="ph ph-clock-counter-clockwise"></i> Recent searches</span>
+      <button class="search-history-clear" onclick="clearSearchHistory(); hideSearchResults();" title="Clear history">
+        <i class="ph ph-x"></i>
+      </button>
+    </div>
+    ${history.map(h => `
+      <div class="search-history-item" data-query="${escapeHtmlApp(h.query)}">
+        <i class="ph ph-clock-counter-clockwise"></i>
+        <span>${escapeHtmlApp(h.query)}</span>
+      </div>
+    `).join('')}
+    <div class="search-history-footer">
+      <span>Press ↑↓ to navigate, Enter to select</span>
+    </div>
+  `;
+
+  dropdown.querySelectorAll('.search-history-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const query = item.dataset.query;
+      document.getElementById('global-search').value = query;
+      showingHistory = false;
+      handleGlobalSearch(query);
+    });
+  });
+
+  dropdown.style.display = 'block';
+}
+
+// Show search suggestions when no history
+function showSearchSuggestions() {
+  let dropdown = document.getElementById('search-results');
+  if (!dropdown) {
+    dropdown = document.createElement('div');
+    dropdown.id = 'search-results';
+    dropdown.className = 'search-results-dropdown';
+    document.querySelector('.sidebar-search')?.appendChild(dropdown);
+  }
+
+  dropdown.innerHTML = `
+    <div class="search-suggestions">
+      <div class="search-suggestions-title">
+        <i class="ph ph-lightbulb"></i>
+        <span>Search tips</span>
+      </div>
+      <div class="search-suggestion-item" data-prefix="">
+        <kbd></kbd><span>Search records by name</span>
+      </div>
+      <div class="search-suggestion-item" data-prefix="@">
+        <kbd>@</kbd><span>Search all field values</span>
+      </div>
+      <div class="search-suggestion-item" data-prefix="#">
+        <kbd>#</kbd><span>Find sets by name</span>
+      </div>
+      <div class="search-suggestion-item" data-prefix="/">
+        <kbd>/</kbd><span>Search views/lenses</span>
+      </div>
+      <div class="search-suggestion-item" data-prefix=">">
+        <kbd>></kbd><span>Run commands</span>
+      </div>
+      <div class="search-suggestions-hint">
+        Type to search or use a prefix
+      </div>
+    </div>
+  `;
+
+  dropdown.querySelectorAll('.search-suggestion-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const prefix = item.dataset.prefix;
+      const input = document.getElementById('global-search');
+      input.value = prefix;
+      input.focus();
+      if (prefix) {
+        showingHistory = false;
+        handleGlobalSearch(prefix);
+      }
+    });
+  });
+
+  dropdown.style.display = 'block';
+}
+
 function handleGlobalSearch(query) {
   if (!query || query.length < 1) {
-    hideSearchResults();
+    if (document.activeElement?.id === 'global-search') {
+      showSearchHistory();
+    } else {
+      hideSearchResults();
+    }
     updateSearchPrefixHint('');
     return;
   }
@@ -715,11 +946,124 @@ function handleGlobalSearch(query) {
     case '!': // Search by provenance
       results = searchByProvenance(workbench, termLower);
       break;
-    default: // Search records by primary field
-      results = searchRecordsPrimary(workbench, termLower);
+    default: // Unified search across all types
+      results = searchUnified(workbench, termLower);
   }
 
-  showSearchResults(results.slice(0, 15), prefix);
+  // Reset selection when results change
+  searchSelectedIndex = -1;
+  currentSearchResults = results;
+
+  showSearchResults(results.slice(0, 20), prefix, query);
+}
+
+// Unified search across all types with ranking
+function searchUnified(workbench, query) {
+  const allResults = [];
+
+  // Collect all searchable items
+  const items = [];
+
+  // Add sets
+  workbench.getSets().forEach(set => {
+    items.push({
+      type: 'set',
+      id: set.id,
+      title: set.name,
+      subtitle: `${set.records.length} records · ${set.fields.length} fields`,
+      icon: set.icon || 'ph-table',
+      searchText: set.name
+    });
+
+    // Add records (primary field)
+    const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
+    set.records.forEach(record => {
+      const primaryValue = record.values[primaryField?.id] || '';
+      if (primaryValue) {
+        items.push({
+          type: 'record',
+          id: record.id,
+          setId: set.id,
+          title: String(primaryValue),
+          subtitle: set.name,
+          icon: 'ph-file',
+          searchText: String(primaryValue)
+        });
+      }
+    });
+
+    // Add views
+    (set.views || []).forEach(view => {
+      items.push({
+        type: 'view',
+        id: view.id,
+        setId: set.id,
+        title: view.name,
+        subtitle: `${view.type} · ${set.name}`,
+        icon: getViewIcon(view.type),
+        searchText: view.name
+      });
+    });
+  });
+
+  // Add commands
+  const commands = [
+    { id: 'new_record', name: 'New Record', desc: 'Create a new record', icon: 'ph-plus', action: 'newRecord' },
+    { id: 'new_set', name: 'New Set', desc: 'Create a new data set', icon: 'ph-table-plus', action: 'newSet' },
+    { id: 'import', name: 'Import Data', desc: 'Import spreadsheet or data file', icon: 'ph-download', action: 'import' },
+    { id: 'filter', name: 'Add Filter', desc: 'Create a focus/filter', icon: 'ph-funnel', action: 'filter' },
+    { id: 'createExport', name: 'Create Export', desc: 'Download and record immutable export', icon: 'ph-export', action: 'createExport' },
+    { id: 'settings', name: 'Settings', desc: 'Open settings', icon: 'ph-gear', action: 'settings' }
+  ];
+  commands.forEach(cmd => {
+    items.push({
+      type: 'command',
+      id: cmd.id,
+      title: cmd.name,
+      subtitle: cmd.desc,
+      icon: cmd.icon,
+      action: cmd.action,
+      searchText: `${cmd.name} ${cmd.desc}`
+    });
+  });
+
+  // Use Fuse.js for fuzzy matching if available
+  if (typeof Fuse !== 'undefined') {
+    const fuse = new Fuse(items, {
+      keys: ['searchText', 'title', 'subtitle'],
+      threshold: 0.4,
+      distance: 100,
+      includeScore: true,
+      ignoreLocation: true
+    });
+    const fuseResults = fuse.search(query);
+    return fuseResults.map(r => ({ ...r.item, score: r.score }));
+  }
+
+  // Fallback: basic scoring
+  return items
+    .map(item => {
+      const searchText = item.searchText.toLowerCase();
+      let score = 1;
+
+      if (searchText === query) {
+        score = 0; // Exact match
+      } else if (searchText.startsWith(query)) {
+        score = 0.1; // Starts with
+      } else if (searchText.includes(query)) {
+        score = 0.3; // Contains
+      } else {
+        return null; // No match
+      }
+
+      // Boost certain types
+      if (item.type === 'command') score -= 0.05;
+      if (item.type === 'set') score -= 0.03;
+
+      return { ...item, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.score - b.score);
 }
 
 function searchRecordsPrimary(workbench, query) {
@@ -900,7 +1244,7 @@ function getSourceIcon(filename) {
   return icons[ext] || 'ph-file';
 }
 
-function showSearchResults(results, prefix = '') {
+function showSearchResults(results, prefix = '', query = '') {
   let dropdown = document.getElementById('search-results');
   if (!dropdown) {
     dropdown = document.createElement('div');
@@ -911,27 +1255,142 @@ function showSearchResults(results, prefix = '') {
 
   if (results.length === 0) {
     const prefixInfo = SEARCH_PREFIXES[prefix];
-    const hint = prefixInfo ? `No ${prefixInfo.name} found` : 'No results found';
-    dropdown.innerHTML = `<div class="search-no-results"><i class="ph ph-magnifying-glass"></i><span>${hint}</span></div>`;
-  } else {
-    dropdown.innerHTML = results.map(r => `
-      <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-set-id="${r.setId || ''}" data-action="${r.action || ''}">
-        <i class="ph ${r.icon || 'ph-file'}"></i>
-        <div class="search-result-content">
-          <div class="search-result-title">${escapeHtmlApp(r.title)}</div>
-          <div class="search-result-subtitle">${escapeHtmlApp(r.subtitle)}</div>
+    dropdown.innerHTML = `
+      <div class="search-no-results">
+        <i class="ph ph-magnifying-glass-minus"></i>
+        <div class="search-no-results-text">
+          <strong>${prefixInfo ? `No ${prefixInfo.name} found` : 'No results found'}</strong>
+          <span>Try a different search term${!prefix ? ' or use a prefix' : ''}</span>
         </div>
-        ${r.type === 'command' ? '<kbd class="search-result-kbd">↵</kbd>' : ''}
+        ${!prefix ? `
+          <div class="search-no-results-hints">
+            <span class="hint-chip" data-prefix="@"><kbd>@</kbd> fields</span>
+            <span class="hint-chip" data-prefix="#"><kbd>#</kbd> sets</span>
+            <span class="hint-chip" data-prefix=">"><kbd>></kbd> commands</span>
+          </div>
+        ` : ''}
       </div>
-    `).join('');
+    `;
+
+    dropdown.querySelectorAll('.hint-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const input = document.getElementById('global-search');
+        const newQuery = chip.dataset.prefix + (query || '');
+        input.value = newQuery;
+        handleGlobalSearch(newQuery);
+      });
+    });
+  } else {
+    // Group results by type for unified search (no prefix)
+    let html = '';
+    if (!prefix) {
+      const grouped = groupResultsByType(results);
+      const typeLabels = {
+        command: 'Commands',
+        set: 'Sets',
+        record: 'Records',
+        view: 'Views',
+        field_match: 'Field Matches',
+        source: 'Sources'
+      };
+
+      for (const [type, items] of Object.entries(grouped)) {
+        if (items.length > 0) {
+          html += `<div class="search-results-group">
+            <div class="search-results-group-label">${typeLabels[type] || type}</div>
+            ${items.map(r => renderSearchResultItem(r, query)).join('')}
+          </div>`;
+        }
+      }
+    } else {
+      html = results.map(r => renderSearchResultItem(r, query)).join('');
+    }
+
+    // Add footer with count and keyboard hints
+    html += `
+      <div class="search-results-footer">
+        <span>${results.length} result${results.length !== 1 ? 's' : ''}</span>
+        <span class="search-footer-hint">↑↓ navigate · ↵ select · esc close</span>
+      </div>
+    `;
+
+    dropdown.innerHTML = html;
 
     dropdown.querySelectorAll('.search-result-item').forEach(item => {
       item.addEventListener('click', () => {
         handleSearchResultClick(item);
+        addToSearchHistory(document.getElementById('global-search').value);
       });
     });
   }
   dropdown.style.display = 'block';
+}
+
+// Group results by type
+function groupResultsByType(results) {
+  const grouped = {
+    command: [],
+    set: [],
+    view: [],
+    record: [],
+    field_match: [],
+    source: []
+  };
+
+  results.forEach(r => {
+    if (grouped[r.type]) {
+      grouped[r.type].push(r);
+    }
+  });
+
+  return grouped;
+}
+
+// Render a single search result item with highlighting
+function renderSearchResultItem(r, query = '') {
+  const highlightedTitle = highlightMatch(r.title, query);
+  const highlightedSubtitle = highlightMatch(r.subtitle, query);
+  const typeIcon = getTypeIcon(r.type);
+
+  return `
+    <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-set-id="${r.setId || ''}" data-action="${r.action || ''}">
+      <i class="ph ${r.icon || 'ph-file'}"></i>
+      <div class="search-result-content">
+        <div class="search-result-title">${highlightedTitle}</div>
+        <div class="search-result-subtitle">${highlightedSubtitle}</div>
+      </div>
+      <span class="search-result-type-badge type-${r.type}">${typeIcon}</span>
+      ${r.type === 'command' ? '<kbd class="search-result-kbd">↵</kbd>' : ''}
+    </div>
+  `;
+}
+
+// Highlight matching text
+function highlightMatch(text, query) {
+  if (!text || !query) return escapeHtmlApp(text);
+  const escaped = escapeHtmlApp(text);
+  const queryLower = query.toLowerCase();
+  const textLower = escaped.toLowerCase();
+  const index = textLower.indexOf(queryLower);
+  if (index === -1) return escaped;
+  return escaped.slice(0, index) +
+    '<mark class="search-highlight">' +
+    escaped.slice(index, index + query.length) +
+    '</mark>' +
+    escaped.slice(index + query.length);
+}
+
+// Get icon for result type badge
+function getTypeIcon(type) {
+  const icons = {
+    command: '<i class="ph ph-terminal"></i>',
+    set: '<i class="ph ph-table"></i>',
+    record: '<i class="ph ph-file"></i>',
+    view: '<i class="ph ph-eye"></i>',
+    field_match: '<i class="ph ph-text-aa"></i>',
+    source: '<i class="ph ph-download-simple"></i>'
+  };
+  return icons[type] || '';
 }
 
 function handleSearchResultClick(item) {
@@ -1348,23 +1807,122 @@ function escapeHtmlApp(text) {
 
 const additionalStyles = document.createElement('style');
 additionalStyles.textContent = `
+  /* Search dropdown base */
   .search-results-dropdown {
     position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px;
     background: var(--bg-secondary); border: 1px solid var(--border-primary);
     border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-    max-height: 300px; overflow-y: auto; z-index: 100; display: none;
+    max-height: 400px; overflow-y: auto; z-index: 100; display: none;
   }
+
+  /* Search result items */
   .search-result-item {
     display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
+    border-left: 3px solid transparent; transition: all 0.15s ease;
   }
   .search-result-item:hover { background: var(--bg-hover); }
-  .search-result-item i { font-size: 16px; color: var(--text-muted); width: 20px; }
+  .search-result-item.selected {
+    background: var(--primary-50, rgba(59, 130, 246, 0.1));
+    border-left-color: var(--primary-500, #3b82f6);
+  }
+  .search-result-item > i { font-size: 16px; color: var(--text-muted); width: 20px; flex-shrink: 0; }
   .search-result-content { flex: 1; min-width: 0; }
   .search-result-title { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .search-result-subtitle { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .search-no-results { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; color: var(--text-muted); font-size: 13px; }
-  .search-no-results i { font-size: 24px; }
+  .search-result-kbd { font-size: 10px; padding: 2px 6px; background: var(--bg-tertiary); border-radius: 3px; color: var(--text-muted); }
+  .search-result-type-badge { font-size: 12px; color: var(--text-muted); opacity: 0.7; }
+  .search-highlight { background: var(--warning-100, #fef3c7); color: var(--warning-800, #92400e); padding: 0 2px; border-radius: 2px; }
+
+  /* Results grouping */
+  .search-results-group { border-bottom: 1px solid var(--border-secondary); }
+  .search-results-group:last-of-type { border-bottom: none; }
+  .search-results-group-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-muted); padding: 8px 12px 4px; background: var(--bg-tertiary);
+  }
+
+  /* Results footer */
+  .search-results-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; font-size: 11px; color: var(--text-muted);
+    border-top: 1px solid var(--border-secondary); background: var(--bg-tertiary);
+    position: sticky; bottom: 0;
+  }
+  .search-footer-hint { opacity: 0.7; }
+
+  /* No results state */
+  .search-no-results {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding: 24px 20px; color: var(--text-muted); text-align: center;
+  }
+  .search-no-results > i { font-size: 32px; opacity: 0.5; }
+  .search-no-results-text { display: flex; flex-direction: column; gap: 4px; }
+  .search-no-results-text strong { font-size: 14px; color: var(--text-secondary); }
+  .search-no-results-text span { font-size: 12px; }
+  .search-no-results-hints { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; justify-content: center; }
+  .hint-chip {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+    background: var(--bg-tertiary); border-radius: 12px; font-size: 11px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .hint-chip:hover { background: var(--bg-hover); }
+  .hint-chip kbd { font-size: 10px; font-weight: 600; color: var(--primary-500); }
+
+  /* Search history */
+  .search-history-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px 6px; font-size: 11px; color: var(--text-muted);
+    border-bottom: 1px solid var(--border-secondary);
+  }
+  .search-history-header span { display: flex; align-items: center; gap: 6px; }
+  .search-history-clear {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--text-muted); border-radius: 4px; transition: all 0.15s;
+  }
+  .search-history-clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .search-history-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    cursor: pointer; border-left: 3px solid transparent; transition: all 0.15s;
+  }
+  .search-history-item:hover { background: var(--bg-hover); }
+  .search-history-item.selected {
+    background: var(--primary-50, rgba(59, 130, 246, 0.1));
+    border-left-color: var(--primary-500, #3b82f6);
+  }
+  .search-history-item i { font-size: 14px; color: var(--text-muted); }
+  .search-history-item span { font-size: 13px; color: var(--text-primary); }
+  .search-history-footer {
+    padding: 8px 12px; font-size: 11px; color: var(--text-muted);
+    border-top: 1px solid var(--border-secondary); background: var(--bg-tertiary);
+    text-align: center;
+  }
+
+  /* Search suggestions */
+  .search-suggestions { padding: 12px; }
+  .search-suggestions-title {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    font-weight: 500; color: var(--text-secondary); margin-bottom: 10px;
+  }
+  .search-suggestion-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border-radius: var(--radius-md); cursor: pointer; transition: background 0.15s;
+  }
+  .search-suggestion-item:hover { background: var(--bg-hover); }
+  .search-suggestion-item kbd {
+    min-width: 20px; text-align: center; font-size: 12px; font-weight: 600;
+    color: var(--primary-500); background: var(--primary-50, rgba(59, 130, 246, 0.1));
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .search-suggestion-item span { font-size: 13px; color: var(--text-secondary); }
+  .search-suggestions-hint {
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-secondary);
+    font-size: 11px; color: var(--text-muted); text-align: center;
+  }
+
+  /* Base sidebar search */
   .sidebar-search { position: relative; }
+
+  /* Select dropdown (generic) */
   .select-dropdown { position: absolute; top: 100%; left: 0; min-width: 200px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); z-index: 100; max-height: 200px; overflow-y: auto; }
   .select-option { padding: 8px 12px; cursor: pointer; }
   .select-option:hover { background: var(--bg-hover); }
