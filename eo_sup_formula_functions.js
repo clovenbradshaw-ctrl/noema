@@ -5,6 +5,8 @@
  * combining superposition values within the formula system.
  *
  * PRINCIPLE: Disagreement is preserved, not hidden. User controls when collapse happens.
+ *
+ * Simplified to 22 essential functions across 6 categories.
  */
 
 // ============================================================================
@@ -36,7 +38,7 @@ function createSuperpositionObject(states, options = {}) {
 }
 
 // ============================================================================
-// Part I: Creation Functions
+// Part I: Creation Functions (4)
 // ============================================================================
 
 /**
@@ -125,105 +127,8 @@ function SOURCED(...args) {
   return createSuperpositionObject(states, { sourced: true });
 }
 
-/**
- * UNCERTAIN - Creates superposition representing measurement uncertainty
- * @param {number} centralValue - The central/expected value
- * @param {number} uncertainty - The uncertainty magnitude
- * @param {string} type - Type: "absolute", "percent", or "stddev"
- * @returns {object} Superposition representing uncertainty band
- */
-function UNCERTAIN(centralValue, uncertainty, type = 'absolute') {
-  const central = Number(centralValue);
-  const unc = Number(uncertainty);
-
-  if (isNaN(central)) return null;
-  if (isNaN(unc) || unc === 0) return central;
-
-  let delta;
-  switch (type) {
-    case 'percent':
-      delta = central * (unc / 100);
-      break;
-    case 'stddev':
-      delta = unc;
-      break;
-    case 'absolute':
-    default:
-      delta = unc;
-  }
-
-  const states = [
-    { value: central - delta, label: 'low', probability: 0.25 },
-    { value: central, label: 'central', probability: 0.5 },
-    { value: central + delta, label: 'high', probability: 0.25 }
-  ];
-
-  return createSuperpositionObject(states, {
-    weighted: true,
-    metadata: {
-      uncertainty: { type, magnitude: unc, delta },
-      distribution: type === 'stddev' ? 'normal' : 'uniform'
-    }
-  });
-}
-
-/**
- * RANGE_SUP - Creates superposition from a continuous range (discretized)
- * @param {number} min - Minimum value
- * @param {number} max - Maximum value
- * @param {number} steps - Number of steps (default 3)
- * @returns {object} Superposition of values spanning the range
- */
-function RANGE_SUP(min, max, steps = 3) {
-  const minVal = Number(min);
-  const maxVal = Number(max);
-  const numSteps = Math.max(2, Math.floor(Number(steps)));
-
-  if (isNaN(minVal) || isNaN(maxVal)) return null;
-  if (minVal === maxVal) return minVal;
-
-  const states = [];
-  for (let i = 0; i < numSteps; i++) {
-    const value = minVal + (maxVal - minVal) * (i / (numSteps - 1));
-    states.push({
-      value: value,
-      index: i,
-      probability: 1 / numSteps
-    });
-  }
-
-  return createSuperpositionObject(states, {
-    weighted: true,
-    metadata: { range: { min: minVal, max: maxVal, steps: numSteps } }
-  });
-}
-
-/**
- * SNAPSHOT - Captures current superposition state at a point in time
- * @param {any} superposition - The superposition to snapshot
- * @param {string} label - Optional label for the snapshot
- * @returns {object} Timestamped copy of superposition state
- */
-function SNAPSHOT(superposition, label = null) {
-  if (!isSuperpositionObject(superposition)) {
-    return {
-      _type: 'snapshot',
-      value: superposition,
-      timestamp: Date.now(),
-      label: label
-    };
-  }
-
-  return {
-    _type: 'snapshot',
-    superposition: JSON.parse(JSON.stringify(superposition)),
-    timestamp: Date.now(),
-    label: label
-  };
-}
-
 // ============================================================================
-// Part II: Inspection Functions (Non-Collapsing)
+// Part II: Inspection Functions (8)
 // ============================================================================
 
 /**
@@ -342,110 +247,8 @@ function EXPECTED(superposition) {
   return weightSum > 0 ? sum / weightSum * states.length / states.length : 0;
 }
 
-/**
- * PROBABILITY_OF - Returns probability of a specific value
- * @param {any} superposition - The superposition
- * @param {any} value - The value to find probability of
- * @returns {number} Probability (0-1)
- */
-function PROBABILITY_OF(superposition, value) {
-  if (!isSuperpositionObject(superposition)) {
-    return JSON.stringify(superposition) === JSON.stringify(value) ? 1 : 0;
-  }
-
-  const weights = GET_WEIGHTS(superposition);
-  const states = superposition.states || [];
-  const valueStr = JSON.stringify(value);
-
-  let totalProb = 0;
-  states.forEach((s, i) => {
-    if (JSON.stringify(s.value) === valueStr) {
-      totalProb += weights[i];
-    }
-  });
-
-  return totalProb;
-}
-
-/**
- * VARIANCE - Returns statistical variance of numeric superposition
- * @param {any} superposition - The superposition
- * @returns {number} Variance value
- */
-function VARIANCE(superposition) {
-  if (!isSuperpositionObject(superposition)) return 0;
-
-  const exp = EXPECTED(superposition);
-  const weights = GET_WEIGHTS(superposition);
-  const states = superposition.states || [];
-
-  let variance = 0;
-  states.forEach((s, i) => {
-    const val = Number(s.value);
-    if (!isNaN(val)) {
-      variance += Math.pow(val - exp, 2) * weights[i];
-    }
-  });
-
-  return variance;
-}
-
-/**
- * ENTROPY - Returns information entropy of superposition (uncertainty measure)
- * @param {any} superposition - The superposition
- * @returns {number} Entropy in bits (0 = certain, higher = more uncertain)
- */
-function ENTROPY(superposition) {
-  if (!isSuperpositionObject(superposition)) return 0;
-
-  const weights = GET_WEIGHTS(superposition);
-
-  // Normalize weights if needed
-  const sum = weights.reduce((a, b) => a + b, 0);
-  const probs = sum > 0 ? weights.map(w => w / sum) : weights;
-
-  let entropy = 0;
-  probs.forEach(p => {
-    if (p > 0) {
-      entropy -= p * Math.log2(p);
-    }
-  });
-
-  return entropy;
-}
-
-/**
- * CONFLICT_LEVEL - Returns a measure of how much states disagree (0-1)
- * @param {any} superposition - The superposition
- * @returns {number} 0 (no conflict) to 1 (maximum conflict)
- */
-function CONFLICT_LEVEL(superposition) {
-  if (!isSuperpositionObject(superposition)) return 0;
-
-  const states = superposition.states || [];
-  if (states.length <= 1) return 0;
-
-  const values = states.map(s => JSON.stringify(s.value));
-  const unique = new Set(values);
-
-  if (unique.size === 1) return 0;
-
-  // Normalized: 1 when all different, approaching 0 when mostly same
-  return (unique.size - 1) / (values.length - 1);
-}
-
-/**
- * CONSENSUS - Checks if superposition shows consensus (low spread)
- * @param {any} superposition - The superposition
- * @param {number} threshold - Maximum spread for consensus
- * @returns {boolean} TRUE if spread below threshold
- */
-function CONSENSUS(superposition, threshold) {
-  return SPREAD(superposition) <= Number(threshold);
-}
-
 // ============================================================================
-// Part III: Collapse Functions
+// Part III: Collapse Functions (4)
 // ============================================================================
 
 /**
@@ -525,7 +328,7 @@ function COLLAPSE(superposition, method = 'first') {
  * COLLAPSE_BY_SOURCE - Collapses by selecting value from specified source
  * @param {any} superposition - The superposition
  * @param {string} sourceName - The source to select
- * @returns {any} Value from that source, or error if not found
+ * @returns {any} Value from that source, or first value if not found
  */
 function COLLAPSE_BY_SOURCE(superposition, sourceName) {
   if (!isSuperpositionObject(superposition)) return superposition;
@@ -534,8 +337,7 @@ function COLLAPSE_BY_SOURCE(superposition, sourceName) {
   const match = states.find(s => s.source === sourceName);
 
   if (!match) {
-    // Return first value as fallback, could also throw
-    console.warn(`COLLAPSE_BY_SOURCE: Source '${sourceName}' not found`);
+    // Return first value as fallback
     return states[0]?.value;
   }
 
@@ -574,101 +376,8 @@ function COLLAPSE_WHEN_SINGLE(superposition) {
   return superposition;
 }
 
-/**
- * COALESCE_SUP - Returns first non-superposed value, or collapses first superposition
- * @param {...any} args - Values to coalesce, optionally ending with collapse method
- * @returns {any} First definite value, or collapsed first superposition
- */
-function COALESCE_SUP(...args) {
-  // Check if last arg is a collapse method
-  const methods = ['first', 'last', 'max', 'min', 'random', 'weighted', 'expected', 'majority', 'median'];
-  let method = 'first';
-  let values = args;
-
-  if (args.length > 0 && typeof args[args.length - 1] === 'string' &&
-      methods.includes(args[args.length - 1].toLowerCase())) {
-    method = args[args.length - 1];
-    values = args.slice(0, -1);
-  }
-
-  for (const v of values) {
-    if (v == null) continue;
-    if (!IS_SUPERPOSED(v)) return v;
-  }
-
-  // All superposed or null, collapse first non-null superposition
-  for (const v of values) {
-    if (v != null && isSuperpositionObject(v)) {
-      return COLLAPSE(v, method);
-    }
-  }
-
-  return null;
-}
-
-/**
- * RESOLVE - Interactive collapse, marks superposition as requiring human decision
- * @param {any} superposition - The superposition
- * @param {string} prompt - Prompt for resolution
- * @param {string} resolver - Optional resolver assignment
- * @returns {object} Superposition tagged for resolution
- */
-function RESOLVE(superposition, prompt, resolver = null) {
-  if (!isSuperpositionObject(superposition)) return superposition;
-
-  return {
-    ...superposition,
-    needsResolution: true,
-    resolutionPrompt: prompt,
-    assignedResolver: resolver,
-    resolutionRequested: Date.now()
-  };
-}
-
-/**
- * TIMEOUT - Auto-collapses after duration if not manually resolved
- * @param {any} superposition - The superposition
- * @param {number|string} duration - Duration in ms or string like "7 days"
- * @param {string} fallbackMethod - Method to use for auto-collapse
- * @returns {object} Superposition that auto-collapses
- */
-function TIMEOUT(superposition, duration, fallbackMethod = 'first') {
-  if (!isSuperpositionObject(superposition)) return superposition;
-
-  let durationMs;
-  if (typeof duration === 'string') {
-    // Parse duration strings like "7 days", "24 hours"
-    const match = duration.match(/(\d+)\s*(day|hour|minute|second|ms)?s?/i);
-    if (match) {
-      const num = parseInt(match[1]);
-      const unit = (match[2] || 'ms').toLowerCase();
-      const multipliers = {
-        'ms': 1,
-        'second': 1000,
-        'minute': 60000,
-        'hour': 3600000,
-        'day': 86400000
-      };
-      durationMs = num * (multipliers[unit] || 1);
-    } else {
-      durationMs = parseInt(duration) || 86400000; // Default 24 hours
-    }
-  } else {
-    durationMs = Number(duration) || 86400000;
-  }
-
-  return {
-    ...superposition,
-    timeout: {
-      deadline: Date.now() + durationMs,
-      method: fallbackMethod,
-      duration: durationMs
-    }
-  };
-}
-
 // ============================================================================
-// Part IV: Combination Functions
+// Part IV: Combination Functions (3)
 // ============================================================================
 
 /**
@@ -746,58 +455,8 @@ function DIFF_SUP(sup1, sup2) {
   return createSuperpositionObject(diffStates);
 }
 
-/**
- * PRODUCT_SUP - Cartesian product of superpositions, all combinations
- * @param {any} sup1 - First superposition
- * @param {any} sup2 - Second superposition
- * @param {function} combiner - Optional combiner function (default creates tuple)
- * @returns {object} Superposition of all combinations
- */
-function PRODUCT_SUP(sup1, sup2, combiner = null) {
-  const vals1 = GET_STATES(sup1);
-  const vals2 = GET_STATES(sup2);
-  const combineFn = combiner || ((a, b) => [a, b]);
-
-  const states = [];
-  for (const v1 of vals1) {
-    for (const v2 of vals2) {
-      states.push({ value: combineFn(v1, v2) });
-    }
-  }
-
-  if (states.length === 0) return null;
-  if (states.length === 1) return states[0].value;
-
-  return createSuperpositionObject(states);
-}
-
-/**
- * ZIP_SUP - Pairs states by position
- * @param {any} sup1 - First superposition
- * @param {any} sup2 - Second superposition
- * @param {function} combiner - Optional combiner function
- * @returns {object} Superposition of paired states
- */
-function ZIP_SUP(sup1, sup2, combiner = null) {
-  const vals1 = GET_STATES(sup1);
-  const vals2 = GET_STATES(sup2);
-  const combineFn = combiner || ((a, b) => [a, b]);
-
-  const len = Math.min(vals1.length, vals2.length);
-  const states = [];
-
-  for (let i = 0; i < len; i++) {
-    states.push({ value: combineFn(vals1[i], vals2[i]) });
-  }
-
-  if (states.length === 0) return null;
-  if (states.length === 1) return states[0].value;
-
-  return createSuperpositionObject(states);
-}
-
 // ============================================================================
-// Part V: Propagation Functions
+// Part V: Propagation Functions (3)
 // ============================================================================
 
 /**
@@ -867,175 +526,8 @@ function REDUCE_SUP(superposition, reducer, initial) {
   return values.reduce(reducer, initial);
 }
 
-/**
- * PROPAGATE - Controls how superposition flows through a formula
- * @param {any} superposition - The superposition
- * @param {function} fn - Transform function
- * @param {string} mode - Mode: "expand", "collapse_first", "parallel", "expected"
- * @returns {any|object} Result based on mode
- */
-function PROPAGATE(superposition, fn, mode = 'expand') {
-  switch (mode.toLowerCase()) {
-    case 'expand':
-    case 'parallel':
-      return MAP_SUP(superposition, fn);
-
-    case 'collapse_first':
-      return fn(COLLAPSE(superposition, 'first'));
-
-    case 'expected':
-      return fn(EXPECTED(superposition));
-
-    default:
-      return MAP_SUP(superposition, fn);
-  }
-}
-
 // ============================================================================
-// Part VI: Stabilization Functions
-// ============================================================================
-
-/**
- * HOLD - Prevents accidental collapse, superposition must be explicitly collapsed
- * @param {any} superposition - The superposition to protect
- * @returns {object} Protected superposition
- */
-function HOLD(superposition) {
-  if (!isSuperpositionObject(superposition)) return superposition;
-
-  return {
-    ...superposition,
-    held: true
-  };
-}
-
-/**
- * DEFER - Marks superposition for later resolution
- * @param {any} superposition - The superposition
- * @param {any} until - Condition or date for resolution
- * @returns {object} Deferred superposition
- */
-function DEFER(superposition, until) {
-  if (!isSuperpositionObject(superposition)) return superposition;
-
-  return {
-    ...superposition,
-    deferred: true,
-    deferredUntil: until
-  };
-}
-
-/**
- * REQUIRE_RESOLUTION - Marks superposition as blocking
- * @param {any} superposition - The superposition
- * @param {string} message - Blocking message
- * @returns {object} Blocking superposition
- */
-function REQUIRE_RESOLUTION(superposition, message) {
-  if (!isSuperpositionObject(superposition)) return superposition;
-
-  return {
-    ...superposition,
-    blocking: true,
-    blockingMessage: message
-  };
-}
-
-// ============================================================================
-// Part VII: Comparison & Analysis Functions
-// ============================================================================
-
-/**
- * COMPARE_SUP - Compares two superpositions for similarity
- * @param {any} sup1 - First superposition
- * @param {any} sup2 - Second superposition
- * @returns {object} Object with overlap, difference metrics
- */
-function COMPARE_SUP(sup1, sup2) {
-  const vals1 = GET_STATES(sup1).map(v => JSON.stringify(v));
-  const vals2 = GET_STATES(sup2).map(v => JSON.stringify(v));
-
-  const set1 = new Set(vals1);
-  const set2 = new Set(vals2);
-
-  const intersection = [...set1].filter(v => set2.has(v));
-  const union = new Set([...set1, ...set2]);
-  const onlyIn1 = [...set1].filter(v => !set2.has(v));
-  const onlyIn2 = [...set2].filter(v => !set1.has(v));
-
-  return {
-    overlap: intersection.length / union.size,
-    common: intersection.map(v => JSON.parse(v)),
-    added: onlyIn2.map(v => JSON.parse(v)),
-    removed: onlyIn1.map(v => JSON.parse(v)),
-    count1: vals1.length,
-    count2: vals2.length
-  };
-}
-
-/**
- * DIVERGENCE - Measures how different two superpositions are
- * @param {any} sup1 - First superposition
- * @param {any} sup2 - Second superposition
- * @param {string} method - Method: "jaccard", "kl", "cosine"
- * @returns {number} Divergence score (0 = identical)
- */
-function DIVERGENCE(sup1, sup2, method = 'jaccard') {
-  const comparison = COMPARE_SUP(sup1, sup2);
-
-  switch (method.toLowerCase()) {
-    case 'jaccard':
-      // Jaccard distance = 1 - Jaccard similarity
-      return 1 - comparison.overlap;
-
-    case 'cosine':
-    case 'kl':
-      // Simplified: use proportion of non-overlapping elements
-      const total = comparison.count1 + comparison.count2;
-      const diff = comparison.added.length + comparison.removed.length;
-      return total > 0 ? diff / total : 0;
-
-    default:
-      return 1 - comparison.overlap;
-  }
-}
-
-/**
- * OUTLIERS - Identifies states that are statistical outliers
- * @param {any} superposition - The superposition
- * @param {number} threshold - IQR multiplier (default 1.5)
- * @returns {object} Superposition of outlier states only
- */
-function OUTLIERS(superposition, threshold = 1.5) {
-  const values = GET_STATES(superposition);
-  const nums = values
-    .map((v, i) => ({ value: Number(v), index: i, original: v }))
-    .filter(x => !isNaN(x.value))
-    .sort((a, b) => a.value - b.value);
-
-  if (nums.length < 4) return null; // Need enough data for IQR
-
-  const q1Idx = Math.floor(nums.length * 0.25);
-  const q3Idx = Math.floor(nums.length * 0.75);
-  const q1 = nums[q1Idx].value;
-  const q3 = nums[q3Idx].value;
-  const iqr = q3 - q1;
-
-  const lowerBound = q1 - threshold * iqr;
-  const upperBound = q3 + threshold * iqr;
-
-  const outliers = nums
-    .filter(x => x.value < lowerBound || x.value > upperBound)
-    .map(x => ({ value: x.original }));
-
-  if (outliers.length === 0) return null;
-  if (outliers.length === 1) return outliers[0].value;
-
-  return createSuperpositionObject(outliers);
-}
-
-// ============================================================================
-// Part VIII: Display & Formatting Functions
+// Part VI: Display & Formatting Functions (2)
 // ============================================================================
 
 /**
@@ -1121,16 +613,13 @@ function SUMMARIZE_SUP(superposition) {
  * All SUP formula functions for registration with formula evaluator
  */
 const SUPFormulaFunctions = {
-  // Creation
+  // Creation (4)
   SUPERPOSE,
   SUPERPOSE_IF,
   WEIGHTED,
   SOURCED,
-  UNCERTAIN,
-  RANGE_SUP,
-  SNAPSHOT,
 
-  // Inspection
+  // Inspection (8)
   IS_SUPERPOSED,
   COUNT_STATES,
   GET_STATES,
@@ -1139,45 +628,24 @@ const SUPFormulaFunctions = {
   GET_SOURCES,
   SPREAD,
   EXPECTED,
-  PROBABILITY_OF,
-  VARIANCE,
-  ENTROPY,
-  CONFLICT_LEVEL,
-  CONSENSUS,
 
-  // Collapse
+  // Collapse (4)
   COLLAPSE,
   COLLAPSE_BY_SOURCE,
   COLLAPSE_IF,
   COLLAPSE_WHEN_SINGLE,
-  COALESCE_SUP,
-  RESOLVE,
-  TIMEOUT,
 
-  // Combination
+  // Combination (3)
   UNION_SUP,
   INTERSECT_SUP,
   DIFF_SUP,
-  PRODUCT_SUP,
-  ZIP_SUP,
 
-  // Propagation
+  // Propagation (3)
   MAP_SUP,
   FILTER_SUP,
   REDUCE_SUP,
-  PROPAGATE,
 
-  // Stabilization
-  HOLD,
-  DEFER,
-  REQUIRE_RESOLUTION,
-
-  // Comparison
-  COMPARE_SUP,
-  DIVERGENCE,
-  OUTLIERS,
-
-  // Display
+  // Display (2)
   FORMAT_SUP,
   SUMMARIZE_SUP
 };
@@ -1189,16 +657,13 @@ const SUPFunctionDefinitions = {
   name: 'Superposition',
   icon: 'ph-git-fork',
   functions: [
-    // Creation
+    // Creation (4)
     { name: 'SUPERPOSE', syntax: 'SUPERPOSE(value1, value2, [...])', description: 'Hold multiple values without resolution' },
     { name: 'SUPERPOSE_IF', syntax: 'SUPERPOSE_IF(value1, value2, [...])', description: 'Superpose only if values differ' },
     { name: 'WEIGHTED', syntax: 'WEIGHTED(value1, weight1, [...])', description: 'Superposition with probabilities' },
     { name: 'SOURCED', syntax: 'SOURCED(value1, source1, [...])', description: 'Superposition with source attribution' },
-    { name: 'UNCERTAIN', syntax: 'UNCERTAIN(value, uncertainty, [type])', description: 'Measurement with error margin' },
-    { name: 'RANGE_SUP', syntax: 'RANGE_SUP(min, max, [steps])', description: 'Discretized range superposition' },
-    { name: 'SNAPSHOT', syntax: 'SNAPSHOT(superposition, [label])', description: 'Capture superposition state' },
 
-    // Inspection
+    // Inspection (8)
     { name: 'IS_SUPERPOSED', syntax: 'IS_SUPERPOSED(value)', description: 'Check if value is superposed' },
     { name: 'COUNT_STATES', syntax: 'COUNT_STATES(superposition)', description: 'Count states in superposition' },
     { name: 'GET_STATES', syntax: 'GET_STATES(superposition)', description: 'Extract all values as array' },
@@ -1207,45 +672,24 @@ const SUPFunctionDefinitions = {
     { name: 'GET_SOURCES', syntax: 'GET_SOURCES(superposition)', description: 'Extract sources as array' },
     { name: 'SPREAD', syntax: 'SPREAD(superposition)', description: 'Range of numeric superposition' },
     { name: 'EXPECTED', syntax: 'EXPECTED(superposition)', description: 'Weighted expected value' },
-    { name: 'PROBABILITY_OF', syntax: 'PROBABILITY_OF(superposition, value)', description: 'Probability of specific value' },
-    { name: 'VARIANCE', syntax: 'VARIANCE(superposition)', description: 'Statistical variance' },
-    { name: 'ENTROPY', syntax: 'ENTROPY(superposition)', description: 'Information entropy in bits' },
-    { name: 'CONFLICT_LEVEL', syntax: 'CONFLICT_LEVEL(superposition)', description: 'Disagreement measure (0-1)' },
-    { name: 'CONSENSUS', syntax: 'CONSENSUS(superposition, threshold)', description: 'Check if spread below threshold' },
 
-    // Collapse
+    // Collapse (4)
     { name: 'COLLAPSE', syntax: 'COLLAPSE(superposition, method)', description: 'Force resolution to single value' },
     { name: 'COLLAPSE_BY_SOURCE', syntax: 'COLLAPSE_BY_SOURCE(superposition, source)', description: 'Select value by source' },
     { name: 'COLLAPSE_IF', syntax: 'COLLAPSE_IF(superposition, condition, method)', description: 'Conditional collapse' },
     { name: 'COLLAPSE_WHEN_SINGLE', syntax: 'COLLAPSE_WHEN_SINGLE(superposition)', description: 'Collapse only if unanimous' },
-    { name: 'COALESCE_SUP', syntax: 'COALESCE_SUP(value1, [...], method)', description: 'First definite value' },
-    { name: 'RESOLVE', syntax: 'RESOLVE(superposition, prompt, [resolver])', description: 'Mark for human resolution' },
-    { name: 'TIMEOUT', syntax: 'TIMEOUT(superposition, duration, method)', description: 'Auto-collapse after time' },
 
-    // Combination
+    // Combination (3)
     { name: 'UNION_SUP', syntax: 'UNION_SUP(sup1, sup2, [...])', description: 'Combine keeping all unique states' },
     { name: 'INTERSECT_SUP', syntax: 'INTERSECT_SUP(sup1, sup2, [...])', description: 'Keep common states only' },
     { name: 'DIFF_SUP', syntax: 'DIFF_SUP(sup1, sup2)', description: 'States in first not in second' },
-    { name: 'PRODUCT_SUP', syntax: 'PRODUCT_SUP(sup1, sup2, [combiner])', description: 'Cartesian product' },
-    { name: 'ZIP_SUP', syntax: 'ZIP_SUP(sup1, sup2, [combiner])', description: 'Pair states by position' },
 
-    // Propagation
+    // Propagation (3)
     { name: 'MAP_SUP', syntax: 'MAP_SUP(superposition, transform)', description: 'Apply function to each state' },
     { name: 'FILTER_SUP', syntax: 'FILTER_SUP(superposition, predicate)', description: 'Keep matching states' },
     { name: 'REDUCE_SUP', syntax: 'REDUCE_SUP(superposition, reducer, initial)', description: 'Reduce to single value' },
-    { name: 'PROPAGATE', syntax: 'PROPAGATE(superposition, formula, mode)', description: 'Control flow through formula' },
 
-    // Stabilization
-    { name: 'HOLD', syntax: 'HOLD(superposition)', description: 'Prevent accidental collapse' },
-    { name: 'DEFER', syntax: 'DEFER(superposition, until)', description: 'Mark for later resolution' },
-    { name: 'REQUIRE_RESOLUTION', syntax: 'REQUIRE_RESOLUTION(superposition, message)', description: 'Mark as blocking' },
-
-    // Comparison
-    { name: 'COMPARE_SUP', syntax: 'COMPARE_SUP(sup1, sup2)', description: 'Compare for similarity' },
-    { name: 'DIVERGENCE', syntax: 'DIVERGENCE(sup1, sup2, [method])', description: 'Measure difference' },
-    { name: 'OUTLIERS', syntax: 'OUTLIERS(superposition, [threshold])', description: 'Identify statistical outliers' },
-
-    // Display
+    // Display (2)
     { name: 'FORMAT_SUP', syntax: 'FORMAT_SUP(superposition, format)', description: 'Format for display' },
     { name: 'SUMMARIZE_SUP', syntax: 'SUMMARIZE_SUP(superposition)', description: 'Human-readable summary' }
   ]
