@@ -35124,13 +35124,12 @@ class EODataWorkbench {
    * @param {Function|null} callback - Callback when changing an existing field's type
    */
   _showFormulaEditor(field, callback = null) {
-    // Use V3 EO-native editor if available, fallback to V2
-    if (!this.formulaEditor) {
-      if (window.EOFormulaEditorV3) {
-        this.formulaEditor = new EOFormulaEditorV3(this);
-      } else {
-        this.formulaEditor = new EOFormulaEditor(this);
-      }
+    // Always use V3 EO-native editor if available (preferred), fallback to V2
+    // Create fresh instance each time to ensure latest version is used
+    if (window.EOFormulaEditorV3) {
+      this.formulaEditor = new EOFormulaEditorV3(this);
+    } else {
+      this.formulaEditor = new EOFormulaEditor(this);
     }
 
     if (field) {
