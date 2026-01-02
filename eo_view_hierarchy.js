@@ -161,6 +161,9 @@ class ProjectConfig {
     this.definitionIds = options.definitionIds || []; // Owned definitions
     this.exportIds = options.exportIds || [];
 
+    // Folder nesting - allows projects to be nested within other projects
+    this.parentId = options.parentId || null; // Parent project ID for nesting
+
     // Workspaces within this project (optional - for sub-organization)
     this.workspaceIds = options.workspaceIds || [];
 

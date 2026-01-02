@@ -1827,6 +1827,7 @@ class EODataWorkbench {
       createdAt: timestamp,
       updatedAt: timestamp,
       status: 'active',
+      isSample: true, // Flag to identify sample data - can only be cleared via Clear Sample Data
       getItemCount() {
         return (this.sourceIds?.length || 0) + (this.setIds?.length || 0) +
                (this.definitionIds?.length || 0) + (this.exportIds?.length || 0);
@@ -2076,6 +2077,7 @@ class EODataWorkbench {
       },
       derivedSetIds: [],
       status: 'active',
+      isSample: true, // Flag to identify sample data - can only be cleared via Clear Sample Data
       importedAt: timestamp,
       createdAt: timestamp
     };
@@ -2208,6 +2210,9 @@ class EODataWorkbench {
       origin: 'sample',
       provenance: source.provenance
     };
+
+    // Mark set as sample data - can only be cleared via Clear Sample Data
+    set.isSample = true;
 
     // Step 5: Create record type views (lenses) for each subtype
     // Each lens filters to a specific type and shows only relevant fields
@@ -6260,7 +6265,7 @@ class EODataWorkbench {
 
     // "All Items" option to show everything without project filter
     const allSourcesCount = this.sources.filter(s => s.status !== 'archived').length;
-    const allSetsCount = this.sets.length;
+    const allSetsCount = this.sets.filter(s => s.status !== 'archived').length;
     const allDefinitionsCount = this.definitions.filter(d => d.status !== 'archived').length;
     const allExportsCount = this.exports.length;
     const totalItemCount = allSourcesCount + allSetsCount + allDefinitionsCount + allExportsCount;
@@ -6276,23 +6281,41 @@ class EODataWorkbench {
       </div>
     `;
 
-    // Render each project with nested content
+    // Separate top-level projects from nested ones
+    const topLevelProjects = sortedProjects.filter(p => !p.parentId);
+    const projectsByParent = {};
+
+    // Build a map of child projects by parent ID
     for (const project of sortedProjects) {
+      if (project.parentId) {
+        if (!projectsByParent[project.parentId]) {
+          projectsByParent[project.parentId] = [];
+        }
+        projectsByParent[project.parentId].push(project);
+      }
+    }
+
+    // Recursive function to render a project and its children
+    const renderProjectTree = (project, depth = 0) => {
       const isActiveProject = this.currentProjectId === project.id;
       const isExpanded = this.expandedProjects?.[project.id] ?? isActiveProject;
+      const childProjects = projectsByParent[project.id] || [];
+      const hasChildren = childProjects.length > 0;
 
       // Get project's content
       const projectSources = this.sources.filter(s =>
         s.status !== 'archived' && project.sourceIds?.includes(s.id)
       );
-      const projectSets = this.sets.filter(s => project.setIds?.includes(s.id));
+      const projectSets = this.sets.filter(s =>
+        s.status !== 'archived' && project.setIds?.includes(s.id)
+      );
       const projectDefinitions = this.definitions.filter(d =>
         d.status !== 'archived' && project.definitionIds?.includes(d.id)
       );
       const projectExports = this.exports.filter(e => project.exportIds?.includes(e.id));
 
       const projectItemCount = projectSources.length + projectSets.length +
-                               projectDefinitions.length + projectExports.length;
+                               projectDefinitions.length + projectExports.length + childProjects.length;
 
       // Render nested Sources section
       const sourcesHtml = this._renderNestedSources(projectSources, project.id, viewTypeIcons);
@@ -6306,9 +6329,34 @@ class EODataWorkbench {
       // Render nested Exports section
       const exportsHtml = this._renderNestedExports(projectExports, project.id);
 
-      html += `
-        <div class="project-tree-item ${isActiveProject ? 'active' : ''} ${isExpanded ? 'expanded' : ''}"
-             data-project-id="${project.id}">
+      // Check if this is a sample project
+      const sampleBadge = project.isSample ? '<span class="sample-badge" title="Sample data - clear via Settings">Sample</span>' : '';
+
+      // Recursively render child projects
+      let childProjectsHtml = '';
+      if (hasChildren) {
+        childProjectsHtml = `
+          <div class="project-section subprojects-section ${isExpanded ? 'expanded' : ''}"
+               data-section="subprojects" data-project-id="${project.id}">
+            <div class="project-section-header" data-section="subprojects" data-project-id="${project.id}">
+              <i class="ph ph-caret-right section-expand-icon"></i>
+              <i class="ph ph-folders section-icon"></i>
+              <span class="section-title">Sub-projects</span>
+              <span class="section-count">${childProjects.length}</span>
+            </div>
+            <div class="project-section-content subprojects-content">
+              ${childProjects.map(child => renderProjectTree(child, depth + 1)).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      const nestedClass = depth > 0 ? 'nested-project' : '';
+      const indentStyle = depth > 0 ? `style="margin-left: ${depth * 8}px"` : '';
+
+      return `
+        <div class="project-tree-item ${isActiveProject ? 'active' : ''} ${isExpanded ? 'expanded' : ''} ${project.isSample ? 'sample-project' : ''} ${nestedClass}"
+             data-project-id="${project.id}" data-depth="${depth}" ${indentStyle}>
           <div class="project-tree-header"
                data-project-id="${project.id}"
                title="${this._escapeHtml(project.description || project.name)}">
@@ -6317,10 +6365,12 @@ class EODataWorkbench {
             </div>
             <span class="project-color-dot" style="background-color: ${project.color || '#3B82F6'}"></span>
             <i class="ph ${project.icon || 'ph-folder-simple-dashed'} project-icon"></i>
-            <span class="project-name">${this._escapeHtml(this._truncateName(project.name, 18))}</span>
+            <span class="project-name">${this._escapeHtml(this._truncateName(project.name, 18 - depth * 2))}</span>
+            ${sampleBadge}
             <span class="project-item-count">${projectItemCount}</span>
           </div>
           <div class="project-tree-content">
+            ${childProjectsHtml}
             ${sourcesHtml}
             ${setsHtml}
             ${definitionsHtml}
@@ -6328,7 +6378,16 @@ class EODataWorkbench {
           </div>
         </div>
       `;
+    };
+
+    // Render top-level projects (those without parentId)
+    for (const project of topLevelProjects) {
+      html += renderProjectTree(project, 0);
     }
+
+    // Add Archive section if there are archived items
+    const archivedHtml = this._renderArchivedSection();
+    html += archivedHtml;
 
     container.innerHTML = html;
 
@@ -6848,6 +6907,123 @@ class EODataWorkbench {
         this._showExportContextMenu(e, item.dataset.exportId);
       });
     });
+
+    // Archive section handlers
+    container.querySelectorAll('.archived-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const type = item.dataset.type;
+        const id = item.dataset.id;
+
+        // Show unarchive confirmation
+        const name = item.querySelector('.archived-item-name')?.textContent || 'this item';
+        if (confirm(`Restore "${name}" from archive?`)) {
+          switch (type) {
+            case 'project':
+              this._unarchiveProject(id);
+              break;
+            case 'source':
+              this._unarchiveSource(id);
+              break;
+            case 'set':
+              this._unarchiveSet(id);
+              break;
+            case 'definition':
+              this._unarchiveDefinition(id);
+              break;
+          }
+        }
+      });
+    });
+
+    // Archive section header toggle
+    container.querySelector('.archive-section-header')?.addEventListener('click', (e) => {
+      const section = e.target.closest('.archive-section');
+      if (section) {
+        const isExpanded = section.classList.contains('expanded');
+        section.classList.toggle('expanded');
+        this.archiveSectionExpanded = !isExpanded;
+      }
+    });
+  }
+
+  /**
+   * Render the Archive section showing archived items
+   */
+  _renderArchivedSection() {
+    // Count archived items
+    const archivedProjects = this.projects?.filter(p => p.status === 'archived' && !p.isSample) || [];
+    const archivedSources = this.sources?.filter(s => s.status === 'archived' && !s.isSample) || [];
+    const archivedSets = this.sets?.filter(s => s.status === 'archived' && !s.isSample) || [];
+    const archivedDefinitions = this.definitions?.filter(d => d.status === 'archived') || [];
+
+    const totalArchived = archivedProjects.length + archivedSources.length + archivedSets.length + archivedDefinitions.length;
+
+    if (totalArchived === 0) {
+      return '';
+    }
+
+    const isExpanded = this.archiveSectionExpanded ?? false;
+
+    let archivedItemsHtml = '';
+
+    // Archived Projects
+    for (const project of archivedProjects) {
+      archivedItemsHtml += `
+        <div class="archived-item" data-type="project" data-id="${project.id}" title="Click to restore">
+          <i class="ph ph-folder-simple-dashed"></i>
+          <span class="archived-item-name">${this._escapeHtml(project.name)}</span>
+          <span class="archived-item-type">Project</span>
+        </div>
+      `;
+    }
+
+    // Archived Sources
+    for (const source of archivedSources) {
+      archivedItemsHtml += `
+        <div class="archived-item" data-type="source" data-id="${source.id}" title="Click to restore">
+          <i class="ph ph-file-text"></i>
+          <span class="archived-item-name">${this._escapeHtml(source.name)}</span>
+          <span class="archived-item-type">Source</span>
+        </div>
+      `;
+    }
+
+    // Archived Sets
+    for (const set of archivedSets) {
+      archivedItemsHtml += `
+        <div class="archived-item" data-type="set" data-id="${set.id}" title="Click to restore">
+          <i class="ph ph-table"></i>
+          <span class="archived-item-name">${this._escapeHtml(set.name)}</span>
+          <span class="archived-item-type">Set</span>
+        </div>
+      `;
+    }
+
+    // Archived Definitions
+    for (const def of archivedDefinitions) {
+      archivedItemsHtml += `
+        <div class="archived-item" data-type="definition" data-id="${def.id}" title="Click to restore">
+          <i class="ph ph-book-open-text"></i>
+          <span class="archived-item-name">${this._escapeHtml(def.name)}</span>
+          <span class="archived-item-type">Definition</span>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="archive-section ${isExpanded ? 'expanded' : ''}">
+        <div class="archive-section-header">
+          <i class="ph ph-caret-right section-expand-icon"></i>
+          <i class="ph ph-archive"></i>
+          <span>Archive</span>
+          <span class="archive-count">${totalArchived}</span>
+        </div>
+        <div class="archive-section-content">
+          ${archivedItemsHtml}
+        </div>
+      </div>
+    `;
   }
 
   /**
@@ -7394,12 +7570,42 @@ class EODataWorkbench {
       },
       { divider: true },
       {
+        label: 'Create Sub-project',
+        icon: 'ph-folder-plus',
+        action: () => this._showNewProjectModal(projectId)
+      },
+      {
+        label: 'Move to...',
+        icon: 'ph-arrow-square-out',
+        action: () => this._showMoveProjectModal(projectId)
+      },
+      { divider: true }
+    ];
+
+    // Sample data can only be cleared via Settings > Clear Sample Data
+    if (project.isSample) {
+      menuItems.push({
+        label: 'Sample Data (use Settings to clear)',
+        icon: 'ph-flask',
+        disabled: true,
+        action: () => {
+          this._showToast('Sample data can only be cleared via Settings → Clear Sample Data', 'info');
+        }
+      });
+    } else {
+      menuItems.push({
         label: 'Archive Project',
         icon: 'ph-archive',
         danger: true,
         action: () => this._archiveProject(projectId)
-      }
-    ];
+      });
+      menuItems.push({
+        label: 'Delete Project',
+        icon: 'ph-trash',
+        danger: true,
+        action: () => this._deleteProject(projectId)
+      });
+    }
 
     this._showContextMenu(e, menuItems);
   }
@@ -7407,7 +7613,7 @@ class EODataWorkbench {
   /**
    * Show modal for creating a new project
    */
-  _showNewProjectModal() {
+  _showNewProjectModal(defaultParentId = null) {
     const modal = document.getElementById('modal-overlay');
     const modalTitle = modal?.querySelector('.modal-title');
     const modalBody = document.getElementById('modal-body');
@@ -7426,6 +7632,16 @@ class EODataWorkbench {
       '#84CC16', // Lime
     ];
 
+    // Get available parent projects (exclude sample and archived)
+    const availableParents = (this.projects || []).filter(p =>
+      p.status !== 'archived' && !p.isSample
+    );
+
+    // Build parent project options
+    const parentOptions = availableParents.map(p =>
+      `<option value="${p.id}" ${p.id === defaultParentId ? 'selected' : ''}>${this._escapeHtml(p.name)}</option>`
+    ).join('');
+
     modalTitle.textContent = 'New Project';
     modalBody.innerHTML = `
       <div class="form-group">
@@ -7435,6 +7651,14 @@ class EODataWorkbench {
       <div class="form-group">
         <label class="form-label">Description (optional)</label>
         <textarea id="new-project-description" class="form-textarea" rows="2" placeholder="What is this project about?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Parent Folder (optional)</label>
+        <select id="new-project-parent" class="form-input">
+          <option value="">None (top-level project)</option>
+          ${parentOptions}
+        </select>
+        <span class="form-hint">Nest this project inside another project</span>
       </div>
       <div class="form-group">
         <label class="form-label">Color</label>
@@ -7476,6 +7700,7 @@ class EODataWorkbench {
     confirmBtn.addEventListener('click', () => {
       const name = document.getElementById('new-project-name').value.trim();
       const description = document.getElementById('new-project-description').value.trim();
+      const parentId = document.getElementById('new-project-parent').value || null;
 
       if (!name) {
         this._showToast('Please enter a project name', 'error');
@@ -7485,7 +7710,8 @@ class EODataWorkbench {
       this._createProject({
         name,
         description,
-        color: selectedColor
+        color: selectedColor,
+        parentId
       });
 
       modal.classList.remove('active');
@@ -7513,6 +7739,7 @@ class EODataWorkbench {
       description: config.description || '',
       icon: config.icon || 'ph-folder-simple-dashed',
       color: config.color || '#3B82F6',
+      parentId: config.parentId || null, // Parent project for nesting
       sourceIds: [],
       setIds: [],
       definitionIds: [],
@@ -7575,13 +7802,113 @@ class EODataWorkbench {
   }
 
   /**
+   * Show modal to move a project to a different parent
+   */
+  _showMoveProjectModal(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const modal = document.getElementById('modal-overlay');
+    const modalTitle = modal?.querySelector('.modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const modalFooter = document.getElementById('modal-footer');
+    if (!modal || !modalBody) return;
+
+    // Get all projects that can be parents (exclude self, descendants, sample, and archived)
+    const descendants = this._getProjectDescendants(projectId);
+    const availableParents = (this.projects || []).filter(p =>
+      p.id !== projectId &&
+      !descendants.includes(p.id) &&
+      p.status !== 'archived' &&
+      !p.isSample
+    );
+
+    // Build parent project options
+    const parentOptions = availableParents.map(p => {
+      const indent = this._getProjectDepth(p.id);
+      const prefix = '—'.repeat(indent);
+      return `<option value="${p.id}" ${p.id === project.parentId ? 'selected' : ''}>${prefix}${prefix ? ' ' : ''}${this._escapeHtml(p.name)}</option>`;
+    }).join('');
+
+    modalTitle.textContent = `Move "${project.name}"`;
+    modalBody.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Move to</label>
+        <select id="move-project-parent" class="form-input">
+          <option value="" ${!project.parentId ? 'selected' : ''}>Top level (no parent)</option>
+          ${parentOptions}
+        </select>
+      </div>
+    `;
+
+    modalFooter.innerHTML = `
+      <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Move</button>
+    `;
+
+    modal.classList.add('active');
+
+    // Handle confirm
+    document.getElementById('modal-confirm').addEventListener('click', () => {
+      const newParentId = document.getElementById('move-project-parent').value || null;
+
+      if (newParentId === project.parentId) {
+        modal.classList.remove('active');
+        return;
+      }
+
+      project.parentId = newParentId;
+      project.updatedAt = new Date().toISOString();
+
+      modal.classList.remove('active');
+      this._renderSidebar();
+      this._saveData();
+      this._showToast(`Moved "${project.name}"`, 'success');
+    });
+
+    document.getElementById('modal-cancel').addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
+  }
+
+  /**
+   * Get all descendant project IDs of a given project
+   */
+  _getProjectDescendants(projectId) {
+    const descendants = [];
+    const children = this.projects.filter(p => p.parentId === projectId);
+
+    for (const child of children) {
+      descendants.push(child.id);
+      descendants.push(...this._getProjectDescendants(child.id));
+    }
+
+    return descendants;
+  }
+
+  /**
+   * Get the depth of a project in the hierarchy
+   */
+  _getProjectDepth(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project || !project.parentId) return 0;
+    return 1 + this._getProjectDepth(project.parentId);
+  }
+
+  /**
    * Archive a project
    */
   _archiveProject(projectId) {
     const project = this.projects.find(p => p.id === projectId);
     if (!project) return;
 
-    if (!confirm(`Archive project "${project.name}"? Items in this project will still be accessible under "All Items".`)) {
+    // Sample data cannot be archived
+    if (project.isSample) {
+      this._showToast('Sample data can only be cleared via Settings → Clear Sample Data', 'info');
+      return;
+    }
+
+    if (!confirm(`Archive project "${project.name}"? You can restore it from the Archive section.`)) {
       return;
     }
 
@@ -7597,6 +7924,196 @@ class EODataWorkbench {
     this._updateBreadcrumb();
     this._saveData();
     this._showToast(`Archived project "${project.name}"`, 'success');
+  }
+
+  /**
+   * Delete a project permanently
+   */
+  _deleteProject(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    // Sample data cannot be deleted via context menu
+    if (project.isSample) {
+      this._showToast('Sample data can only be cleared via Settings → Clear Sample Data', 'info');
+      return;
+    }
+
+    const itemCount = (project.sourceIds?.length || 0) + (project.setIds?.length || 0) +
+                      (project.definitionIds?.length || 0) + (project.exportIds?.length || 0);
+
+    if (!confirm(`Delete project "${project.name}" and all its contents (${itemCount} items)? This cannot be undone.`)) {
+      return;
+    }
+
+    // Remove associated sources
+    if (project.sourceIds?.length) {
+      this.sources = this.sources?.filter(s => !project.sourceIds.includes(s.id)) || [];
+    }
+
+    // Remove associated sets
+    if (project.setIds?.length) {
+      this.sets = this.sets?.filter(s => !project.setIds.includes(s.id)) || [];
+    }
+
+    // Remove associated definitions
+    if (project.definitionIds?.length) {
+      this.definitions = this.definitions?.filter(d => !project.definitionIds.includes(d.id)) || [];
+    }
+
+    // Remove associated exports
+    if (project.exportIds?.length) {
+      this.exports = this.exports?.filter(e => !project.exportIds.includes(e.id)) || [];
+    }
+
+    // Remove the project itself
+    this.projects = this.projects?.filter(p => p.id !== projectId) || [];
+
+    // Clear current project selection if it was this project
+    if (this.currentProjectId === projectId) {
+      this.currentProjectId = null;
+    }
+
+    this._renderSidebar();
+    this._updateBreadcrumb();
+    this._saveData();
+    this._showToast(`Deleted project "${project.name}"`, 'success');
+  }
+
+  /**
+   * Unarchive a project
+   */
+  _unarchiveProject(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    project.status = 'active';
+    project.updatedAt = new Date().toISOString();
+
+    this._renderSidebar();
+    this._saveData();
+    this._showToast(`Restored project "${project.name}"`, 'success');
+  }
+
+  /**
+   * Archive a source
+   */
+  _archiveSource(sourceId) {
+    const source = this.sources?.find(s => s.id === sourceId);
+    if (!source) return;
+
+    // Sample data cannot be archived
+    if (source.isSample) {
+      this._showToast('Sample data can only be cleared via Settings → Clear Sample Data', 'info');
+      return;
+    }
+
+    source.status = 'archived';
+    source.updatedAt = new Date().toISOString();
+
+    this._renderSidebar();
+    this._saveData();
+    this._showToast(`Archived source "${source.name}"`, 'success');
+  }
+
+  /**
+   * Unarchive a source
+   */
+  _unarchiveSource(sourceId) {
+    const source = this.sources?.find(s => s.id === sourceId);
+    if (!source) return;
+
+    source.status = 'active';
+    source.updatedAt = new Date().toISOString();
+
+    this._renderSidebar();
+    this._saveData();
+    this._showToast(`Restored source "${source.name}"`, 'success');
+  }
+
+  /**
+   * Archive a set
+   */
+  _archiveSet(setId) {
+    const set = this.sets?.find(s => s.id === setId);
+    if (!set) return;
+
+    // Sample data cannot be archived
+    if (set.isSample) {
+      this._showToast('Sample data can only be cleared via Settings → Clear Sample Data', 'info');
+      return;
+    }
+
+    set.status = 'archived';
+    set.updatedAt = new Date().toISOString();
+
+    // Close any open tabs for this set
+    if (this.browserTabs) {
+      this.browserTabs = this.browserTabs.filter(tab => tab.setId !== setId);
+      if (this.activeTabId) {
+        const activeTab = this.browserTabs.find(t => t.id === this.activeTabId);
+        if (!activeTab && this.browserTabs.length > 0) {
+          this.activeTabId = this.browserTabs[0].id;
+        } else if (this.browserTabs.length === 0) {
+          this.activeTabId = null;
+        }
+      }
+    }
+
+    // Clear current set selection if it was this set
+    if (this.currentSetId === setId) {
+      this.currentSetId = null;
+    }
+
+    this._renderSidebar();
+    this._renderTabBar();
+    this._saveData();
+    this._showToast(`Archived set "${set.name}"`, 'success');
+  }
+
+  /**
+   * Unarchive a set
+   */
+  _unarchiveSet(setId) {
+    const set = this.sets?.find(s => s.id === setId);
+    if (!set) return;
+
+    set.status = 'active';
+    set.updatedAt = new Date().toISOString();
+
+    this._renderSidebar();
+    this._saveData();
+    this._showToast(`Restored set "${set.name}"`, 'success');
+  }
+
+  /**
+   * Archive a definition
+   */
+  _archiveDefinition(definitionId) {
+    const definition = this.definitions?.find(d => d.id === definitionId);
+    if (!definition) return;
+
+    definition.status = 'archived';
+    definition.updatedAt = new Date().toISOString();
+
+    this._renderSidebar();
+    this._saveData();
+    this._showToast(`Archived definition "${definition.name}"`, 'success');
+  }
+
+  /**
+   * Unarchive a definition
+   */
+  _unarchiveDefinition(definitionId) {
+    const definition = this.definitions?.find(d => d.id === definitionId);
+    if (!definition) return;
+
+    definition.status = 'active';
+    definition.updatedAt = new Date().toISOString();
+
+    this._renderSidebar();
+    this._saveData();
+    this._showToast(`Restored definition "${definition.name}"`, 'success');
   }
 
   /**
@@ -17741,6 +18258,9 @@ class EODataWorkbench {
    * Show context menu for source
    */
   _showSourceContextMenu(e, sourceId) {
+    const source = this.sources?.find(s => s.id === sourceId);
+    const isSample = source?.isSample === true;
+
     const menu = [
       { icon: 'ph-info', label: 'View Details', action: () => this._showSourceDetail(sourceId) },
       { icon: 'ph-pencil', label: 'Rename Source...', action: () => this._renameSource(sourceId) },
@@ -17751,9 +18271,21 @@ class EODataWorkbench {
       { icon: 'ph-intersect', label: 'Join with Another Source...', action: () => this._showJoinBuilderUI(sourceId) },
       { divider: true },
       { icon: 'ph-export', label: 'Export Source Data', action: () => this._exportSource(sourceId) },
-      { divider: true },
-      { icon: 'ph-trash', label: 'Delete Source', action: () => this._deleteSource(sourceId), class: 'danger' }
+      { divider: true }
     ];
+
+    // Sample data can only be cleared via Settings > Clear Sample Data
+    if (isSample) {
+      menu.push({
+        icon: 'ph-flask',
+        label: 'Sample Data (use Settings to clear)',
+        disabled: true,
+        action: () => this._showToast('Sample data can only be cleared via Settings → Clear Sample Data', 'info')
+      });
+    } else {
+      menu.push({ icon: 'ph-archive', label: 'Archive Source', action: () => this._archiveSource(sourceId) });
+      menu.push({ icon: 'ph-trash', label: 'Delete Source', action: () => this._deleteSource(sourceId), class: 'danger' });
+    }
 
     this._showContextMenu(e.pageX, e.pageY, menu);
   }
@@ -28738,8 +29270,10 @@ class EODataWorkbench {
     const set = this.sets.find(s => s.id === setId);
     const hasRecords = set && set.records && set.records.length > 0;
     const hasSources = this.sourceStore && this.sourceStore.getByStatus('active').length > 0;
+    const isSample = set?.isSample === true;
 
-    menu.innerHTML = `
+    // Build the menu HTML
+    let menuHtml = `
       <div class="context-menu-item" data-action="rename">
         <i class="ph ph-pencil"></i>
         <span>Rename</span>
@@ -28758,11 +29292,30 @@ class EODataWorkbench {
         <span>Create views from column...</span>
       </div>
       <div class="context-menu-divider"></div>
-      <div class="context-menu-item danger" data-action="delete">
-        <i class="ph ph-trash"></i>
-        <span>Delete</span>
-      </div>
     `;
+
+    // Sample data can only be cleared via Settings > Clear Sample Data
+    if (isSample) {
+      menuHtml += `
+        <div class="context-menu-item disabled" data-action="sample-info" title="Sample data can only be cleared via Settings → Clear Sample Data">
+          <i class="ph ph-flask"></i>
+          <span>Sample Data (use Settings to clear)</span>
+        </div>
+      `;
+    } else {
+      menuHtml += `
+        <div class="context-menu-item" data-action="archive">
+          <i class="ph ph-archive"></i>
+          <span>Archive</span>
+        </div>
+        <div class="context-menu-item danger" data-action="delete">
+          <i class="ph ph-trash"></i>
+          <span>Delete</span>
+        </div>
+      `;
+    }
+
+    menu.innerHTML = menuHtml;
 
     // Calculate position with viewport boundary checking
     const menuWidth = 220;
@@ -28808,6 +29361,12 @@ class EODataWorkbench {
             if (!item.classList.contains('disabled')) {
               this._showCreateViewsFromColumnModal(setId);
             }
+            break;
+          case 'archive':
+            this._archiveSet(setId);
+            break;
+          case 'sample-info':
+            this._showToast('Sample data can only be cleared via Settings → Clear Sample Data', 'info');
             break;
           case 'delete':
             this._deleteSet(setId);
