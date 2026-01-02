@@ -2454,6 +2454,66 @@ class EODataWorkbench {
     requestedByField.sourceColumn = 'Requested By';
     targetReleaseField.sourceColumn = 'Target Release';
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FORMULA FIELDS - Demonstrating Semantic Functions (AV-Inspired)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Formula 1: Days Until Due - Uses UNLESS for expired items
+    // Returns days remaining, or "Overdue" if past due date
+    const daysUntilDueField = createField('Days Until Due', FieldTypes.FORMULA, {
+      formula: 'UNLESS(DATETIME_DIFF({Due Date}, TODAY(), "days"), {Due Date} < TODAY(), "Overdue")',
+      resultType: 'text',
+      description: 'Days remaining until due date, or "Overdue" if past. Uses UNLESS semantic function.'
+    });
+
+    // Formula 2: Risk Level - Uses VALID_WHEN for scoped assessment
+    // Risk is only meaningful for non-completed items
+    const riskLevelField = createField('Risk Level', FieldTypes.FORMULA, {
+      formula: 'VALID_WHEN(IF(AND({Priority} = "Urgent", {Status} != "Complete"), "High", IF({Priority} = "High", "Medium", "Low")), {Status} != "Complete", "Active items only")',
+      resultType: 'text',
+      description: 'Risk assessment scoped to active items only. Uses VALID_WHEN semantic function.'
+    });
+
+    // Formula 3: Effort Estimate - Uses ASSUMING with confidence level
+    // Estimate with explicit assumptions about productivity
+    const adjustedEstimateField = createField('Adjusted Estimate', FieldTypes.FORMULA, {
+      formula: 'ASSUMING({Estimate (hrs)} * 1.3, "30% buffer for unknowns", 0.7)',
+      resultType: 'number',
+      description: 'Padded estimate assuming 30% buffer. 70% confidence. Uses ASSUMING semantic function.'
+    });
+
+    // Formula 4: Status Health - Uses EXCEPT to identify concerning states
+    // Everything except healthy states
+    const statusHealthField = createField('Needs Attention', FieldTypes.FORMULA, {
+      formula: 'IF(LEN(EXCEPT(ARRAYJOIN([{Status}]), "Complete", "Review")) > 0, IF({Priority} = "Urgent", "🔴 Urgent", IF({Priority} = "High", "🟠 High", "🟡 Monitor")), "✓ OK")',
+      resultType: 'text',
+      description: 'Flags items not in healthy states (Complete/Review). Uses EXCEPT semantic function.'
+    });
+
+    // Formula 5: Diagnostic Info - Uses DIAGNOSTIC for non-actionable metadata
+    // Debug info that should not drive automation
+    const diagnosticInfoField = createField('Debug Info', FieldTypes.FORMULA, {
+      formula: 'DIAGNOSTIC(CONCATENATE("Type:", {Type}, " | Status:", {Status}, " | Pri:", {Priority}), "troubleshooting", "formula_engine")',
+      resultType: 'text',
+      description: 'Diagnostic metadata for debugging. Not actionable. Uses DIAGNOSTIC semantic function.'
+    });
+
+    // Formula 6: Is Blocked - Uses EQUIVALENT_WHEN for status matching
+    // Treats multiple statuses as equivalent for "blocked" determination
+    const isBlockedField = createField('Is Blocked', FieldTypes.FORMULA, {
+      formula: 'IS_EQUIVALENT({Status}, EQUIVALENT_WHEN("Backlog", ["Backlog", "Blocked", "On Hold"], "blocked_states"))',
+      resultType: 'checkbox',
+      description: 'True if status matches any blocked-equivalent state. Uses EQUIVALENT_WHEN semantic function.'
+    });
+
+    // Add formula fields to set
+    daysUntilDueField.sourceColumn = null; // Formula fields don't map to source columns
+    riskLevelField.sourceColumn = null;
+    adjustedEstimateField.sourceColumn = null;
+    statusHealthField.sourceColumn = null;
+    diagnosticInfoField.sourceColumn = null;
+    isBlockedField.sourceColumn = null;
+
     set.fields.push(
       typeField,
       statusField,
@@ -2472,7 +2532,14 @@ class EODataWorkbench {
       // Feature Request-specific
       businessValueField,
       requestedByField,
-      targetReleaseField
+      targetReleaseField,
+      // Formula fields (semantic functions)
+      daysUntilDueField,
+      riskLevelField,
+      adjustedEstimateField,
+      statusHealthField,
+      diagnosticInfoField,
+      isBlockedField
     );
 
     // Helper to find choice ID by name
@@ -2539,9 +2606,10 @@ class EODataWorkbench {
     // Each lens filters to a specific type and shows only relevant fields
 
     // Define hidden fields for each lens (fields not relevant to that type)
+    // Task-specific formula fields: daysUntilDueField, adjustedEstimateField (use Due Date and Estimate)
     const taskHiddenFields = [severityField.id, reportedByField.id, affectedVersionField.id, stepsToReproduceField.id, businessValueField.id, requestedByField.id, targetReleaseField.id];
-    const bugHiddenFields = [dueDateField.id, estimateField.id, assigneeField.id, completedField.id, businessValueField.id, requestedByField.id, targetReleaseField.id];
-    const featureHiddenFields = [dueDateField.id, estimateField.id, assigneeField.id, completedField.id, severityField.id, reportedByField.id, affectedVersionField.id, stepsToReproduceField.id];
+    const bugHiddenFields = [dueDateField.id, estimateField.id, assigneeField.id, completedField.id, businessValueField.id, requestedByField.id, targetReleaseField.id, daysUntilDueField.id, adjustedEstimateField.id];
+    const featureHiddenFields = [dueDateField.id, estimateField.id, assigneeField.id, completedField.id, severityField.id, reportedByField.id, affectedVersionField.id, stepsToReproduceField.id, daysUntilDueField.id, adjustedEstimateField.id];
 
     // Tasks lens with multiple views
     set.views.push(createView('Tasks', 'table', {
