@@ -3478,6 +3478,15 @@ class EODataWorkbench {
   }
 
   /**
+   * Get the current project name for display in tab headers
+   */
+  _getCurrentProjectName() {
+    if (!this.currentProjectId) return '';
+    const project = this.projects.find(p => p.id === this.currentProjectId);
+    return project?.name || 'Project';
+  }
+
+  /**
    * Get a record by its ID from the current set
    */
   _getRecordById(recordId) {
@@ -13867,8 +13876,8 @@ class EODataWorkbench {
     const contentArea = this.elements.contentArea;
     if (!contentArea) return;
 
-    // Get all active sources
-    const activeSources = (this.sources || []).filter(s => s.status !== 'archived');
+    // Get sources filtered by current project hierarchy
+    const activeSources = this._getProjectSources();
 
     // Sort by import date (newest first)
     const sortedSources = activeSources.sort((a, b) => {
@@ -13910,7 +13919,7 @@ class EODataWorkbench {
                 </span>
               </h2>
               <div class="sources-table-meta">
-                ${sortedSources.length} source${sortedSources.length !== 1 ? 's' : ''} imported
+                ${sortedSources.length} source${sortedSources.length !== 1 ? 's' : ''}${this.currentProjectId ? ` in ${this._escapeHtml(this._getCurrentProjectName())}` : ' imported'}
               </div>
             </div>
           </div>
@@ -14212,7 +14221,7 @@ class EODataWorkbench {
                 </span>
               </h2>
               <div class="sources-table-meta">
-                ${sortedSets.length} set${sortedSets.length !== 1 ? 's' : ''} in workspace
+                ${sortedSets.length} set${sortedSets.length !== 1 ? 's' : ''}${this.currentProjectId ? ` in ${this._escapeHtml(this._getCurrentProjectName())}` : ' in workspace'}
               </div>
             </div>
           </div>
@@ -15557,7 +15566,7 @@ class EODataWorkbench {
                 </span>
               </h2>
               <div class="definitions-explorer-meta">
-                ${activeDefinitions.length} definition${activeDefinitions.length !== 1 ? 's' : ''} available
+                ${activeDefinitions.length} definition${activeDefinitions.length !== 1 ? 's' : ''}${this.currentProjectId ? ` in ${this._escapeHtml(this._getCurrentProjectName())}` : ' available'}
               </div>
             </div>
           </div>
@@ -17091,13 +17100,15 @@ class EODataWorkbench {
   // ==========================================================================
 
   /**
-   * Show sets as a table view in the main content area
+   * Show sets as a table view in the main content area (alternate view)
+   * Note: Primary implementation is above - this is a simplified fallback
    */
-  _showSetsTableView() {
+  _showSetsTableViewAlt() {
     const contentArea = this.elements.contentArea;
     if (!contentArea) return;
 
-    const sets = this.sets || [];
+    // Get sets filtered by current project hierarchy
+    const sets = this._getProjectSets();
 
     // Update breadcrumb
     this._updateBreadcrumb({
@@ -17121,7 +17132,7 @@ class EODataWorkbench {
                 </span>
               </h2>
               <div class="sources-table-meta">
-                ${sets.length} set${sets.length !== 1 ? 's' : ''}
+                ${sets.length} set${sets.length !== 1 ? 's' : ''}${this.currentProjectId ? ` in ${this._escapeHtml(this._getCurrentProjectName())}` : ''}
               </div>
             </div>
           </div>
@@ -17195,7 +17206,8 @@ class EODataWorkbench {
     const contentArea = this.elements.contentArea;
     if (!contentArea) return;
 
-    const exports = this.exports || [];
+    // Get exports filtered by current project hierarchy
+    const exports = this._getProjectExports();
 
     // Update breadcrumb
     this._updateBreadcrumb({
@@ -17220,7 +17232,7 @@ class EODataWorkbench {
                 </span>
               </h2>
               <div class="sources-table-meta">
-                ${exports.length} export${exports.length !== 1 ? 's' : ''}
+                ${exports.length} export${exports.length !== 1 ? 's' : ''}${this.currentProjectId ? ` in ${this._escapeHtml(this._getCurrentProjectName())}` : ''}
               </div>
             </div>
           </div>
