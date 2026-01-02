@@ -11193,6 +11193,18 @@ class EODataWorkbench {
         // Convert DefinitionSource to internal definition format
         const definition = this._convertDefinitionSourceToDefinition(defSource);
         this.definitions.push(definition);
+
+        // Add definition to current project if applicable
+        if (this.currentProjectId) {
+          const project = this.projects.find(p => p.id === this.currentProjectId);
+          if (project) {
+            if (!project.definitionIds) project.definitionIds = [];
+            if (!project.definitionIds.includes(definition.id)) {
+              project.definitionIds.push(definition.id);
+            }
+          }
+        }
+
         importedCount++;
       });
 
@@ -15637,6 +15649,20 @@ class EODataWorkbench {
 
     // Add new definitions to the workbench
     this.definitions.push(...newDefinitions);
+
+    // Add definitions to current project if applicable
+    if (this.currentProjectId) {
+      const project = this.projects.find(p => p.id === this.currentProjectId);
+      if (project) {
+        if (!project.definitionIds) project.definitionIds = [];
+        for (const def of newDefinitions) {
+          if (!project.definitionIds.includes(def.id)) {
+            project.definitionIds.push(def.id);
+          }
+        }
+      }
+    }
+
     this._saveData();
 
     // Refresh the definitions panel to show new definitions
