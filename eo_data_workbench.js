@@ -62,6 +62,27 @@ const FieldTypeIcons = {
   [FieldTypes.JSON]: 'ph-brackets-curly'
 };
 
+// Display names for field types (used for auto-naming new fields)
+const FieldTypeDisplayNames = {
+  [FieldTypes.TEXT]: 'Text',
+  [FieldTypes.LONG_TEXT]: 'Long text',
+  [FieldTypes.NUMBER]: 'Number',
+  [FieldTypes.SELECT]: 'Select',
+  [FieldTypes.MULTI_SELECT]: 'Multi-select',
+  [FieldTypes.DATE]: 'Date',
+  [FieldTypes.CHECKBOX]: 'Checkbox',
+  [FieldTypes.LINK]: 'Link',
+  [FieldTypes.ATTACHMENT]: 'Attachment',
+  [FieldTypes.URL]: 'URL',
+  [FieldTypes.EMAIL]: 'Email',
+  [FieldTypes.PHONE]: 'Phone',
+  [FieldTypes.FORMULA]: 'Formula',
+  [FieldTypes.ROLLUP]: 'Rollup',
+  [FieldTypes.COUNT]: 'Count',
+  [FieldTypes.AUTONUMBER]: 'Autonumber',
+  [FieldTypes.JSON]: 'JSON'
+};
+
 const SelectColors = ['blue', 'green', 'yellow', 'red', 'purple', 'pink', 'orange', 'gray'];
 
 // ============================================================================
@@ -31861,6 +31882,32 @@ class EODataWorkbench {
   // Field Operations
   // --------------------------------------------------------------------------
 
+  /**
+   * Generate a unique auto-name for a new field based on its type.
+   * Creates names like "Text", "Text 1", "Text 2", etc.
+   * @param {string} type - The field type
+   * @returns {string} A unique field name
+   */
+  _generateFieldName(type) {
+    const set = this.getCurrentSet();
+    if (!set) return FieldTypeDisplayNames[type] || 'Field';
+
+    const baseName = FieldTypeDisplayNames[type] || 'Field';
+    const existingNames = new Set(set.fields.map(f => f.name));
+
+    // If base name is available, use it
+    if (!existingNames.has(baseName)) {
+      return baseName;
+    }
+
+    // Otherwise, find the next available number
+    let counter = 1;
+    while (existingNames.has(`${baseName} ${counter}`)) {
+      counter++;
+    }
+    return `${baseName} ${counter}`;
+  }
+
   _addField(type, name = 'New Field', options = {}) {
     const set = this.getCurrentSet();
     if (!set) return;
@@ -32780,34 +32827,105 @@ class EODataWorkbench {
     picker.style.top = top + 'px';
     picker.classList.add('active');
 
-    picker.querySelectorAll('.field-type-item').forEach(item => {
-      item.addEventListener('click', () => {
-        picker.classList.remove('active');
-        const type = item.dataset.type;
+    // Get all field type items for keyboard navigation
+    const items = Array.from(picker.querySelectorAll('.field-type-item'));
+    let focusedIndex = -1;
 
-        // For LINK type, show a modal to select the target set/view
-        if (type === FieldTypes.LINK) {
-          this._showLinkedSetSelectionModal(({ linkedSetId, linkedViewId, allowMultiple }) => {
-            if (callback) {
-              // When changing type, pass the options through callback
-              callback(type, { linkedSetId, linkedViewId, allowMultiple });
-            } else {
-              // When adding new field, pass options directly
-              this._addField(type, 'Link', { linkedSetId, linkedViewId, allowMultiple });
-            }
-          });
-        } else if (type === FieldTypes.FORMULA) {
-          // For FORMULA type, show the formula editor
-          this._showFormulaEditor(null, callback);
-        } else {
+    // Helper to update focused item
+    const updateFocus = (newIndex) => {
+      if (focusedIndex >= 0 && focusedIndex < items.length) {
+        items[focusedIndex].classList.remove('keyboard-focused');
+      }
+      focusedIndex = newIndex;
+      if (focusedIndex >= 0 && focusedIndex < items.length) {
+        items[focusedIndex].classList.add('keyboard-focused');
+        items[focusedIndex].scrollIntoView({ block: 'nearest' });
+      }
+    };
+
+    // Helper to select the focused or specified item
+    const selectItem = (item) => {
+      cleanup();
+      picker.classList.remove('active');
+      const type = item.dataset.type;
+
+      // For LINK type, show a modal to select the target set/view
+      if (type === FieldTypes.LINK) {
+        this._showLinkedSetSelectionModal(({ linkedSetId, linkedViewId, allowMultiple }) => {
           if (callback) {
-            callback(type);
+            // When changing type, pass the options through callback
+            callback(type, { linkedSetId, linkedViewId, allowMultiple });
           } else {
-            this._addField(type);
+            // When adding new field, pass options directly with auto-generated name
+            const autoName = this._generateFieldName(type);
+            this._addField(type, autoName, { linkedSetId, linkedViewId, allowMultiple });
           }
+        });
+      } else if (type === FieldTypes.FORMULA) {
+        // For FORMULA type, show the formula editor
+        this._showFormulaEditor(null, callback);
+      } else {
+        if (callback) {
+          callback(type);
+        } else {
+          // Use auto-generated name based on field type
+          const autoName = this._generateFieldName(type);
+          this._addField(type, autoName);
         }
-      }, { once: true });
+      }
+    };
+
+    // Keyboard handler for navigation
+    const handleKeydown = (event) => {
+      // Self-cleanup if picker was closed externally
+      if (!picker.classList.contains('active')) {
+        cleanup();
+        return;
+      }
+
+      switch (event.key) {
+        case 'ArrowDown':
+        case 'j':
+          event.preventDefault();
+          updateFocus(focusedIndex < items.length - 1 ? focusedIndex + 1 : 0);
+          break;
+        case 'ArrowUp':
+        case 'k':
+          event.preventDefault();
+          updateFocus(focusedIndex > 0 ? focusedIndex - 1 : items.length - 1);
+          break;
+        case 'Enter':
+          event.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < items.length) {
+            selectItem(items[focusedIndex]);
+          }
+          break;
+        case 'Escape':
+          event.preventDefault();
+          cleanup();
+          picker.classList.remove('active');
+          break;
+      }
+    };
+
+    // Cleanup function to remove event listeners
+    const cleanup = () => {
+      document.removeEventListener('keydown', handleKeydown);
+      items.forEach(item => item.classList.remove('keyboard-focused'));
+    };
+
+    // Add keyboard listener
+    document.addEventListener('keydown', handleKeydown);
+
+    // Add click handlers to each item
+    items.forEach((item, index) => {
+      item.addEventListener('click', () => selectItem(item), { once: true });
+      // Also update focus on hover for better UX
+      item.addEventListener('mouseenter', () => updateFocus(index));
     });
+
+    // Focus first item by default for keyboard navigation
+    updateFocus(0);
   }
 
   _hideField(fieldId) {
