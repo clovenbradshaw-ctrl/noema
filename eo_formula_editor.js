@@ -201,6 +201,30 @@ class EOFormulaEditor {
           { name: 'FORMAT_SUP', syntax: 'FORMAT_SUP(superposition, format)', description: 'Format for display' },
           { name: 'SUMMARIZE_SUP', syntax: 'SUMMARIZE_SUP(superposition)', description: 'Human-readable summary' }
         ]
+      },
+      eoOperators: {
+        name: 'EO Operators',
+        icon: 'ph-flow-arrow',
+        functions: [
+          // Pipeline Operators
+          { name: '#Reference', syntax: '#NodeName', description: 'Reference another node/set in the graph' },
+          { name: '#Filter', syntax: '#NodeName[field = "value"]', description: 'Filter referenced records by condition' },
+          { name: '.Property', syntax: '#NodeName.PropertyName', description: 'Access a property from connected records' },
+          { name: '.SUM()', syntax: '#NodeName.Property.SUM()', description: 'Sum values from connected records (SYN operator)' },
+          { name: '.COUNT()', syntax: '#NodeName.COUNT()', description: 'Count connected records (SYN operator)' },
+          { name: '.AVG()', syntax: '#NodeName.Property.AVG()', description: 'Average values from connected records (SYN operator)' },
+          { name: '.MIN()', syntax: '#NodeName.Property.MIN()', description: 'Minimum value from connected records (SYN operator)' },
+          { name: '.MAX()', syntax: '#NodeName.Property.MAX()', description: 'Maximum value from connected records (SYN operator)' },
+          { name: '.FIRST()', syntax: '#NodeName.FIRST()', description: 'First connected record (SYN operator)' },
+          { name: '.LAST()', syntax: '#NodeName.LAST()', description: 'Last connected record (SYN operator)' },
+          { name: '.CONCAT()', syntax: '#NodeName.Property.CONCAT()', description: 'Concatenate values from connected records' },
+          { name: '.COLLECT()', syntax: '#NodeName.Property.COLLECT()', description: 'Collect values as array' },
+          // Examples
+          { name: 'Rollup Example', syntax: '#Orders[Status = "Complete"].Total.SUM()', description: 'Sum of Total from completed Orders (like a Rollup)' },
+          { name: 'Lookup Example', syntax: '#Customer.Name', description: 'Get Name from linked Customer (like a Lookup)' },
+          { name: 'Chain Example', syntax: '#Orders.#Customer.AccountManager', description: 'Traverse multiple relationships' },
+          { name: 'Arithmetic', syntax: '#Q4Revenue - #Q3Revenue', description: 'Compute difference between two nodes' }
+        ]
       }
     };
 
