@@ -22961,9 +22961,9 @@ body.has-picked-up .browser-tab:hover {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  width: 90%;
-  max-width: 900px;
-  max-height: 90vh;
+  width: 95%;
+  max-width: 1200px;
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
