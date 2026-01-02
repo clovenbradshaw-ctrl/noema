@@ -35585,3 +35585,976 @@ td.cell-editable.has-history:hover .cell-history-indicator {
 .light-theme .definition-source-card-header {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(59, 130, 246, 0.05));
 }
+
+/* ============================================================================
+   DEFINITIONS HIERARCHY REDESIGN
+   Information hierarchy: Identity → Meaning Contract → Impact → Structure → Provenance → Notes
+   ============================================================================ */
+
+/* Definition Profile - Identity Header */
+.definition-detail-view.hierarchy-redesign .definition-identity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), rgba(139, 92, 246, 0.04));
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  margin-bottom: 20px;
+}
+
+.definition-identity-header .identity-main {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.definition-identity-header .identity-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 2px solid;
+}
+
+.definition-identity-header .identity-icon i {
+  font-size: 24px;
+}
+
+.definition-identity-header .identity-icon.externally-grounded {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.definition-identity-header .identity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.definition-identity-header .identity-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.definition-identity-header .identity-name {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-100);
+  margin: 0;
+}
+
+.definition-identity-header .identity-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.definition-identity-header .kind-badge,
+.definition-identity-header .stability-badge,
+.definition-identity-header .scope-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.definition-identity-header .scope-badge {
+  background: var(--bg-300);
+  color: var(--text-200);
+}
+
+.definition-identity-header .identity-purpose {
+  color: var(--text-200);
+  font-size: 14px;
+  margin: 0 0 8px 0;
+  line-height: 1.5;
+}
+
+.definition-identity-header .identity-uri {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-300);
+}
+
+.definition-identity-header .identity-uri a {
+  color: var(--primary-400);
+  text-decoration: none;
+}
+
+.definition-identity-header .identity-uri a:hover {
+  text-decoration: underline;
+}
+
+.definition-identity-header .identity-uri.local-warning {
+  color: var(--warning-500);
+}
+
+.definition-identity-header .identity-uri .wikidata-id {
+  background: var(--primary-500);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.definition-identity-header .identity-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.definition-identity-header .identity-actions .btn-icon {
+  padding: 8px;
+  min-width: auto;
+}
+
+/* Meaning Contract Section */
+.meaning-contract-section {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.04), rgba(99, 102, 241, 0.04));
+  border-color: rgba(168, 85, 247, 0.15);
+}
+
+.meaning-contract-section .section-header {
+  margin-bottom: 16px;
+}
+
+.meaning-contract-section .section-header h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-100);
+}
+
+.meaning-contract-section .section-header h3 i {
+  color: var(--primary-400);
+}
+
+.meaning-contract-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.contract-assertions .contract-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-300);
+  margin-bottom: 8px;
+}
+
+.contract-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.contract-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text-200);
+}
+
+.contract-list li i {
+  color: var(--primary-400);
+  font-size: 14px;
+}
+
+.contract-list li strong {
+  color: var(--text-100);
+  font-weight: 500;
+}
+
+.contract-stance {
+  flex-shrink: 0;
+}
+
+.stance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-300);
+  color: var(--text-200);
+}
+
+.stance-badge.authoritative {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-500);
+}
+
+.stance-badge.interpretive {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning-600);
+}
+
+/* Impact & Usage Section */
+.impact-usage-section .section-header {
+  margin-bottom: 16px;
+}
+
+.impact-usage-section .section-header h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-100);
+}
+
+.impact-usage-section .section-header h3 i {
+  color: var(--warning-500);
+}
+
+.impact-usage-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.impact-column-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-300);
+  margin-bottom: 12px;
+}
+
+.usage-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.usage-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-300);
+  border-radius: 8px;
+  min-width: 70px;
+}
+
+.usage-stat i {
+  font-size: 18px;
+  color: var(--text-300);
+  margin-bottom: 4px;
+}
+
+.usage-stat .usage-count {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-100);
+}
+
+.usage-stat .usage-label {
+  font-size: 11px;
+  color: var(--text-300);
+  text-transform: uppercase;
+}
+
+.usage-details {
+  padding: 12px;
+  background: var(--bg-200);
+  border-radius: 8px;
+}
+
+.usage-details-label {
+  font-size: 12px;
+  color: var(--text-300);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.usage-details .used-by-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usage-details .used-by-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-200);
+}
+
+.usage-details .used-by-item i {
+  color: var(--primary-400);
+}
+
+.usage-details .field-count {
+  color: var(--text-300);
+  font-size: 12px;
+}
+
+.usage-details .used-by-more {
+  font-size: 12px;
+  color: var(--primary-400);
+  cursor: pointer;
+}
+
+.usage-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: var(--bg-200);
+  border-radius: 8px;
+  color: var(--text-300);
+  font-size: 13px;
+}
+
+.effects-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.effects-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--text-200);
+  border-bottom: 1px solid var(--bg-300);
+}
+
+.effects-list li:last-child {
+  border-bottom: none;
+}
+
+.effects-list li i {
+  color: var(--success-500);
+}
+
+.semantic-actions-bar {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bg-300);
+}
+
+.semantic-actions-bar .semantic-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--bg-300);
+  border: 1px solid var(--border-200);
+  border-radius: 8px;
+  color: var(--text-200);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.semantic-actions-bar .semantic-action-btn:hover {
+  background: var(--bg-400);
+  color: var(--text-100);
+  border-color: var(--primary-400);
+}
+
+.semantic-actions-bar .semantic-action-btn i {
+  font-size: 16px;
+}
+
+/* Structure Section */
+.definition-structure-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.definition-structure-section .section-header h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-100);
+}
+
+.definition-structure-section .section-header h3 i {
+  color: var(--primary-400);
+}
+
+.definition-structure-section .terms-count {
+  background: var(--primary-500);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Provenance Section */
+.provenance-section {
+  border-color: var(--border-200);
+}
+
+.provenance-section .collapsible-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-100);
+}
+
+.provenance-section .collapsible-header i:first-child {
+  color: var(--text-300);
+}
+
+.provenance-section .toggle-icon {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.provenance-section.collapsed .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.provenance-section.collapsed .provenance-content {
+  display: none;
+}
+
+.provenance-content {
+  margin-top: 16px;
+}
+
+.provenance-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: var(--bg-200);
+  border-radius: 8px;
+  color: var(--text-300);
+  font-size: 13px;
+}
+
+/* Notes & Rationale Section */
+.notes-rationale-section {
+  border-color: var(--border-200);
+}
+
+.notes-rationale-section .collapsible-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-100);
+}
+
+.notes-rationale-section .collapsible-header i:first-child {
+  color: var(--text-300);
+}
+
+.notes-rationale-section .optional-badge {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  background: var(--bg-300);
+  border-radius: 4px;
+  color: var(--text-300);
+}
+
+.notes-rationale-section .toggle-icon {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.notes-rationale-section.collapsed .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.notes-rationale-section.collapsed .notes-rationale-content {
+  display: none;
+}
+
+.notes-rationale-content {
+  margin-top: 16px;
+}
+
+/* ============================================================================
+   DEFINITIONS PANEL - HIERARCHY REDESIGN
+   ============================================================================ */
+
+.definitions-panel-view.hierarchy-redesign .definitions-panel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.definitions-panel-view-toggle {
+  display: flex;
+  background: var(--bg-300);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.view-toggle-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-300);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-toggle-btn:hover {
+  color: var(--text-200);
+}
+
+.view-toggle-btn.active {
+  background: var(--bg-100);
+  color: var(--primary-500);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.view-toggle-btn i {
+  font-size: 16px;
+}
+
+.definitions-count {
+  font-size: 13px;
+  color: var(--text-300);
+  margin-left: auto;
+}
+
+/* Grouped View */
+.definitions-grouped-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.definitions-kind-group {
+  background: var(--bg-200);
+  border-radius: 12px;
+  border: 1px solid var(--border-200);
+  overflow: hidden;
+}
+
+.kind-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-300);
+  border-bottom: 1px solid var(--border-200);
+}
+
+.kind-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kind-group-title i {
+  font-size: 18px;
+}
+
+.kind-group-title .kind-name {
+  font-weight: 600;
+  color: var(--text-100);
+  font-size: 14px;
+}
+
+.kind-group-title .kind-count {
+  background: var(--bg-400);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text-200);
+}
+
+.kind-description {
+  font-size: 12px;
+  color: var(--text-300);
+}
+
+.kind-group-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+
+.definition-grouped-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-100);
+  border-radius: 8px;
+  border: 1px solid var(--border-200);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.definition-grouped-item:hover {
+  border-color: var(--primary-400);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.grouped-item-main {
+  display: flex;
+  gap: 10px;
+}
+
+.grouped-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.grouped-item-icon i {
+  font-size: 18px;
+}
+
+.grouped-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.grouped-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.grouped-item-name {
+  font-weight: 500;
+  color: var(--text-100);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stability-pill {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.grouped-item-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.term-chip {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--bg-300);
+  border-radius: 4px;
+  color: var(--text-200);
+}
+
+.term-more {
+  font-size: 11px;
+  color: var(--primary-400);
+}
+
+.grouped-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-200);
+}
+
+.scope-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-300);
+}
+
+.scope-indicator i {
+  font-size: 12px;
+}
+
+.grouped-item-meta .usage-indicator {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-200);
+  background: var(--bg-300);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Table View - New Hierarchy Columns */
+.definitions-panel-table.new-hierarchy {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.definitions-panel-table.new-hierarchy th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-300);
+  background: var(--bg-200);
+  border-bottom: 1px solid var(--border-200);
+}
+
+.definitions-panel-table.new-hierarchy .definition-row {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.definitions-panel-table.new-hierarchy .definition-row:hover {
+  background: var(--bg-200);
+}
+
+.definitions-panel-table.new-hierarchy .definition-row td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-200);
+  vertical-align: middle;
+}
+
+.definitions-panel-table.new-hierarchy .col-expand {
+  width: 40px;
+}
+
+.definitions-panel-table.new-hierarchy .col-name {
+  min-width: 200px;
+}
+
+.definitions-panel-table.new-hierarchy .col-kind,
+.definitions-panel-table.new-hierarchy .col-status,
+.definitions-panel-table.new-hierarchy .col-scope {
+  width: 120px;
+}
+
+.definitions-panel-table.new-hierarchy .col-usage {
+  width: 80px;
+  text-align: center;
+}
+
+.definitions-panel-table.new-hierarchy .col-actions {
+  width: 140px;
+}
+
+.definitions-panel-table.new-hierarchy .def-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.definitions-panel-table.new-hierarchy .def-icon {
+  font-size: 18px;
+}
+
+.definitions-panel-table.new-hierarchy .def-name-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.definitions-panel-table.new-hierarchy .def-name-text {
+  font-weight: 500;
+  color: var(--text-100);
+}
+
+.definitions-panel-table.new-hierarchy .def-term-count {
+  font-size: 11px;
+  color: var(--text-300);
+}
+
+.definitions-panel-table.new-hierarchy .kind-badge,
+.definitions-panel-table.new-hierarchy .stability-badge,
+.definitions-panel-table.new-hierarchy .scope-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.definitions-panel-table.new-hierarchy .scope-badge {
+  background: var(--bg-300);
+  color: var(--text-200);
+}
+
+.definitions-panel-table.new-hierarchy .usage-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.definitions-panel-table.new-hierarchy .usage-badge.has-usage {
+  background: var(--success-500);
+  color: white;
+}
+
+.definitions-panel-table.new-hierarchy .usage-badge.no-usage {
+  background: var(--bg-300);
+  color: var(--text-300);
+}
+
+/* Expanded Row */
+.definition-expanded-row {
+  background: var(--bg-200);
+}
+
+.definition-expanded-row td {
+  padding: 0 !important;
+}
+
+.def-expanded-content {
+  padding: 16px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.expanded-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.expanded-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-300);
+  white-space: nowrap;
+}
+
+.contract-text,
+.impact-text {
+  font-size: 13px;
+  color: var(--text-200);
+}
+
+.expanded-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.expanded-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--bg-300);
+  border: 1px solid var(--border-200);
+  border-radius: 6px;
+  color: var(--text-200);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.expanded-action-btn:hover {
+  background: var(--bg-400);
+  border-color: var(--primary-400);
+  color: var(--primary-400);
+}
+
+.expanded-action-btn i {
+  font-size: 14px;
+}
+
+.terms-preview {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-200);
+}
+
+.terms-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Light Theme Adjustments for Hierarchy Redesign */
+:root.light-theme .definition-identity-header,
+.light-theme .definition-identity-header {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.06));
+}
+
+:root.light-theme .definitions-kind-group,
+.light-theme .definitions-kind-group {
+  background: white;
+}
+
+:root.light-theme .definition-grouped-item,
+.light-theme .definition-grouped-item {
+  background: white;
+}
+
+:root.light-theme .definition-grouped-item:hover,
+.light-theme .definition-grouped-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}

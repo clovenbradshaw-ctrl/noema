@@ -9300,6 +9300,213 @@ class EODataWorkbench {
   }
 
   /**
+   * Infer the semantic kind of a definition based on its name, terms, and metadata.
+   * Kinds: Identifier, Measure, Temporal, Descriptive, Relational, Administrative
+   * @param {Object} definition - The definition object
+   * @returns {Object} { kind: string, icon: string, color: string }
+   */
+  _getDefinitionKind(definition) {
+    const name = (definition.name || '').toLowerCase();
+    const desc = (definition.description || '').toLowerCase();
+    const terms = definition.terms || definition.properties || [];
+    const termNames = terms.map(t => (t.name || t.label || '').toLowerCase()).join(' ');
+    const combined = `${name} ${desc} ${termNames}`;
+
+    // Identifier patterns
+    const identifierPatterns = /\b(id|identifier|key|code|uuid|guid|sku|ean|upc|ssn|ein|reference|ref)\b/;
+    if (identifierPatterns.test(combined)) {
+      return { kind: 'Identifier', icon: 'ph-key', color: '#6366f1' };
+    }
+
+    // Temporal patterns
+    const temporalPatterns = /\b(date|time|timestamp|datetime|year|month|day|hour|minute|second|period|duration|created|updated|modified|start|end|from|to|effective|expires)\b/;
+    if (temporalPatterns.test(combined)) {
+      return { kind: 'Temporal', icon: 'ph-calendar', color: '#f59e0b' };
+    }
+
+    // Measure/Numeric patterns
+    const measurePatterns = /\b(amount|total|sum|count|quantity|number|price|cost|rate|percentage|percent|ratio|score|value|balance|volume|weight|size|height|width|length|area|distance)\b/;
+    if (measurePatterns.test(combined)) {
+      return { kind: 'Measure', icon: 'ph-chart-bar', color: '#10b981' };
+    }
+
+    // Relational patterns
+    const relationalPatterns = /\b(parent|child|related|link|association|relationship|belongs|has|owns|references|foreign|fk|join|lookup|mapping)\b/;
+    if (relationalPatterns.test(combined)) {
+      return { kind: 'Relational', icon: 'ph-git-branch', color: '#8b5cf6' };
+    }
+
+    // Administrative patterns
+    const adminPatterns = /\b(status|state|flag|active|inactive|enabled|disabled|deleted|archived|approved|pending|draft|published|locked|hidden|visible|admin|system|internal|audit|log|permission|role|access)\b/;
+    if (adminPatterns.test(combined)) {
+      return { kind: 'Administrative', icon: 'ph-gear', color: '#64748b' };
+    }
+
+    // Default to Descriptive
+    return { kind: 'Descriptive', icon: 'ph-tag', color: '#0ea5e9' };
+  }
+
+  /**
+   * Determine the stability level of a definition.
+   * Stability: Stable, Contextual, Experimental
+   * @param {Object} definition - The definition object
+   * @returns {Object} { stability: string, icon: string, color: string, description: string }
+   */
+  _getDefinitionStability(definition) {
+    const hasUri = !!definition.sourceUri;
+    const hasAuthority = !!(definition.definitionSource?.authority?.name);
+    const isVerified = definition.status === 'verified' || definition.status === 'complete';
+    const isPending = this._isDefinitionPending(definition);
+    const isLocal = !hasUri;
+
+    // Check validity
+    const validity = definition.definitionSource?.validity;
+    const isSuperseded = validity?.supersededBy;
+
+    if (isSuperseded) {
+      return {
+        stability: 'Superseded',
+        icon: 'ph-arrow-bend-double-up-right',
+        color: '#ef4444',
+        description: 'This definition has been superseded by a newer version'
+      };
+    }
+
+    if (isPending) {
+      return {
+        stability: 'Experimental',
+        icon: 'ph-flask',
+        color: '#f59e0b',
+        description: 'This definition is pending review and may change'
+      };
+    }
+
+    if (hasUri && hasAuthority && isVerified) {
+      return {
+        stability: 'Stable',
+        icon: 'ph-seal-check',
+        color: '#10b981',
+        description: 'Externally grounded and verified definition'
+      };
+    }
+
+    if (hasUri || (isLocal && isVerified)) {
+      return {
+        stability: 'Contextual',
+        icon: 'ph-circle-dashed',
+        color: '#6366f1',
+        description: 'Stable within project context'
+      };
+    }
+
+    return {
+      stability: 'Experimental',
+      icon: 'ph-flask',
+      color: '#f59e0b',
+      description: 'Local definition, may evolve'
+    };
+  }
+
+  /**
+   * Infer the scope of a definition based on its usage and metadata.
+   * @param {Object} definition - The definition object
+   * @returns {Object} { scope: string, scopeDetail: string }
+   */
+  _getDefinitionScope(definition) {
+    const hasUri = !!definition.sourceUri;
+    const projectId = definition.projectId;
+
+    // Check where this definition is used
+    const linkedSets = this._getLinkedSetsForDefinition(definition);
+    const linkedSetCount = linkedSets?.size || 0;
+
+    // Get dataset names for scope detail
+    const datasetNames = [];
+    if (linkedSets) {
+      linkedSets.forEach((value, key) => {
+        if (value.set?.name) {
+          datasetNames.push(value.set.name);
+        }
+      });
+    }
+
+    if (hasUri) {
+      return {
+        scope: 'Global',
+        scopeDetail: 'Shared via external URI',
+        icon: 'ph-globe'
+      };
+    }
+
+    if (linkedSetCount > 1) {
+      return {
+        scope: 'Project',
+        scopeDetail: `Used in ${linkedSetCount} datasets`,
+        icon: 'ph-folder-notch'
+      };
+    }
+
+    if (linkedSetCount === 1 && datasetNames.length > 0) {
+      return {
+        scope: 'Dataset',
+        scopeDetail: datasetNames[0],
+        icon: 'ph-table'
+      };
+    }
+
+    return {
+      scope: 'Local',
+      scopeDetail: 'Not yet applied',
+      icon: 'ph-house'
+    };
+  }
+
+  /**
+   * Get the icon for a definition kind
+   */
+  _getDefinitionKindIcon(kind) {
+    const kindIcons = {
+      'Identifier': 'ph-key',
+      'Measure': 'ph-chart-bar',
+      'Temporal': 'ph-calendar',
+      'Descriptive': 'ph-tag',
+      'Relational': 'ph-git-branch',
+      'Administrative': 'ph-gear'
+    };
+    return kindIcons[kind] || 'ph-tag';
+  }
+
+  /**
+   * Group definitions by their semantic kind
+   * @param {Array} definitions - Array of definition objects
+   * @returns {Object} Grouped definitions by kind
+   */
+  _groupDefinitionsByKind(definitions) {
+    const groups = {
+      'Identifier': [],
+      'Measure': [],
+      'Temporal': [],
+      'Descriptive': [],
+      'Relational': [],
+      'Administrative': []
+    };
+
+    definitions.forEach(def => {
+      const { kind } = this._getDefinitionKind(def);
+      if (groups[kind]) {
+        groups[kind].push(def);
+      } else {
+        groups['Descriptive'].push(def);
+      }
+    });
+
+    // Filter out empty groups
+    return Object.fromEntries(
+      Object.entries(groups).filter(([_, defs]) => defs.length > 0)
+    );
+  }
+
+  /**
    * Truncate name for display
    */
   _truncateName(name, maxLength = 20) {
@@ -10098,6 +10305,7 @@ class EODataWorkbench {
 
   /**
    * Render definition detail view in main content area
+   * Layout hierarchy: Identity → Meaning Contract → Impact → Structure → Provenance → Notes
    */
   _renderDefinitionDetailView(definition) {
     const contentArea = this.elements.contentArea;
@@ -10118,148 +10326,196 @@ class EODataWorkbench {
     const wikidataMatch = definition.sourceUri?.match(/Q\d+/);
     const wikidataId = wikidataMatch ? wikidataMatch[0] : null;
 
-    contentArea.innerHTML = `
-      <div class="definition-detail-view glossary-style semantic-engine">
-        <!-- Back Navigation -->
-        ${linkedSetsArray.length > 0 ? `
-          <div class="definition-back-nav">
-            <button class="btn-link" id="btn-back-to-usage">
-              <i class="ph ph-arrow-left"></i> Back to where this meaning is used
-            </button>
-          </div>
-        ` : ''}
+    // Get semantic metadata for the definition
+    const kindInfo = this._getDefinitionKind(definition);
+    const stabilityInfo = this._getDefinitionStability(definition);
+    const scopeInfo = this._getDefinitionScope(definition);
 
+    // Count linked fields
+    let linkedFieldsCount = 0;
+    linkedSetsArray.forEach(({ fields }) => {
+      linkedFieldsCount += fields.length;
+    });
+
+    // Calculate unique pipelines/exports (placeholder for future implementation)
+    const linkedPipelinesCount = 0;
+    const linkedExportsCount = 0;
+
+    contentArea.innerHTML = `
+      <div class="definition-detail-view glossary-style semantic-engine hierarchy-redesign">
         <!-- Semantic Philosophy Tagline -->
         <div class="semantic-tagline">
           <i class="ph ph-lightbulb"></i>
           <span>Definitions shape how data is interpreted, not what the data is.</span>
         </div>
 
-        <!-- Glossary Header - Enhanced with External Grounding -->
-        <div class="definition-glossary-header">
-          <div class="glossary-icon-title">
-            <div class="glossary-icon ${isLocal ? '' : 'externally-grounded'}">
-              <i class="ph ${this._getDefinitionIcon(definition)}"></i>
+        <!-- ═══════════════════════════════════════════════════════════════════
+             A. IDENTITY HEADER - "What is this definition?" in 5 seconds
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div class="definition-identity-header">
+          <div class="identity-main">
+            <div class="identity-icon ${isLocal ? '' : 'externally-grounded'}" style="background: ${kindInfo.color}15; border-color: ${kindInfo.color}40;">
+              <i class="ph ${kindInfo.icon}" style="color: ${kindInfo.color};"></i>
             </div>
-            <div class="glossary-title-area">
-              <div class="glossary-title-row">
-                <h2>${this._escapeHtml(definition.name)}${externalSourceName ? ` <span class="source-label">(${externalSourceName})</span>` : ''}</h2>
-                ${!isLocal ? `
-                  <span class="grounding-badge" title="This meaning is shared across datasets, tools, and organizations.">
-                    <i class="ph ph-globe-hemisphere-west"></i> Externally grounded
+            <div class="identity-content">
+              <div class="identity-title-row">
+                <h2 class="identity-name">${this._escapeHtml(definition.name)}</h2>
+                <div class="identity-badges">
+                  <span class="kind-badge" style="background: ${kindInfo.color}15; color: ${kindInfo.color};" title="Semantic kind: ${kindInfo.kind}">
+                    <i class="ph ${kindInfo.icon}"></i>
+                    ${kindInfo.kind}
                   </span>
-                ` : ''}
+                  <span class="stability-badge" style="background: ${stabilityInfo.color}15; color: ${stabilityInfo.color};" title="${stabilityInfo.description}">
+                    <i class="ph ${stabilityInfo.icon}"></i>
+                    ${stabilityInfo.stability}
+                  </span>
+                  <span class="scope-badge" title="${scopeInfo.scopeDetail}">
+                    <i class="ph ${scopeInfo.icon}"></i>
+                    ${scopeInfo.scope}
+                  </span>
+                </div>
               </div>
+              <p class="identity-purpose">${this._escapeHtml(definition.description || 'Defines vocabulary terms that can be applied to data fields for semantic meaning.')}</p>
               ${definition.sourceUri ? `
-                <div class="glossary-uri">
+                <div class="identity-uri">
                   <i class="ph ph-globe"></i>
-                  ${isWikidata && wikidataId ? `
-                    <span class="wikidata-id">${wikidataId}</span>
-                  ` : ''}
+                  ${isWikidata && wikidataId ? `<span class="wikidata-id">${wikidataId}</span>` : ''}
                   <a href="${this._escapeHtml(definition.sourceUri)}" target="_blank" class="definition-uri-link">
                     ${this._escapeHtml(definition.sourceUri)}
                   </a>
                 </div>
-                <div class="grounding-hint">External, shared definition</div>
               ` : `
-                <div class="glossary-uri local-warning">
+                <div class="identity-uri local-warning">
                   <i class="ph ph-warning-circle"></i>
                   <span class="local-only-text">Local only — no URI defined</span>
-                  <span class="local-hint">This definition works locally but won't carry meaning outside this project.</span>
                 </div>
               `}
             </div>
           </div>
-          <div class="glossary-actions">
+          <div class="identity-actions">
+            <button class="btn btn-primary" id="btn-apply-definition" title="Bind this meaning to one or more columns">
+              <i class="ph ph-arrow-right"></i> Apply to Fields…
+            </button>
             <button class="btn btn-secondary" id="btn-refresh-definition" title="Refresh from URI" ${isLocal ? 'disabled' : ''}>
               <i class="ph ph-arrows-clockwise"></i> Refresh
             </button>
-            <button class="btn btn-primary" id="btn-apply-definition" title="Bind this meaning to one or more columns (adds semantic context, does not change data)">
-              <i class="ph ph-arrow-right"></i> Apply to Fields…
-            </button>
-            <button class="btn btn-secondary btn-danger" id="btn-delete-definition" title="Delete definition">
+            <button class="btn btn-icon btn-danger" id="btn-delete-definition" title="Delete definition">
               <i class="ph ph-trash"></i>
             </button>
           </div>
         </div>
 
-        <!-- Purpose Section (Glossary-style) -->
-        <div class="glossary-section purpose-section">
-          <h3><i class="ph ph-info"></i> Purpose</h3>
-          <p class="purpose-text">${this._escapeHtml(definition.description || 'Defines vocabulary terms that can be applied to data fields for semantic meaning.')}</p>
-        </div>
-
-        <!-- Meaning Footprint Section (replaces "Used by") -->
-        <div class="glossary-section meaning-footprint-section ${linkedSetsArray.length === 0 ? 'unused' : ''}">
-          <h3><i class="ph ${linkedSetsArray.length > 0 ? 'ph-map-trifold' : 'ph-map-trifold'}"></i> Meaning Footprint</h3>
-          ${linkedSetsArray.length > 0 ? `
-            <div class="footprint-currently-used">
-              <span class="footprint-label">Currently used by:</span>
-              <div class="used-by-list">
-                ${linkedSetsArray.map(({ set, fields }) => fields.map(f => `
-                  <span class="used-by-item" title="${this._escapeHtml(set.name)}.${this._escapeHtml(f.fieldName)} → ${this._escapeHtml(definition.name)}">
-                    <i class="ph ph-check"></i>
-                    <span class="set-name">${this._escapeHtml(set.name)}</span>.<span class="field-name">${this._escapeHtml(f.fieldName)}</span>
-                  </span>
-                `).join('')).join('')}
-              </div>
+        <!-- ═══════════════════════════════════════════════════════════════════
+             B. MEANING CONTRACT - The semantic promise of this definition
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div class="glossary-section meaning-contract-section">
+          <div class="section-header">
+            <h3><i class="ph ph-handshake"></i> Meaning Contract</h3>
+          </div>
+          <div class="meaning-contract-content">
+            <div class="contract-assertions">
+              <span class="contract-label">This definition asserts:</span>
+              <ul class="contract-list">
+                ${kindInfo.kind === 'Identifier' ? `
+                  <li><i class="ph ph-key"></i> <strong>Uniqueness:</strong> Values should be unique within their scope</li>
+                  <li><i class="ph ph-target"></i> <strong>Stability:</strong> Per-record, immutable reference</li>
+                  <li><i class="ph ph-signpost"></i> <strong>Intended role:</strong> Primary or foreign key identifier</li>
+                ` : kindInfo.kind === 'Measure' ? `
+                  <li><i class="ph ph-chart-bar"></i> <strong>Type:</strong> Quantitative, numeric value</li>
+                  <li><i class="ph ph-calculator"></i> <strong>Aggregatable:</strong> Can be summed, averaged, or compared</li>
+                  <li><i class="ph ph-signpost"></i> <strong>Intended role:</strong> Metric or measurement</li>
+                ` : kindInfo.kind === 'Temporal' ? `
+                  <li><i class="ph ph-calendar"></i> <strong>Type:</strong> Date, time, or duration</li>
+                  <li><i class="ph ph-arrows-horizontal"></i> <strong>Orderable:</strong> Can be sorted chronologically</li>
+                  <li><i class="ph ph-signpost"></i> <strong>Intended role:</strong> Timestamp or period marker</li>
+                ` : kindInfo.kind === 'Relational' ? `
+                  <li><i class="ph ph-link"></i> <strong>Type:</strong> Reference to another entity</li>
+                  <li><i class="ph ph-git-branch"></i> <strong>Joinable:</strong> Links records across datasets</li>
+                  <li><i class="ph ph-signpost"></i> <strong>Intended role:</strong> Foreign key or lookup value</li>
+                ` : kindInfo.kind === 'Administrative' ? `
+                  <li><i class="ph ph-toggle-left"></i> <strong>Type:</strong> Status, flag, or state indicator</li>
+                  <li><i class="ph ph-funnel"></i> <strong>Filterable:</strong> Used for filtering and segmentation</li>
+                  <li><i class="ph ph-signpost"></i> <strong>Intended role:</strong> Control or classification field</li>
+                ` : `
+                  <li><i class="ph ph-tag"></i> <strong>Type:</strong> Descriptive attribute</li>
+                  <li><i class="ph ph-text-aa"></i> <strong>Categorical:</strong> Qualitative, text-based value</li>
+                  <li><i class="ph ph-signpost"></i> <strong>Intended role:</strong> Label or descriptor</li>
+                `}
+              </ul>
             </div>
-          ` : `
-            <div class="footprint-not-used">
-              <span class="footprint-label">Currently used by:</span>
-              <span class="footprint-none">— (none)</span>
+            <div class="contract-stance">
+              <span class="stance-badge ${!isLocal ? 'authoritative' : 'interpretive'}">
+                <i class="ph ${!isLocal ? 'ph-seal-check' : 'ph-lightbulb'}"></i>
+                ${!isLocal ? 'Authoritative definition' : 'Interpretive, project-local'}
+              </span>
             </div>
-          `}
-          <div class="footprint-benefits">
-            <span class="footprint-label">Once applied, this definition will:</span>
-            <ul class="footprint-benefit-list">
-              <li><i class="ph ph-check-circle"></i> Clarify the meaning of selected fields</li>
-              <li><i class="ph ph-check-circle"></i> Enable consistent filtering and grouping</li>
-              ${!isLocal ? `<li><i class="ph ph-check-circle"></i> Allow cross-dataset comparison via ${externalSourceName || 'external URI'}</li>` : ''}
-              <li><i class="ph ph-check-circle"></i> Preserve semantic lineage in exports</li>
-            </ul>
           </div>
         </div>
 
-        <!-- Impact Preview Section -->
-        <div class="glossary-section impact-preview-section collapsed" id="impact-preview-section">
-          <h3 class="collapsible-header" id="impact-preview-toggle">
-            <i class="ph ph-lightning"></i> Impact Preview
-            <i class="ph ph-caret-down toggle-icon"></i>
-          </h3>
-          <div class="impact-preview-content">
-            <p class="impact-intro">If applied, this definition will affect:</p>
-            <ul class="impact-list">
-              <li><i class="ph ph-funnel"></i> <strong>Filters:</strong> "Show only records related to ${this._escapeHtml(definition.name)}"</li>
-              <li><i class="ph ph-stack"></i> <strong>Grouping:</strong> Aggregate by ${this._escapeHtml(definition.name)} status</li>
-              <li><i class="ph ph-squares-four"></i> <strong>Views:</strong> Cards, Kanban, and analytics</li>
-              <li><i class="ph ph-export"></i> <strong>Exports:</strong> Meaning preserved ${!isLocal ? `via ${externalSourceName || 'external'} URI` : 'locally'}</li>
-            </ul>
-            <details class="operator-trace">
-              <summary><i class="ph ph-code"></i> Show operator trace</summary>
-              <div class="operator-trace-content">
-                <code>DES</code> → Bind concept to field<br>
-                <code>ALT</code> → Enables alternate interpretation<br>
-                <code>REC</code> → Enables re-centering around condition
-              </div>
-            </details>
+        <!-- ═══════════════════════════════════════════════════════════════════
+             C. IMPACT & USAGE - Where it's used and what it enables
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div class="glossary-section impact-usage-section">
+          <div class="section-header">
+            <h3><i class="ph ph-lightning"></i> Impact</h3>
           </div>
-        </div>
-
-        <!-- Semantic Actions Panel -->
-        <div class="glossary-section semantic-actions-section">
-          <h3><i class="ph ph-sparkle"></i> Semantic Actions</h3>
-          <div class="semantic-actions-grid">
+          <div class="impact-usage-content">
+            <div class="impact-column usage-column">
+              <span class="impact-column-label">Current Usage</span>
+              <div class="usage-stats">
+                <div class="usage-stat" title="Fields using this definition">
+                  <i class="ph ph-columns"></i>
+                  <span class="usage-count">${linkedFieldsCount}</span>
+                  <span class="usage-label">Fields</span>
+                </div>
+                <div class="usage-stat" title="Pipelines using this definition">
+                  <i class="ph ph-flow-arrow"></i>
+                  <span class="usage-count">${linkedPipelinesCount}</span>
+                  <span class="usage-label">Pipelines</span>
+                </div>
+                <div class="usage-stat" title="Exports using this definition">
+                  <i class="ph ph-export"></i>
+                  <span class="usage-count">${linkedExportsCount}</span>
+                  <span class="usage-label">Exports</span>
+                </div>
+              </div>
+              ${linkedSetsArray.length > 0 ? `
+                <div class="usage-details">
+                  <span class="usage-details-label">Used in:</span>
+                  <div class="used-by-list">
+                    ${linkedSetsArray.slice(0, 3).map(({ set, fields }) => `
+                      <span class="used-by-item" title="${fields.map(f => f.fieldName).join(', ')}">
+                        <i class="ph ph-table"></i>
+                        ${this._escapeHtml(set.name)} <span class="field-count">(${fields.length} field${fields.length !== 1 ? 's' : ''})</span>
+                      </span>
+                    `).join('')}
+                    ${linkedSetsArray.length > 3 ? `
+                      <span class="used-by-more">+${linkedSetsArray.length - 3} more</span>
+                    ` : ''}
+                  </div>
+                </div>
+              ` : `
+                <div class="usage-empty">
+                  <i class="ph ph-info"></i>
+                  <span>Not yet applied to any fields</span>
+                </div>
+              `}
+            </div>
+            <div class="impact-column effects-column">
+              <span class="impact-column-label">Effects When Applied</span>
+              <ul class="effects-list">
+                <li><i class="ph ph-check-circle"></i> Clarify the meaning of selected fields</li>
+                <li><i class="ph ph-check-circle"></i> Enable consistent filtering and grouping</li>
+                ${!isLocal ? `<li><i class="ph ph-check-circle"></i> Allow cross-dataset comparison via ${externalSourceName || 'external URI'}</li>` : ''}
+                <li><i class="ph ph-check-circle"></i> Preserve semantic lineage in exports</li>
+              </ul>
+            </div>
+          </div>
+          <div class="semantic-actions-bar">
             <button class="semantic-action-btn" id="btn-apply-to-fields" title="Bind this meaning to one or more columns">
               <i class="ph ph-plugs-connected"></i>
               <span>Apply to fields</span>
             </button>
-            ${!isLocal ? `
-              <button class="semantic-action-btn" id="btn-find-related" title="Search for related concepts">
-                <i class="ph ph-graph"></i>
-                <span>Find related concepts</span>
-              </button>
-            ` : ''}
             <button class="semantic-action-btn" id="btn-compare-definitions" title="Compare with similar definitions">
               <i class="ph ph-git-diff"></i>
               <span>Compare with similar</span>
@@ -10271,46 +10527,12 @@ class EODataWorkbench {
           </div>
         </div>
 
-        <!-- Interpretation Notes Section -->
-        <div class="glossary-section interpretation-notes-section collapsed" id="interpretation-notes-section">
-          <h3 class="collapsible-header" id="interpretation-notes-toggle">
-            <i class="ph ph-note-pencil"></i> Interpretation Notes
-            <span class="optional-badge">optional</span>
-            <i class="ph ph-caret-down toggle-icon"></i>
-          </h3>
-          <div class="interpretation-notes-content">
-            <div class="scope-selector">
-              <span class="scope-label">Scope:</span>
-              <div class="scope-options">
-                <label class="scope-option">
-                  <input type="checkbox" name="scope" value="individual" ${definition.interpretationScope?.includes('individual') ? 'checked' : ''}>
-                  <span>Individual-level</span>
-                </label>
-                <label class="scope-option">
-                  <input type="checkbox" name="scope" value="household" ${definition.interpretationScope?.includes('household') ? 'checked' : ''}>
-                  <span>Household-level</span>
-                </label>
-                <label class="scope-option">
-                  <input type="checkbox" name="scope" value="community" ${definition.interpretationScope?.includes('community') ? 'checked' : ''}>
-                  <span>Community-level</span>
-                </label>
-              </div>
-            </div>
-            <div class="notes-input-group">
-              <label for="interpretation-notes-text">Notes:</label>
-              <textarea id="interpretation-notes-text" placeholder="Add context about how this definition is used in your project...">${this._escapeHtml(definition.interpretationNotes || '')}</textarea>
-            </div>
-            <button class="btn btn-secondary btn-sm" id="btn-save-interpretation-notes">
-              <i class="ph ph-floppy-disk"></i> Save Notes
-            </button>
-          </div>
-        </div>
-
-        ${defSource ? this._renderDefinitionSourceSection(defSource) : ''}
-
-        <div class="definition-terms-section">
-          <div class="definition-terms-header">
-            <h3><i class="ph ph-list"></i> Terms & Properties</h3>
+        <!-- ═══════════════════════════════════════════════════════════════════
+             D. STRUCTURE - Terms & Properties (the body of the definition)
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div class="glossary-section definition-structure-section">
+          <div class="section-header">
+            <h3><i class="ph ph-tree-structure"></i> Structure</h3>
             <span class="terms-count">${terms.length} term${terms.length !== 1 ? 's' : ''}</span>
           </div>
 
@@ -10328,9 +10550,9 @@ class EODataWorkbench {
               </div>
               <div class="terms-filters">
                 <div class="filter-group">
-                  <label>Type:</label>
+                  <label>Role:</label>
                   <select id="terms-type-filter">
-                    <option value="">All Types</option>
+                    <option value="">All Roles</option>
                     ${uniqueTypes.map(type => `<option value="${this._escapeHtml(type)}">${this._escapeHtml(type)}</option>`).join('')}
                   </select>
                 </div>
@@ -10346,7 +10568,7 @@ class EODataWorkbench {
                   <label>Group by:</label>
                   <select id="terms-group-filter">
                     <option value="none">None</option>
-                    <option value="type">Type</option>
+                    <option value="type">Role</option>
                     <option value="set">Linked Set</option>
                   </select>
                 </div>
@@ -10361,14 +10583,14 @@ class EODataWorkbench {
               </button>
             </div>
 
-            <!-- Terms Table -->
+            <!-- Terms Table (simplified columns) -->
             <div class="definition-terms-table enhanced" id="terms-table-container">
               <table class="data-table terms-data-table">
                 <thead>
                   <tr>
                     <th class="col-name" style="width: 180px;">
                       <div class="th-content">
-                        <span>Name</span>
+                        <span>Term</span>
                         <button class="th-sort-btn" data-sort="name" title="Sort by name">
                           <i class="ph ph-arrows-down-up"></i>
                         </button>
@@ -10384,22 +10606,17 @@ class EODataWorkbench {
                     </th>
                     <th class="col-type" style="width: 100px;">
                       <div class="th-content">
-                        <span>Type</span>
+                        <span>Role</span>
                       </div>
                     </th>
                     <th class="col-description">
                       <div class="th-content">
-                        <span>Description</span>
+                        <span>Notes</span>
                       </div>
                     </th>
                     <th class="col-linked" style="width: 160px;">
                       <div class="th-content">
                         <span>Linked To</span>
-                      </div>
-                    </th>
-                    <th class="col-uri" style="width: 180px;">
-                      <div class="th-content">
-                        <span>URI / IRI</span>
                       </div>
                     </th>
                     <th class="col-actions" style="width: 60px;"></th>
@@ -10415,12 +10632,66 @@ class EODataWorkbench {
             <div class="terms-grouped-view" id="terms-grouped-container" style="display: none;">
             </div>
           `}
+          <div class="definition-add-term-section">
+            <button class="btn btn-secondary" id="btn-add-term">
+              <i class="ph ph-plus"></i> Add Term
+            </button>
+          </div>
         </div>
 
-        <div class="definition-add-term-section">
-          <button class="btn btn-secondary" id="btn-add-term">
-            <i class="ph ph-plus"></i> Add Term
-          </button>
+        <!-- ═══════════════════════════════════════════════════════════════════
+             E. PROVENANCE & AUTHORITY - Trust metadata (collapsed by default)
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div class="glossary-section provenance-section collapsed" id="provenance-section">
+          <h3 class="collapsible-header" id="provenance-toggle">
+            <i class="ph ph-certificate"></i> Provenance & Authority
+            <i class="ph ph-caret-down toggle-icon"></i>
+          </h3>
+          <div class="provenance-content">
+            ${defSource ? this._renderDefinitionSourceSection(defSource) : `
+              <div class="provenance-empty">
+                <i class="ph ph-info"></i>
+                <span>No provenance information available. This is a locally-created definition.</span>
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════
+             F. NOTES & RATIONALE - Context and interpretation notes
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div class="glossary-section notes-rationale-section collapsed" id="notes-rationale-section">
+          <h3 class="collapsible-header" id="notes-rationale-toggle">
+            <i class="ph ph-note-pencil"></i> Notes & Rationale
+            <span class="optional-badge">optional</span>
+            <i class="ph ph-caret-down toggle-icon"></i>
+          </h3>
+          <div class="notes-rationale-content">
+            <div class="scope-selector">
+              <span class="scope-label">Interpretation scope:</span>
+              <div class="scope-options">
+                <label class="scope-option">
+                  <input type="checkbox" name="scope" value="individual" ${definition.interpretationScope?.includes('individual') ? 'checked' : ''}>
+                  <span>Individual-level</span>
+                </label>
+                <label class="scope-option">
+                  <input type="checkbox" name="scope" value="household" ${definition.interpretationScope?.includes('household') ? 'checked' : ''}>
+                  <span>Household-level</span>
+                </label>
+                <label class="scope-option">
+                  <input type="checkbox" name="scope" value="community" ${definition.interpretationScope?.includes('community') ? 'checked' : ''}>
+                  <span>Community-level</span>
+                </label>
+              </div>
+            </div>
+            <div class="notes-input-group">
+              <label for="interpretation-notes-text">Rationale and context:</label>
+              <textarea id="interpretation-notes-text" placeholder="Add context about how this definition is used in your project, why it was chosen, and any caveats...">${this._escapeHtml(definition.interpretationNotes || '')}</textarea>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-save-interpretation-notes">
+              <i class="ph ph-floppy-disk"></i> Save Notes
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -10676,14 +10947,15 @@ class EODataWorkbench {
       this._navigateToDefinitionUsage(definition.id);
     });
 
-    // Collapsible sections
-    contentArea.querySelector('#impact-preview-toggle')?.addEventListener('click', () => {
-      const section = contentArea.querySelector('#impact-preview-section');
+    // Collapsible sections - Provenance & Authority
+    contentArea.querySelector('#provenance-toggle')?.addEventListener('click', () => {
+      const section = contentArea.querySelector('#provenance-section');
       section?.classList.toggle('collapsed');
     });
 
-    contentArea.querySelector('#interpretation-notes-toggle')?.addEventListener('click', () => {
-      const section = contentArea.querySelector('#interpretation-notes-section');
+    // Collapsible sections - Notes & Rationale
+    contentArea.querySelector('#notes-rationale-toggle')?.addEventListener('click', () => {
+      const section = contentArea.querySelector('#notes-rationale-section');
       section?.classList.toggle('collapsed');
     });
 
@@ -15864,6 +16136,7 @@ class EODataWorkbench {
   /**
    * Show the main definitions panel with all definitions in table form
    * Allows viewing, editing, and linking definitions to set keys
+   * Table columns: Definition, Kind, Status, Usage, Scope
    */
   _showDefinitionsPanel() {
     const contentArea = this.elements.contentArea;
@@ -15887,6 +16160,9 @@ class EODataWorkbench {
     // Count pending definitions
     const pendingCount = activeDefinitions.filter(d => this._isDefinitionPending(d)).length;
 
+    // Group definitions by kind for the grouped view
+    const groupedDefinitions = this._groupDefinitionsByKind(activeDefinitions);
+
     // Update breadcrumb
     this._updateBreadcrumb({
       workspace: this._getCurrentWorkspaceName(),
@@ -15902,9 +16178,9 @@ class EODataWorkbench {
     // Get all sets for linking
     const sets = this.sets.filter(s => s.status !== 'archived');
 
-    // Build the panel HTML
+    // Build the panel HTML with new hierarchy-focused layout
     contentArea.innerHTML = `
-      <div class="definitions-panel-view">
+      <div class="definitions-panel-view hierarchy-redesign">
         <!-- Header -->
         <div class="definitions-panel-header">
           <div class="definitions-panel-title-area">
@@ -15913,60 +16189,68 @@ class EODataWorkbench {
             </div>
             <div class="definitions-panel-title-info">
               <h2>Definitions</h2>
-              <p class="definitions-panel-subtitle">${activeDefinitions.length} definition${activeDefinitions.length !== 1 ? 's' : ''}${pendingCount > 0 ? ` • <span class="pending-count-badge">${pendingCount} pending approval</span>` : ''} • Manage field schemas and link to sets</p>
+              <p class="definitions-panel-subtitle">${activeDefinitions.length} definition${activeDefinitions.length !== 1 ? 's' : ''}${pendingCount > 0 ? ` • <span class="pending-count-badge">${pendingCount} pending approval</span>` : ''}</p>
             </div>
           </div>
           <div class="definitions-panel-actions">
-            <button class="btn btn-secondary" id="def-panel-auto-import-btn" title="Auto-import keys from all SET fields">
-              <i class="ph ph-arrows-in"></i>
-              Import from Sets
-            </button>
             <button class="btn btn-secondary" id="def-panel-import-btn">
               <i class="ph ph-link"></i>
-              Import from URI
+              Import URI
             </button>
             <button class="btn btn-primary" id="def-panel-new-btn">
               <i class="ph ph-plus"></i>
-              New Definition
+              + New
             </button>
           </div>
         </div>
 
-        <!-- Toolbar -->
+        <!-- Toolbar with view toggle -->
         <div class="definitions-panel-toolbar">
           <div class="definitions-panel-search">
             <i class="ph ph-magnifying-glass"></i>
-            <input type="text" id="def-panel-search" placeholder="Search definitions and terms...">
+            <input type="text" id="def-panel-search" placeholder="Search definitions...">
+          </div>
+          <div class="definitions-panel-view-toggle">
+            <button class="view-toggle-btn active" data-view="grouped" title="Group by kind">
+              <i class="ph ph-squares-four"></i>
+            </button>
+            <button class="view-toggle-btn" data-view="table" title="Table view">
+              <i class="ph ph-table"></i>
+            </button>
           </div>
           <div class="definitions-panel-filters">
+            <select id="def-panel-kind-filter" class="def-panel-filter-select">
+              <option value="">All Kinds</option>
+              <option value="Identifier">Identifiers</option>
+              <option value="Measure">Measures</option>
+              <option value="Temporal">Temporal</option>
+              <option value="Descriptive">Descriptive</option>
+              <option value="Relational">Relational</option>
+              <option value="Administrative">Administrative</option>
+            </select>
             <select id="def-panel-status-filter" class="def-panel-filter-select">
               <option value="">All Status</option>
               <option value="pending">Pending Approval</option>
               <option value="active">Active</option>
             </select>
-            <select id="def-panel-format-filter" class="def-panel-filter-select">
-              <option value="">All Formats</option>
-              <option value="jsonld">JSON-LD</option>
-              <option value="csvw">CSV Schema</option>
-              <option value="rdf">RDF</option>
-              <option value="json">JSON</option>
-              <option value="other">Other</option>
-            </select>
-            <select id="def-panel-source-filter" class="def-panel-filter-select">
-              <option value="">All Sources</option>
-              <option value="uri">From URI</option>
-              <option value="local">Local</option>
+            <select id="def-panel-scope-filter" class="def-panel-filter-select">
+              <option value="">All Scopes</option>
+              <option value="Global">Global</option>
+              <option value="Project">Project</option>
+              <option value="Dataset">Dataset</option>
+              <option value="Local">Local</option>
             </select>
           </div>
+          <span class="definitions-count">${activeDefinitions.length} definitions</span>
         </div>
 
-        <!-- Main Table -->
-        <div class="definitions-panel-table-container">
+        <!-- Main Content Area -->
+        <div class="definitions-panel-content">
           ${activeDefinitions.length === 0 ? `
             <div class="definitions-panel-empty">
               <i class="ph ph-book-open"></i>
               <h3>No definitions yet</h3>
-              <p>Definitions help standardize your data fields by linking them to schemas</p>
+              <p>Definitions shape how data is interpreted, not what the data is.</p>
               <div class="definitions-panel-empty-actions">
                 <button class="btn btn-secondary" id="def-panel-empty-import">
                   <i class="ph ph-link"></i>
@@ -15979,24 +16263,30 @@ class EODataWorkbench {
               </div>
             </div>
           ` : `
-            <table class="definitions-panel-table">
-              <thead>
-                <tr>
-                  <th class="col-expand"></th>
-                  <th class="col-status">Status</th>
-                  <th class="col-name">Name</th>
-                  <th class="col-description">Description</th>
-                  <th class="col-format">Format</th>
-                  <th class="col-source">Source</th>
-                  <th class="col-terms">Terms</th>
-                  <th class="col-linked">Linked Fields</th>
-                  <th class="col-actions">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="definitions-table-body">
-                ${activeDefinitions.map(def => this._renderDefinitionTableRow(def, sets)).join('')}
-              </tbody>
-            </table>
+            <!-- Grouped View (default) -->
+            <div class="definitions-grouped-view" id="definitions-grouped-view">
+              ${this._renderDefinitionsGroupedView(groupedDefinitions, sets)}
+            </div>
+
+            <!-- Table View (hidden by default) -->
+            <div class="definitions-table-view" id="definitions-table-view" style="display: none;">
+              <table class="definitions-panel-table new-hierarchy">
+                <thead>
+                  <tr>
+                    <th class="col-expand"></th>
+                    <th class="col-name">Definition</th>
+                    <th class="col-kind">Kind</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-usage">Usage</th>
+                    <th class="col-scope">Scope</th>
+                    <th class="col-actions"></th>
+                  </tr>
+                </thead>
+                <tbody id="definitions-table-body">
+                  ${activeDefinitions.map(def => this._renderDefinitionTableRow(def, sets)).join('')}
+                </tbody>
+              </table>
+            </div>
           `}
         </div>
       </div>
@@ -16029,14 +16319,117 @@ class EODataWorkbench {
   }
 
   /**
-   * Render a single definition row in the table
+   * Render definitions in a grouped view by semantic kind
+   * @param {Object} groupedDefinitions - Definitions grouped by kind
+   * @param {Array} sets - All available sets for linking
+   * @returns {string} HTML string
+   */
+  _renderDefinitionsGroupedView(groupedDefinitions, sets) {
+    const kindOrder = ['Identifier', 'Measure', 'Temporal', 'Descriptive', 'Relational', 'Administrative'];
+    const kindInfo = {
+      'Identifier': { icon: 'ph-key', color: '#6366f1', description: 'Keys, IDs, and unique references' },
+      'Measure': { icon: 'ph-chart-bar', color: '#10b981', description: 'Quantities, amounts, and metrics' },
+      'Temporal': { icon: 'ph-calendar', color: '#f59e0b', description: 'Dates, times, and durations' },
+      'Descriptive': { icon: 'ph-tag', color: '#0ea5e9', description: 'Labels, names, and text fields' },
+      'Relational': { icon: 'ph-git-branch', color: '#8b5cf6', description: 'Foreign keys and relationships' },
+      'Administrative': { icon: 'ph-gear', color: '#64748b', description: 'Status flags and system fields' }
+    };
+
+    let html = '';
+
+    for (const kind of kindOrder) {
+      const definitions = groupedDefinitions[kind];
+      if (!definitions || definitions.length === 0) continue;
+
+      const info = kindInfo[kind] || { icon: 'ph-tag', color: '#64748b', description: '' };
+
+      html += `
+        <div class="definitions-kind-group" data-kind="${kind}">
+          <div class="kind-group-header">
+            <div class="kind-group-title">
+              <i class="ph ${info.icon}" style="color: ${info.color};"></i>
+              <span class="kind-name">${kind}</span>
+              <span class="kind-count">${definitions.length}</span>
+            </div>
+            <span class="kind-description">${info.description}</span>
+          </div>
+          <div class="kind-group-items">
+            ${definitions.map(def => this._renderDefinitionGroupedItem(def, sets, info)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    return html;
+  }
+
+  /**
+   * Render a single definition item in the grouped view
+   * @param {Object} definition - The definition object
+   * @param {Array} sets - All available sets
+   * @param {Object} kindInfo - Kind icon and color info
+   * @returns {string} HTML string
+   */
+  _renderDefinitionGroupedItem(definition, sets, kindInfo) {
+    const stabilityInfo = this._getDefinitionStability(definition);
+    const scopeInfo = this._getDefinitionScope(definition);
+    const terms = definition.terms || definition.properties || [];
+    const termCount = terms.length;
+
+    // Count linked fields
+    let linkedFieldsCount = 0;
+    sets.forEach(set => {
+      (set.fields || []).forEach(field => {
+        if (field.definitionRef?.definitionId === definition.id) {
+          linkedFieldsCount++;
+        }
+      });
+    });
+
+    return `
+      <div class="definition-grouped-item" data-definition-id="${definition.id}">
+        <div class="grouped-item-main">
+          <div class="grouped-item-icon">
+            <i class="ph ${kindInfo.icon}" style="color: ${kindInfo.color};"></i>
+          </div>
+          <div class="grouped-item-content">
+            <div class="grouped-item-header">
+              <span class="grouped-item-name">${this._escapeHtml(definition.name)}</span>
+              <span class="stability-pill" style="background: ${stabilityInfo.color}15; color: ${stabilityInfo.color};" title="${stabilityInfo.description}">
+                ${stabilityInfo.stability}
+              </span>
+            </div>
+            ${terms.length > 0 ? `
+              <div class="grouped-item-terms">
+                ${terms.slice(0, 3).map(t => `<span class="term-chip">${this._escapeHtml(t.name || t.label)}</span>`).join('')}
+                ${terms.length > 3 ? `<span class="term-more">+${terms.length - 3} more</span>` : ''}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        <div class="grouped-item-meta">
+          <span class="scope-indicator" title="${scopeInfo.scopeDetail}">
+            <i class="ph ${scopeInfo.icon}"></i>
+            ${scopeInfo.scope}
+          </span>
+          <span class="usage-indicator" title="${linkedFieldsCount} field${linkedFieldsCount !== 1 ? 's' : ''} using this definition">
+            ${linkedFieldsCount}
+          </span>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render a single definition row in the table (new hierarchy columns)
+   * Columns: Definition, Kind, Status, Usage, Scope
    */
   _renderDefinitionTableRow(definition, sets) {
     const terms = definition.terms || definition.properties || [];
     const termCount = terms.length;
-    const format = this._getDefinitionFormatLabel(definition.format || definition.type || 'other');
-    const sourceType = definition.sourceUri ? 'URI' : 'Local';
-    const importDate = definition.importedAt ? new Date(definition.importedAt).toLocaleDateString() : '—';
+    const kindInfo = this._getDefinitionKind(definition);
+    const stabilityInfo = this._getDefinitionStability(definition);
+    const scopeInfo = this._getDefinitionScope(definition);
 
     // Check if definition is pending approval
     const isPending = this._isDefinitionPending(definition);
@@ -16097,79 +16490,88 @@ class EODataWorkbench {
       </div>
     `;
 
+    // New hierarchy columns: Definition, Kind, Status, Usage, Scope
     return `
-      <tr class="${rowClass}" data-definition-id="${definition.id}" data-pending="${isPending}">
+      <tr class="${rowClass}" data-definition-id="${definition.id}" data-pending="${isPending}" data-kind="${kindInfo.kind}">
         <td class="col-expand">
-          <button class="def-row-expand-btn" title="Expand to see terms">
+          <button class="def-row-expand-btn" title="Expand details">
             <i class="ph ph-caret-right"></i>
           </button>
         </td>
-        <td class="col-status">
-          ${statusBadge}
-        </td>
         <td class="col-name">
           <div class="def-name-cell">
-            <i class="ph ${this._getDefinitionIcon(definition)} def-icon"></i>
-            <span class="def-name-text" data-field="name">${this._escapeHtml(definition.name)}</span>
+            <i class="ph ${kindInfo.icon} def-icon" style="color: ${kindInfo.color};"></i>
+            <div class="def-name-content">
+              <span class="def-name-text" data-field="name">${this._escapeHtml(definition.name)}</span>
+              ${termCount > 0 ? `<span class="def-term-count">${termCount} term${termCount !== 1 ? 's' : ''}</span>` : ''}
+            </div>
           </div>
         </td>
-        <td class="col-description">
-          <span class="def-description-text" data-field="description">${this._escapeHtml(definition.description || '—')}</span>
-        </td>
-        <td class="col-format">
-          <span class="def-format-badge">${format}</span>
-        </td>
-        <td class="col-source">
-          <span class="def-source-badge ${sourceType.toLowerCase()}">
-            <i class="ph ${sourceType === 'URI' ? 'ph-link' : 'ph-pencil-simple'}"></i>
-            ${sourceType}
+        <td class="col-kind">
+          <span class="kind-badge" style="background: ${kindInfo.color}15; color: ${kindInfo.color};">
+            <i class="ph ${kindInfo.icon}"></i>
+            ${kindInfo.kind}
           </span>
-          ${definition.sourceUri ? `<span class="def-source-uri" title="${this._escapeHtml(definition.sourceUri)}">${this._escapeHtml(this._truncateName(definition.sourceUri, 30))}</span>` : ''}
         </td>
-        <td class="col-terms">
-          <span class="def-terms-count">${termCount}</span>
+        <td class="col-status">
+          <span class="stability-badge" style="background: ${stabilityInfo.color}15; color: ${stabilityInfo.color};" title="${stabilityInfo.description}">
+            <i class="ph ${stabilityInfo.icon}"></i>
+            ${stabilityInfo.stability}
+          </span>
         </td>
-        <td class="col-linked">
-          ${linkedFieldsCount > 0 ? `
-            <button class="def-linked-badge has-links" title="View linked fields">
-              <i class="ph ph-link-simple"></i>
-              <span>${linkedFieldsCount}</span>
-            </button>
-          ` : `
-            <span class="def-linked-badge no-links">—</span>
-          `}
+        <td class="col-usage">
+          <span class="usage-badge ${linkedFieldsCount > 0 ? 'has-usage' : 'no-usage'}" title="${linkedFieldsCount} field${linkedFieldsCount !== 1 ? 's' : ''} using this definition">
+            ${linkedFieldsCount}
+          </span>
+        </td>
+        <td class="col-scope">
+          <span class="scope-badge" title="${scopeInfo.scopeDetail}">
+            <i class="ph ${scopeInfo.icon}"></i>
+            ${scopeInfo.scope}
+          </span>
         </td>
         <td class="col-actions">
           ${actionsHtml}
         </td>
       </tr>
-      <tr class="definition-terms-row" data-definition-id="${definition.id}" style="display: none;">
-        <td colspan="9">
-          <div class="def-terms-expanded">
-            <div class="def-terms-header">
-              <h4><i class="ph ph-list-numbers"></i> Terms (${termCount})</h4>
-              <button class="btn btn-sm btn-secondary def-add-term-btn" data-definition-id="${definition.id}">
-                <i class="ph ph-plus"></i> Add Term
+      <tr class="definition-expanded-row" data-definition-id="${definition.id}" style="display: none;">
+        <td colspan="7">
+          <div class="def-expanded-content">
+            <!-- Meaning Contract Summary -->
+            <div class="expanded-section contract-summary">
+              <span class="expanded-label">Meaning Contract:</span>
+              <span class="contract-text">${kindInfo.kind === 'Identifier' ? 'Unique per-record reference' : kindInfo.kind === 'Measure' ? 'Quantitative, aggregatable value' : kindInfo.kind === 'Temporal' ? 'Date/time, chronologically orderable' : kindInfo.kind === 'Relational' ? 'Reference to another entity' : kindInfo.kind === 'Administrative' ? 'Status or control field' : 'Descriptive attribute'}</span>
+            </div>
+
+            <!-- Impact Summary -->
+            <div class="expanded-section impact-summary">
+              <span class="expanded-label">Impact:</span>
+              <span class="impact-text">${linkedFieldsCount > 0 ? `Used in ${linkedFieldsCount} field${linkedFieldsCount !== 1 ? 's' : ''}` : 'Not yet applied'}</span>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="expanded-actions">
+              <button class="expanded-action-btn" data-action="apply" title="Apply to fields">
+                <i class="ph ph-plugs-connected"></i> Apply
+              </button>
+              <button class="expanded-action-btn" data-action="compare" title="Compare with similar">
+                <i class="ph ph-git-diff"></i> Compare
+              </button>
+              <button class="expanded-action-btn" data-action="refine" title="Create refinement">
+                <i class="ph ph-git-branch"></i> Refine
               </button>
             </div>
-            ${terms.length === 0 ? `
-              <p class="def-terms-empty">No terms defined yet</p>
-            ` : `
-              <table class="def-terms-table">
-                <thead>
-                  <tr>
-                    <th>Term Name</th>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th>URI</th>
-                    <th>Link to Field</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${terms.map(term => this._renderTermRow(term, definition, sets)).join('')}
-                </tbody>
-              </table>
-            `}
+
+            <!-- Terms Preview -->
+            ${terms.length > 0 ? `
+              <div class="expanded-section terms-preview">
+                <span class="expanded-label">Terms:</span>
+                <div class="terms-chips">
+                  ${terms.slice(0, 5).map(t => `<span class="term-chip">${this._escapeHtml(t.name || t.label)}</span>`).join('')}
+                  ${terms.length > 5 ? `<span class="term-more">+${terms.length - 5} more</span>` : ''}
+                </div>
+              </div>
+            ` : ''}
           </div>
         </td>
       </tr>
@@ -16237,11 +16639,6 @@ class EODataWorkbench {
   _attachDefinitionsPanelHandlers(definitions, sets) {
     const contentArea = this.elements.contentArea;
 
-    // Auto-import from Sets button
-    contentArea.querySelector('#def-panel-auto-import-btn')?.addEventListener('click', () => {
-      this._autoImportKeysFromSets();
-    });
-
     // Import button
     contentArea.querySelector('#def-panel-import-btn')?.addEventListener('click', () => {
       this._showImportDefinitionModal();
@@ -16260,39 +16657,110 @@ class EODataWorkbench {
       this._showNewDefinitionModal();
     });
 
+    // View toggle buttons
+    contentArea.querySelectorAll('.view-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.dataset.view;
+        const groupedView = contentArea.querySelector('#definitions-grouped-view');
+        const tableView = contentArea.querySelector('#definitions-table-view');
+
+        // Update button states
+        contentArea.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Toggle views
+        if (view === 'grouped') {
+          if (groupedView) groupedView.style.display = '';
+          if (tableView) tableView.style.display = 'none';
+        } else {
+          if (groupedView) groupedView.style.display = 'none';
+          if (tableView) tableView.style.display = '';
+        }
+      });
+    });
+
     // Search
     const searchInput = contentArea.querySelector('#def-panel-search');
     searchInput?.addEventListener('input', (e) => {
       this._filterDefinitionsPanel(e.target.value);
     });
 
-    // Format filter
-    contentArea.querySelector('#def-panel-format-filter')?.addEventListener('change', (e) => {
-      this._applyDefinitionsPanelFilters();
-    });
-
-    // Source filter
-    contentArea.querySelector('#def-panel-source-filter')?.addEventListener('change', (e) => {
+    // Kind filter
+    contentArea.querySelector('#def-panel-kind-filter')?.addEventListener('change', () => {
       this._applyDefinitionsPanelFilters();
     });
 
     // Status filter
-    contentArea.querySelector('#def-panel-status-filter')?.addEventListener('change', (e) => {
+    contentArea.querySelector('#def-panel-status-filter')?.addEventListener('change', () => {
       this._applyDefinitionsPanelFilters();
     });
 
-    // Row expand buttons
+    // Scope filter
+    contentArea.querySelector('#def-panel-scope-filter')?.addEventListener('change', () => {
+      this._applyDefinitionsPanelFilters();
+    });
+
+    // Grouped view item clicks - navigate to definition detail
+    contentArea.querySelectorAll('.definition-grouped-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const definitionId = item.dataset.definitionId;
+        if (definitionId) {
+          this._showDefinitionDetail(definitionId);
+        }
+      });
+    });
+
+    // Row expand buttons (table view)
     contentArea.querySelectorAll('.def-row-expand-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const row = btn.closest('.definition-row');
         const definitionId = row?.dataset.definitionId;
-        const termsRow = contentArea.querySelector(`.definition-terms-row[data-definition-id="${definitionId}"]`);
+        const expandedRow = contentArea.querySelector(`.definition-expanded-row[data-definition-id="${definitionId}"]`);
 
-        if (termsRow) {
-          const isExpanded = termsRow.style.display !== 'none';
-          termsRow.style.display = isExpanded ? 'none' : 'table-row';
+        if (expandedRow) {
+          const isExpanded = expandedRow.style.display !== 'none';
+          expandedRow.style.display = isExpanded ? 'none' : 'table-row';
           row.classList.toggle('expanded', !isExpanded);
           btn.querySelector('i').className = isExpanded ? 'ph ph-caret-right' : 'ph ph-caret-down';
+        }
+      });
+    });
+
+    // Row click to navigate to detail (table view)
+    contentArea.querySelectorAll('.definition-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        // Don't navigate if clicking on buttons or expand area
+        if (e.target.closest('.def-row-expand-btn') || e.target.closest('.def-action-btn') || e.target.closest('.col-actions')) {
+          return;
+        }
+        const definitionId = row.dataset.definitionId;
+        if (definitionId) {
+          this._showDefinitionDetail(definitionId);
+        }
+      });
+    });
+
+    // Expanded row action buttons
+    contentArea.querySelectorAll('.expanded-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const expandedRow = btn.closest('.definition-expanded-row');
+        const definitionId = expandedRow?.dataset.definitionId;
+        const action = btn.dataset.action;
+
+        if (!definitionId) return;
+
+        switch (action) {
+          case 'apply':
+            this._showApplyToFieldsModal(definitionId);
+            break;
+          case 'compare':
+            this._showCompareDefinitionsModal(definitionId);
+            break;
+          case 'refine':
+            this._showCreateRefinementModal(definitionId);
+            break;
         }
       });
     });
