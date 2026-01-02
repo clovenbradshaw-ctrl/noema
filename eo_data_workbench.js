@@ -9314,24 +9314,56 @@ class EODataWorkbench {
     const linkedSets = this._getLinkedSetsForDefinition(definition);
     const linkedSetsArray = Array.from(linkedSets.values());
     const isLocal = !definition.sourceUri;
+    const isWikidata = definition.sourceUri?.includes('wikidata.org');
+    const externalSourceName = isWikidata ? 'Wikidata' : (definition.sourceUri ? 'External' : null);
+
+    // Extract Wikidata Q-number if present
+    const wikidataMatch = definition.sourceUri?.match(/Q\d+/);
+    const wikidataId = wikidataMatch ? wikidataMatch[0] : null;
 
     contentArea.innerHTML = `
-      <div class="definition-detail-view glossary-style">
-        <!-- Glossary Header -->
+      <div class="definition-detail-view glossary-style semantic-engine">
+        <!-- Back Navigation -->
+        ${linkedSetsArray.length > 0 ? `
+          <div class="definition-back-nav">
+            <button class="btn-link" id="btn-back-to-usage">
+              <i class="ph ph-arrow-left"></i> Back to where this meaning is used
+            </button>
+          </div>
+        ` : ''}
+
+        <!-- Semantic Philosophy Tagline -->
+        <div class="semantic-tagline">
+          <i class="ph ph-lightbulb"></i>
+          <span>Definitions shape how data is interpreted, not what the data is.</span>
+        </div>
+
+        <!-- Glossary Header - Enhanced with External Grounding -->
         <div class="definition-glossary-header">
           <div class="glossary-icon-title">
-            <div class="glossary-icon">
+            <div class="glossary-icon ${isLocal ? '' : 'externally-grounded'}">
               <i class="ph ${this._getDefinitionIcon(definition)}"></i>
             </div>
             <div class="glossary-title-area">
-              <h2>${this._escapeHtml(definition.name)}</h2>
+              <div class="glossary-title-row">
+                <h2>${this._escapeHtml(definition.name)}${externalSourceName ? ` <span class="source-label">(${externalSourceName})</span>` : ''}</h2>
+                ${!isLocal ? `
+                  <span class="grounding-badge" title="This meaning is shared across datasets, tools, and organizations.">
+                    <i class="ph ph-globe-hemisphere-west"></i> Externally grounded
+                  </span>
+                ` : ''}
+              </div>
               ${definition.sourceUri ? `
                 <div class="glossary-uri">
                   <i class="ph ph-globe"></i>
+                  ${isWikidata && wikidataId ? `
+                    <span class="wikidata-id">${wikidataId}</span>
+                  ` : ''}
                   <a href="${this._escapeHtml(definition.sourceUri)}" target="_blank" class="definition-uri-link">
                     ${this._escapeHtml(definition.sourceUri)}
                   </a>
                 </div>
+                <div class="grounding-hint">External, shared definition</div>
               ` : `
                 <div class="glossary-uri local-warning">
                   <i class="ph ph-warning-circle"></i>
@@ -9345,8 +9377,8 @@ class EODataWorkbench {
             <button class="btn btn-secondary" id="btn-refresh-definition" title="Refresh from URI" ${isLocal ? 'disabled' : ''}>
               <i class="ph ph-arrows-clockwise"></i> Refresh
             </button>
-            <button class="btn btn-secondary" id="btn-apply-definition" title="Apply to keys">
-              <i class="ph ph-arrow-right"></i> Apply
+            <button class="btn btn-primary" id="btn-apply-definition" title="Bind this meaning to one or more columns (adds semantic context, does not change data)">
+              <i class="ph ph-arrow-right"></i> Apply to Fields…
             </button>
             <button class="btn btn-secondary btn-danger" id="btn-delete-definition" title="Delete definition">
               <i class="ph ph-trash"></i>
@@ -9360,25 +9392,122 @@ class EODataWorkbench {
           <p class="purpose-text">${this._escapeHtml(definition.description || 'Defines vocabulary terms that can be applied to data fields for semantic meaning.')}</p>
         </div>
 
-        <!-- Used By Section -->
-        ${linkedSetsArray.length > 0 ? `
-          <div class="glossary-section used-by-section">
-            <h3><i class="ph ph-check-circle"></i> Used by</h3>
-            <div class="used-by-list">
-              ${linkedSetsArray.map(({ set, fields }) => fields.map(f => `
-                <span class="used-by-item" title="${this._escapeHtml(set.name)}.${this._escapeHtml(f.fieldName)} → ${this._escapeHtml(definition.name)}">
-                  <i class="ph ph-check"></i>
-                  <span class="set-name">${this._escapeHtml(set.name)}</span>.<span class="field-name">${this._escapeHtml(f.fieldName)}</span>
-                </span>
-              `).join('')).join('')}
+        <!-- Meaning Footprint Section (replaces "Used by") -->
+        <div class="glossary-section meaning-footprint-section ${linkedSetsArray.length === 0 ? 'unused' : ''}">
+          <h3><i class="ph ${linkedSetsArray.length > 0 ? 'ph-map-trifold' : 'ph-map-trifold'}"></i> Meaning Footprint</h3>
+          ${linkedSetsArray.length > 0 ? `
+            <div class="footprint-currently-used">
+              <span class="footprint-label">Currently used by:</span>
+              <div class="used-by-list">
+                ${linkedSetsArray.map(({ set, fields }) => fields.map(f => `
+                  <span class="used-by-item" title="${this._escapeHtml(set.name)}.${this._escapeHtml(f.fieldName)} → ${this._escapeHtml(definition.name)}">
+                    <i class="ph ph-check"></i>
+                    <span class="set-name">${this._escapeHtml(set.name)}</span>.<span class="field-name">${this._escapeHtml(f.fieldName)}</span>
+                  </span>
+                `).join('')).join('')}
+              </div>
             </div>
+          ` : `
+            <div class="footprint-not-used">
+              <span class="footprint-label">Currently used by:</span>
+              <span class="footprint-none">— (none)</span>
+            </div>
+          `}
+          <div class="footprint-benefits">
+            <span class="footprint-label">Once applied, this definition will:</span>
+            <ul class="footprint-benefit-list">
+              <li><i class="ph ph-check-circle"></i> Clarify the meaning of selected fields</li>
+              <li><i class="ph ph-check-circle"></i> Enable consistent filtering and grouping</li>
+              ${!isLocal ? `<li><i class="ph ph-check-circle"></i> Allow cross-dataset comparison via ${externalSourceName || 'external URI'}</li>` : ''}
+              <li><i class="ph ph-check-circle"></i> Preserve semantic lineage in exports</li>
+            </ul>
           </div>
-        ` : `
-          <div class="glossary-section used-by-section unused">
-            <h3><i class="ph ph-minus-circle"></i> Used by</h3>
-            <p class="not-used-text">This definition is not yet linked to any fields. Use "Apply" to bind terms to columns.</p>
+        </div>
+
+        <!-- Impact Preview Section -->
+        <div class="glossary-section impact-preview-section collapsed" id="impact-preview-section">
+          <h3 class="collapsible-header" id="impact-preview-toggle">
+            <i class="ph ph-lightning"></i> Impact Preview
+            <i class="ph ph-caret-down toggle-icon"></i>
+          </h3>
+          <div class="impact-preview-content">
+            <p class="impact-intro">If applied, this definition will affect:</p>
+            <ul class="impact-list">
+              <li><i class="ph ph-funnel"></i> <strong>Filters:</strong> "Show only records related to ${this._escapeHtml(definition.name)}"</li>
+              <li><i class="ph ph-stack"></i> <strong>Grouping:</strong> Aggregate by ${this._escapeHtml(definition.name)} status</li>
+              <li><i class="ph ph-squares-four"></i> <strong>Views:</strong> Cards, Kanban, and analytics</li>
+              <li><i class="ph ph-export"></i> <strong>Exports:</strong> Meaning preserved ${!isLocal ? `via ${externalSourceName || 'external'} URI` : 'locally'}</li>
+            </ul>
+            <details class="operator-trace">
+              <summary><i class="ph ph-code"></i> Show operator trace</summary>
+              <div class="operator-trace-content">
+                <code>DES</code> → Bind concept to field<br>
+                <code>ALT</code> → Enables alternate interpretation<br>
+                <code>REC</code> → Enables re-centering around condition
+              </div>
+            </details>
           </div>
-        `}
+        </div>
+
+        <!-- Semantic Actions Panel -->
+        <div class="glossary-section semantic-actions-section">
+          <h3><i class="ph ph-sparkle"></i> Semantic Actions</h3>
+          <div class="semantic-actions-grid">
+            <button class="semantic-action-btn" id="btn-apply-to-fields" title="Bind this meaning to one or more columns">
+              <i class="ph ph-plugs-connected"></i>
+              <span>Apply to fields</span>
+            </button>
+            ${!isLocal ? `
+              <button class="semantic-action-btn" id="btn-find-related" title="Search for related concepts">
+                <i class="ph ph-graph"></i>
+                <span>Find related concepts</span>
+              </button>
+            ` : ''}
+            <button class="semantic-action-btn" id="btn-compare-definitions" title="Compare with similar definitions">
+              <i class="ph ph-git-diff"></i>
+              <span>Compare with similar</span>
+            </button>
+            <button class="semantic-action-btn" id="btn-create-refinement" title="Create a local refinement that keeps link to original">
+              <i class="ph ph-git-branch"></i>
+              <span>Create local refinement</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Interpretation Notes Section -->
+        <div class="glossary-section interpretation-notes-section collapsed" id="interpretation-notes-section">
+          <h3 class="collapsible-header" id="interpretation-notes-toggle">
+            <i class="ph ph-note-pencil"></i> Interpretation Notes
+            <span class="optional-badge">optional</span>
+            <i class="ph ph-caret-down toggle-icon"></i>
+          </h3>
+          <div class="interpretation-notes-content">
+            <div class="scope-selector">
+              <span class="scope-label">Scope:</span>
+              <div class="scope-options">
+                <label class="scope-option">
+                  <input type="checkbox" name="scope" value="individual" ${definition.interpretationScope?.includes('individual') ? 'checked' : ''}>
+                  <span>Individual-level</span>
+                </label>
+                <label class="scope-option">
+                  <input type="checkbox" name="scope" value="household" ${definition.interpretationScope?.includes('household') ? 'checked' : ''}>
+                  <span>Household-level</span>
+                </label>
+                <label class="scope-option">
+                  <input type="checkbox" name="scope" value="community" ${definition.interpretationScope?.includes('community') ? 'checked' : ''}>
+                  <span>Community-level</span>
+                </label>
+              </div>
+            </div>
+            <div class="notes-input-group">
+              <label for="interpretation-notes-text">Notes:</label>
+              <textarea id="interpretation-notes-text" placeholder="Add context about how this definition is used in your project...">${this._escapeHtml(definition.interpretationNotes || '')}</textarea>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-save-interpretation-notes">
+              <i class="ph ph-floppy-disk"></i> Save Notes
+            </button>
+          </div>
+        </div>
 
         ${defSource ? this._renderDefinitionSourceSection(defSource) : ''}
 
@@ -9734,7 +9863,7 @@ class EODataWorkbench {
     });
 
     contentArea.querySelector('#btn-apply-definition')?.addEventListener('click', () => {
-      this._showApplyDefinitionModal(definition.id);
+      this._showApplyToFieldsModal(definition.id);
     });
 
     contentArea.querySelector('#btn-delete-definition')?.addEventListener('click', () => {
@@ -9745,8 +9874,268 @@ class EODataWorkbench {
       this._showAddTermModal(definition.id);
     });
 
+    // Back navigation button
+    contentArea.querySelector('#btn-back-to-usage')?.addEventListener('click', () => {
+      this._navigateToDefinitionUsage(definition.id);
+    });
+
+    // Collapsible sections
+    contentArea.querySelector('#impact-preview-toggle')?.addEventListener('click', () => {
+      const section = contentArea.querySelector('#impact-preview-section');
+      section?.classList.toggle('collapsed');
+    });
+
+    contentArea.querySelector('#interpretation-notes-toggle')?.addEventListener('click', () => {
+      const section = contentArea.querySelector('#interpretation-notes-section');
+      section?.classList.toggle('collapsed');
+    });
+
+    // Semantic Actions buttons
+    contentArea.querySelector('#btn-apply-to-fields')?.addEventListener('click', () => {
+      this._showApplyToFieldsModal(definition.id);
+    });
+
+    contentArea.querySelector('#btn-find-related')?.addEventListener('click', () => {
+      this._showFindRelatedConceptsModal(definition);
+    });
+
+    contentArea.querySelector('#btn-compare-definitions')?.addEventListener('click', () => {
+      this._showCompareDefinitionsModal(definition.id);
+    });
+
+    contentArea.querySelector('#btn-create-refinement')?.addEventListener('click', () => {
+      this._showCreateRefinementModal(definition.id);
+    });
+
+    // Interpretation Notes save button
+    contentArea.querySelector('#btn-save-interpretation-notes')?.addEventListener('click', () => {
+      this._saveInterpretationNotes(definition.id);
+    });
+
     // Terms table search and filter handlers
     this._attachTermsTableHandlers(definition);
+  }
+
+  /**
+   * Navigate to the first set/field that uses this definition
+   */
+  _navigateToDefinitionUsage(definitionId) {
+    const linkedSets = this._getLinkedSetsForDefinition({ id: definitionId });
+    const firstUsage = Array.from(linkedSets.values())[0];
+
+    if (firstUsage && firstUsage.set) {
+      this._selectSet(firstUsage.set.id);
+    }
+  }
+
+  /**
+   * Save interpretation notes for a definition
+   */
+  _saveInterpretationNotes(definitionId) {
+    const definition = this.definitions?.find(d => d.id === definitionId);
+    if (!definition) return;
+
+    const contentArea = this.elements.contentArea;
+    const notesText = contentArea.querySelector('#interpretation-notes-text')?.value || '';
+    const scopeCheckboxes = contentArea.querySelectorAll('input[name="scope"]:checked');
+    const scopes = Array.from(scopeCheckboxes).map(cb => cb.value);
+
+    definition.interpretationNotes = notesText;
+    definition.interpretationScope = scopes;
+
+    this._saveData();
+    this._showNotification('Interpretation notes saved', 'success');
+  }
+
+  /**
+   * Show modal to find related concepts (for externally grounded definitions)
+   */
+  _showFindRelatedConceptsModal(definition) {
+    if (!definition.sourceUri) {
+      this._showNotification('This action requires an externally grounded definition', 'warning');
+      return;
+    }
+
+    const isWikidata = definition.sourceUri.includes('wikidata.org');
+    const sourceLabel = isWikidata ? 'Wikidata' : 'external source';
+
+    this._showModal('Find Related Concepts', `
+      <div class="find-related-form">
+        <p>Search for concepts related to <strong>${this._escapeHtml(definition.name)}</strong> from ${sourceLabel}.</p>
+        <div class="form-group">
+          <label class="form-label">Search for:</label>
+          <div class="related-search-options">
+            <label class="radio-option">
+              <input type="radio" name="related-type" value="broader" checked>
+              <span>Broader concepts (parents)</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="related-type" value="narrower">
+              <span>Narrower concepts (children)</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="related-type" value="related">
+              <span>Related concepts</span>
+            </label>
+          </div>
+        </div>
+        <p class="hint-text">This will search ${sourceLabel} for semantically related definitions you can import.</p>
+      </div>
+    `, () => {
+      const relationType = document.querySelector('input[name="related-type"]:checked')?.value || 'broader';
+      this._searchRelatedConcepts(definition, relationType);
+    });
+  }
+
+  /**
+   * Search for related concepts (placeholder - would integrate with Wikidata API)
+   */
+  _searchRelatedConcepts(definition, relationType) {
+    this._showNotification(`Searching for ${relationType} concepts... (Feature coming soon)`, 'info');
+  }
+
+  /**
+   * Show modal to compare definitions
+   */
+  _showCompareDefinitionsModal(definitionId) {
+    const definition = this.definitions?.find(d => d.id === definitionId);
+    if (!definition) return;
+
+    const otherDefinitions = this.definitions?.filter(d => d.id !== definitionId) || [];
+
+    if (otherDefinitions.length === 0) {
+      this._showNotification('No other definitions to compare with', 'info');
+      return;
+    }
+
+    this._showModal('Compare Definitions', `
+      <div class="compare-definitions-form">
+        <p>Compare <strong>${this._escapeHtml(definition.name)}</strong> with:</p>
+        <div class="form-group">
+          <select id="compare-target" class="form-input">
+            ${otherDefinitions.map(d => `
+              <option value="${d.id}">${this._escapeHtml(d.name)}</option>
+            `).join('')}
+          </select>
+        </div>
+        <p class="hint-text">This will show term overlap and differences between definitions.</p>
+      </div>
+    `, () => {
+      const targetId = document.getElementById('compare-target')?.value;
+      if (targetId) {
+        this._showDefinitionComparison(definitionId, targetId);
+      }
+    });
+  }
+
+  /**
+   * Show definition comparison view
+   */
+  _showDefinitionComparison(defId1, defId2) {
+    const def1 = this.definitions?.find(d => d.id === defId1);
+    const def2 = this.definitions?.find(d => d.id === defId2);
+
+    if (!def1 || !def2) return;
+
+    const terms1 = new Set((def1.terms || []).map(t => t.name?.toLowerCase()));
+    const terms2 = new Set((def2.terms || []).map(t => t.name?.toLowerCase()));
+
+    const overlap = [...terms1].filter(t => terms2.has(t));
+    const onlyIn1 = [...terms1].filter(t => !terms2.has(t));
+    const onlyIn2 = [...terms2].filter(t => !terms1.has(t));
+
+    this._showModal('Definition Comparison', `
+      <div class="definition-comparison">
+        <div class="comparison-header">
+          <span class="def-name">${this._escapeHtml(def1.name)}</span>
+          <span class="vs">vs</span>
+          <span class="def-name">${this._escapeHtml(def2.name)}</span>
+        </div>
+        <div class="comparison-stats">
+          <div class="stat-item overlap">
+            <span class="stat-value">${overlap.length}</span>
+            <span class="stat-label">Overlapping terms</span>
+          </div>
+          <div class="stat-item unique">
+            <span class="stat-value">${onlyIn1.length}</span>
+            <span class="stat-label">Only in ${this._escapeHtml(def1.name)}</span>
+          </div>
+          <div class="stat-item unique">
+            <span class="stat-value">${onlyIn2.length}</span>
+            <span class="stat-label">Only in ${this._escapeHtml(def2.name)}</span>
+          </div>
+        </div>
+        ${overlap.length > 0 ? `
+          <div class="comparison-section">
+            <h4>Overlapping Terms</h4>
+            <div class="term-list">${overlap.map(t => `<span class="term-tag">${this._escapeHtml(t)}</span>`).join('')}</div>
+          </div>
+        ` : ''}
+      </div>
+    `, null, { showCancel: false, confirmText: 'Close' });
+  }
+
+  /**
+   * Show modal to create a local refinement of a definition
+   */
+  _showCreateRefinementModal(definitionId) {
+    const definition = this.definitions?.find(d => d.id === definitionId);
+    if (!definition) return;
+
+    this._showModal('Create Local Refinement', `
+      <div class="create-refinement-form">
+        <p>Create a local refinement of <strong>${this._escapeHtml(definition.name)}</strong>.</p>
+        <p class="hint-text">This creates a copy that maintains a link to the original definition, allowing domain-specific nuance while preserving semantic lineage.</p>
+        <div class="form-group">
+          <label for="refinement-name" class="form-label">Refinement Name</label>
+          <input type="text" id="refinement-name" class="form-input" value="${this._escapeHtml(definition.name)} (Local)" placeholder="e.g., homelessness (HUD CoC)">
+        </div>
+        <div class="form-group">
+          <label for="refinement-notes" class="form-label">How does this refine the original?</label>
+          <textarea id="refinement-notes" class="form-input" rows="3" placeholder="e.g., Scoped to individuals in HUD Continuum of Care programs..."></textarea>
+        </div>
+      </div>
+    `, () => {
+      const name = document.getElementById('refinement-name')?.value?.trim();
+      const notes = document.getElementById('refinement-notes')?.value?.trim();
+
+      if (!name) {
+        this._showNotification('Name is required', 'error');
+        return;
+      }
+
+      this._createDefinitionRefinement(definitionId, name, notes);
+    });
+  }
+
+  /**
+   * Create a local refinement of a definition
+   */
+  _createDefinitionRefinement(originalId, name, notes) {
+    const original = this.definitions?.find(d => d.id === originalId);
+    if (!original) return;
+
+    const refinement = {
+      id: `def_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      name: name,
+      description: notes || original.description,
+      terms: JSON.parse(JSON.stringify(original.terms || [])),
+      sourceUri: null, // Local refinement
+      refinedFrom: {
+        definitionId: originalId,
+        definitionName: original.name,
+        originalUri: original.sourceUri
+      },
+      importedAt: new Date().toISOString()
+    };
+
+    if (!this.definitions) this.definitions = [];
+    this.definitions.push(refinement);
+
+    this._saveData();
+    this._renderDefinitionsNav();
+    this._showDefinitionDetail(refinement.id);
+    this._showNotification(`Created refinement: ${name}`, 'success');
   }
 
   /**
@@ -11190,6 +11579,234 @@ class EODataWorkbench {
       'phone': 'phone'
     };
     return mapping[termType] || mapping[termType?.toLowerCase()] || 'text';
+  }
+
+  /**
+   * Show meaning-aware Apply to Fields modal
+   * This is the enhanced version of the apply modal that suggests field matches
+   */
+  _showApplyToFieldsModal(definitionId) {
+    const definition = this.definitions?.find(d => d.id === definitionId);
+    if (!definition) return;
+
+    const terms = definition.terms || definition.properties || [];
+    const activeSets = this.sets.filter(s => s.status !== 'archived');
+
+    if (activeSets.length === 0) {
+      this._showNotification('No sets available. Create a set first.', 'error');
+      return;
+    }
+
+    // Get all fields from all sets
+    const allFields = [];
+    activeSets.forEach(set => {
+      (set.fields || []).forEach(field => {
+        // Check if already linked to this definition
+        const isLinked = field.definitionRef?.definitionId === definitionId;
+        allFields.push({
+          setId: set.id,
+          setName: set.name,
+          fieldId: field.id,
+          fieldName: field.name,
+          fieldType: field.type,
+          isLinked
+        });
+      });
+    });
+
+    // Calculate suggested matches based on name similarity
+    const suggestedFields = this._getSuggestedFieldMatches(definition, allFields);
+    const otherFields = allFields.filter(f => !suggestedFields.find(s => s.fieldId === f.fieldId));
+
+    const html = `
+      <div class="apply-to-fields-modal">
+        <div class="apply-modal-header">
+          <p>Apply "<strong>${this._escapeHtml(definition.name)}</strong>" to fields</p>
+          <p class="apply-modal-hint">Bind this meaning to one or more columns. This adds semantic context but does not change your data.</p>
+        </div>
+
+        ${suggestedFields.length > 0 ? `
+          <div class="apply-field-section">
+            <h4 class="section-label">
+              <i class="ph ph-sparkle"></i> Suggested matches
+            </h4>
+            <div class="apply-field-list">
+              ${suggestedFields.map(f => `
+                <label class="apply-field-option ${f.isLinked ? 'already-linked' : ''}" title="${f.matchReason || ''}">
+                  <input type="checkbox" name="apply-field" value="${f.setId}:${f.fieldId}" ${f.isLinked ? 'checked' : ''}>
+                  <span class="field-info">
+                    <span class="field-name">${this._escapeHtml(f.fieldName)}</span>
+                    <span class="set-name">in ${this._escapeHtml(f.setName)}</span>
+                  </span>
+                  ${f.matchReason ? `<span class="match-reason">${this._escapeHtml(f.matchReason)}</span>` : ''}
+                  ${f.isLinked ? `<span class="linked-badge"><i class="ph ph-check"></i> Linked</span>` : ''}
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="apply-field-section">
+          <h4 class="section-label">
+            <i class="ph ph-list"></i> ${suggestedFields.length > 0 ? 'Other fields' : 'Available fields'}
+          </h4>
+          <div class="apply-field-list">
+            ${otherFields.length > 0 ? otherFields.map(f => `
+              <label class="apply-field-option ${f.isLinked ? 'already-linked' : ''}">
+                <input type="checkbox" name="apply-field" value="${f.setId}:${f.fieldId}" ${f.isLinked ? 'checked' : ''}>
+                <span class="field-info">
+                  <span class="field-name">${this._escapeHtml(f.fieldName)}</span>
+                  <span class="set-name">in ${this._escapeHtml(f.setName)}</span>
+                </span>
+                ${f.isLinked ? `<span class="linked-badge"><i class="ph ph-check"></i> Linked</span>` : ''}
+              </label>
+            `).join('') : `
+              <p class="no-fields-message">No additional fields available.</p>
+            `}
+          </div>
+        </div>
+
+        <div class="apply-modal-info">
+          <i class="ph ph-info"></i>
+          <span>Selected fields will be bound to this definition's meaning. You can unlink them later.</span>
+        </div>
+      </div>
+    `;
+
+    this._showModal('Apply to Fields…', html, () => {
+      const checkedBoxes = document.querySelectorAll('input[name="apply-field"]:checked');
+      const selections = Array.from(checkedBoxes).map(cb => {
+        const [setId, fieldId] = cb.value.split(':');
+        return { setId, fieldId };
+      });
+
+      if (selections.length === 0) {
+        this._showNotification('Please select at least one field', 'warning');
+        return;
+      }
+
+      this._applyDefinitionToFields(definitionId, selections);
+    }, { confirmText: 'Apply Meaning', cancelText: 'Cancel' });
+  }
+
+  /**
+   * Get suggested field matches based on semantic similarity
+   */
+  _getSuggestedFieldMatches(definition, allFields) {
+    const suggestions = [];
+    const defName = definition.name?.toLowerCase() || '';
+    const defDescription = definition.description?.toLowerCase() || '';
+    const terms = definition.terms || definition.properties || [];
+    const termNames = terms.map(t => (t.name || t.label || '').toLowerCase());
+
+    // Keywords from definition name and description
+    const keywords = [
+      defName,
+      ...defName.split(/[\s_-]+/),
+      ...defDescription.split(/[\s_-]+/).filter(w => w.length > 3)
+    ];
+
+    allFields.forEach(field => {
+      const fieldName = field.fieldName?.toLowerCase() || '';
+      const fieldParts = fieldName.split(/[\s_-]+/);
+
+      let matchReason = null;
+      let score = 0;
+
+      // Check direct name match
+      if (fieldName.includes(defName) || defName.includes(fieldName)) {
+        matchReason = `Matches concept: ${definition.name}`;
+        score = 10;
+      }
+
+      // Check term name matches
+      if (!matchReason) {
+        for (const termName of termNames) {
+          if (fieldName.includes(termName) || termName.includes(fieldName)) {
+            matchReason = `Matches term: ${termName}`;
+            score = 8;
+            break;
+          }
+        }
+      }
+
+      // Check keyword overlaps
+      if (!matchReason) {
+        for (const keyword of keywords) {
+          if (keyword.length > 3 && (fieldName.includes(keyword) || fieldParts.some(p => keyword.includes(p) && p.length > 3))) {
+            matchReason = `Related to: ${keyword}`;
+            score = 5;
+            break;
+          }
+        }
+      }
+
+      // Common semantic patterns
+      if (!matchReason) {
+        const semanticPatterns = [
+          { pattern: /status|condition|state/, match: /status|condition|state/, reason: 'Field type: status/condition' },
+          { pattern: /date|time|when/, match: /date|time|when/, reason: 'Field type: temporal' },
+          { pattern: /id|code|identifier/, match: /id|code|identifier/, reason: 'Field type: identifier' },
+          { pattern: /name|title|label/, match: /name|title|label/, reason: 'Field type: naming' },
+          { pattern: /amount|count|number|total/, match: /amount|count|number|total/, reason: 'Field type: quantity' }
+        ];
+
+        for (const sp of semanticPatterns) {
+          if (sp.pattern.test(defName) && sp.match.test(fieldName)) {
+            matchReason = sp.reason;
+            score = 3;
+            break;
+          }
+        }
+      }
+
+      if (matchReason) {
+        suggestions.push({
+          ...field,
+          matchReason,
+          score
+        });
+      }
+    });
+
+    // Sort by score and return top matches
+    return suggestions.sort((a, b) => b.score - a.score).slice(0, 5);
+  }
+
+  /**
+   * Apply definition to multiple fields
+   */
+  _applyDefinitionToFields(definitionId, selections) {
+    const definition = this.definitions?.find(d => d.id === definitionId);
+    if (!definition) return;
+
+    const terms = definition.terms || definition.properties || [];
+    const firstTerm = terms[0];
+
+    let linkedCount = 0;
+
+    selections.forEach(({ setId, fieldId }) => {
+      const set = this.sets.find(s => s.id === setId);
+      if (!set) return;
+
+      const field = set.fields?.find(f => f.id === fieldId);
+      if (!field) return;
+
+      // Set the definition reference
+      field.definitionRef = {
+        definitionId: definitionId,
+        termId: firstTerm?.id || null,
+        uri: definition.sourceUri || null,
+        lastSyncedAt: new Date().toISOString()
+      };
+
+      linkedCount++;
+    });
+
+    this._saveData();
+    this._closeModal();
+    this._showDefinitionDetail(definitionId);
+    this._showNotification(`Applied "${definition.name}" to ${linkedCount} field${linkedCount !== 1 ? 's' : ''}`, 'success');
   }
 
   /**
