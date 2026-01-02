@@ -392,11 +392,8 @@ class EOFormulaEditor {
                   autocomplete="off"
                 >
               </div>
-              <div class="formula-fn-categories">
-                ${this._renderCategoryFilters()}
-              </div>
-              <div class="formula-fn-list" id="formula-function-list">
-                ${this._renderFunctionList()}
+              <div class="formula-fn-disclosure-list" id="formula-function-list">
+                ${this._renderFunctionDisclosures()}
               </div>
             </div>
           </div>
@@ -456,6 +453,31 @@ class EOFormulaEditor {
         </button>
       `).join('')}
     `;
+  }
+
+  /**
+   * Render function categories as disclosure/accordion sections
+   */
+  _renderFunctionDisclosures() {
+    return Object.entries(this.functionCategories).map(([key, category]) => `
+      <div class="formula-fn-disclosure" data-category="${key}">
+        <button type="button" class="formula-fn-disclosure-header">
+          <i class="ph ${category.icon}"></i>
+          <span class="formula-fn-disclosure-title">${category.name}</span>
+          <span class="formula-fn-disclosure-count">${category.functions.length}</span>
+          <i class="ph ph-caret-right formula-fn-disclosure-arrow"></i>
+        </button>
+        <div class="formula-fn-disclosure-content">
+          ${category.functions.map(fn => `
+            <button type="button" class="formula-fn-item" data-syntax="${this._escapeHtml(fn.syntax)}" data-category="${key}">
+              <div class="formula-fn-name">${fn.name}</div>
+              <div class="formula-fn-syntax">${this._escapeHtml(fn.syntax)}</div>
+              <div class="formula-fn-desc">${fn.description}</div>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
   }
 
   /**
@@ -557,32 +579,20 @@ class EOFormulaEditor {
       });
     }
 
-    // Category filter chips (new design)
-    const categoryChips = modalEl.querySelector('.formula-fn-categories');
-    if (categoryChips) {
-      categoryChips.addEventListener('click', (e) => {
-        const chip = e.target.closest('.formula-cat-chip');
-        if (chip) {
-          const category = chip.dataset.category;
-          // Update active chip
-          modalEl.querySelectorAll('.formula-cat-chip').forEach(c => c.classList.remove('active'));
-          chip.classList.add('active');
-          // Re-render function list
-          const fnList = modalEl.querySelector('#formula-function-list');
-          if (fnList) {
-            fnList.innerHTML = this._renderFunctionList(category);
-          }
-          // Clear search
-          const searchInput = modalEl.querySelector('#formula-function-search');
-          if (searchInput) searchInput.value = '';
-        }
-      });
-    }
-
-    // Function list clicks (new design)
+    // Function disclosure list clicks (disclosure toggle + function insert)
     const fnList = modalEl.querySelector('#formula-function-list');
     if (fnList) {
       fnList.addEventListener('click', (e) => {
+        // Handle disclosure header click
+        const disclosureHeader = e.target.closest('.formula-fn-disclosure-header');
+        if (disclosureHeader) {
+          const disclosure = disclosureHeader.closest('.formula-fn-disclosure');
+          if (disclosure) {
+            disclosure.classList.toggle('expanded');
+          }
+          return;
+        }
+        // Handle function item click
         const fnItem = e.target.closest('.formula-fn-item');
         if (fnItem) {
           const syntax = fnItem.dataset.syntax;
@@ -691,30 +701,37 @@ class EOFormulaEditor {
   }
 
   /**
-   * Filter functions based on search query (V2 design)
+   * Filter functions based on search query (disclosure design)
    */
   _filterFunctionsV2(query) {
     const modalEl = this.modal.element;
-    const fnItems = modalEl.querySelectorAll('.formula-fn-item');
+    const disclosures = modalEl.querySelectorAll('.formula-fn-disclosure');
     const normalizedQuery = query.toLowerCase().trim();
 
-    // Reset category filter to "All" when searching
-    if (normalizedQuery !== '') {
-      modalEl.querySelectorAll('.formula-cat-chip').forEach(c => c.classList.remove('active'));
-      const allChip = modalEl.querySelector('.formula-cat-chip[data-category="all"]');
-      if (allChip) allChip.classList.add('active');
-    }
+    disclosures.forEach(disclosure => {
+      const fnItems = disclosure.querySelectorAll('.formula-fn-item');
+      let hasVisibleItems = false;
 
-    fnItems.forEach(fn => {
-      const name = fn.querySelector('.formula-fn-name')?.textContent.toLowerCase() || '';
-      const syntax = fn.querySelector('.formula-fn-syntax')?.textContent.toLowerCase() || '';
-      const desc = fn.querySelector('.formula-fn-desc')?.textContent.toLowerCase() || '';
-      const matches = normalizedQuery === '' ||
-        name.includes(normalizedQuery) ||
-        syntax.includes(normalizedQuery) ||
-        desc.includes(normalizedQuery);
+      fnItems.forEach(fn => {
+        const name = fn.querySelector('.formula-fn-name')?.textContent.toLowerCase() || '';
+        const syntax = fn.querySelector('.formula-fn-syntax')?.textContent.toLowerCase() || '';
+        const desc = fn.querySelector('.formula-fn-desc')?.textContent.toLowerCase() || '';
+        const matches = normalizedQuery === '' ||
+          name.includes(normalizedQuery) ||
+          syntax.includes(normalizedQuery) ||
+          desc.includes(normalizedQuery);
 
-      fn.style.display = matches ? '' : 'none';
+        fn.style.display = matches ? '' : 'none';
+        if (matches) hasVisibleItems = true;
+      });
+
+      // Hide disclosure if no matching items, show and expand if searching
+      disclosure.style.display = hasVisibleItems ? '' : 'none';
+      if (normalizedQuery !== '' && hasVisibleItems) {
+        disclosure.classList.add('expanded');
+      } else if (normalizedQuery === '') {
+        disclosure.classList.remove('expanded');
+      }
     });
   }
 
