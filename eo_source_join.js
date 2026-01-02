@@ -9225,22 +9225,93 @@ class SourceMerger {
   }
 
   /**
-   * Auto-map fields between source and set based on name similarity
+   * Check if two field types are compatible
+   * Returns: 1.0 (exact match), 0.8 (compatible), 0.5 (coercible), 0 (incompatible)
+   *
+   * @param {string} sourceType - Type from source field
+   * @param {string} targetType - Type from target set field
+   * @returns {Object} { score, compatible, coercible, warning }
+   */
+  checkTypeCompatibility(sourceType, targetType) {
+    const src = (sourceType || 'text').toLowerCase();
+    const tgt = (targetType || 'text').toLowerCase();
+
+    // Exact match
+    if (src === tgt) {
+      return { score: 1.0, compatible: true, coercible: true, warning: null };
+    }
+
+    // Define type compatibility matrix
+    const compatibilityMatrix = {
+      // Numbers
+      'number': { 'integer': 0.9, 'text': 0.5, 'float': 1.0 },
+      'integer': { 'number': 0.9, 'text': 0.5, 'float': 0.9 },
+      'float': { 'number': 1.0, 'integer': 0.8, 'text': 0.5 },
+      // Text can receive anything
+      'text': { 'number': 0.7, 'integer': 0.7, 'date': 0.7, 'boolean': 0.7, 'float': 0.7 },
+      // Dates
+      'date': { 'text': 0.5, 'datetime': 0.9 },
+      'datetime': { 'date': 0.9, 'text': 0.5 },
+      // Booleans
+      'boolean': { 'text': 0.5, 'integer': 0.6, 'number': 0.6 }
+    };
+
+    const srcCompat = compatibilityMatrix[src];
+    if (srcCompat && srcCompat[tgt] !== undefined) {
+      const score = srcCompat[tgt];
+      return {
+        score,
+        compatible: score >= 0.7,
+        coercible: score >= 0.5,
+        warning: score < 0.7 ? `Type mismatch: ${src} → ${tgt}` : null
+      };
+    }
+
+    // Check reverse (target can receive source)
+    const tgtCompat = compatibilityMatrix[tgt];
+    if (tgtCompat && tgtCompat[src] !== undefined) {
+      const score = tgtCompat[src];
+      return {
+        score,
+        compatible: score >= 0.7,
+        coercible: score >= 0.5,
+        warning: score < 0.7 ? `Type mismatch: ${src} → ${tgt}` : null
+      };
+    }
+
+    // Unknown types or incompatible
+    return {
+      score: 0.3,
+      compatible: false,
+      coercible: true, // Allow with warning
+      warning: `Incompatible types: ${src} → ${tgt}`
+    };
+  }
+
+  /**
+   * Auto-map fields between source and set based on name similarity AND type compatibility
+   *
+   * Field type matching is performed during source elevation to ensure:
+   * 1. Names are matched (exact, then partial)
+   * 2. Types are checked for compatibility
+   * 3. Confidence reflects both name match AND type compatibility
    *
    * @param {Object[]} sourceFields - Source schema fields
    * @param {Object[]} setFields - Set schema fields
-   * @returns {Object[]} Suggested field mappings
+   * @returns {Object[]} Suggested field mappings with type compatibility info
    */
   autoMapFields(sourceFields, setFields) {
     const mappings = [];
 
     for (const sourceField of sourceFields) {
       const sourceName = sourceField.name.toLowerCase().replace(/[_\-\s]/g, '');
+      const sourceType = sourceField.type || 'text';
 
-      // Find exact match first
+      // Find exact name match first
       let match = setFields.find(f =>
         f.name.toLowerCase().replace(/[_\-\s]/g, '') === sourceName
       );
+      let nameMatchScore = match ? 1.0 : 0;
 
       // If no exact match, try partial match
       if (!match) {
@@ -9248,22 +9319,37 @@ class SourceMerger {
           const setName = f.name.toLowerCase().replace(/[_\-\s]/g, '');
           return setName.includes(sourceName) || sourceName.includes(setName);
         });
+        if (match) nameMatchScore = 0.7;
       }
 
       if (match) {
+        // Check type compatibility
+        const typeCompat = this.checkTypeCompatibility(sourceType, match.type);
+
+        // Combined confidence: 60% name match, 40% type compatibility
+        const confidence = (nameMatchScore * 0.6) + (typeCompat.score * 0.4);
+
         mappings.push({
           sourceField: sourceField.name,
+          sourceType: sourceType,
           targetField: match.name,
-          confidence: match.name.toLowerCase() === sourceField.name.toLowerCase() ? 1.0 : 0.7
+          targetType: match.type || 'text',
+          confidence: Math.round(confidence * 100) / 100,
+          typeCompatibility: typeCompat,
+          typeMismatch: !typeCompat.compatible,
+          warning: typeCompat.warning
         });
       } else {
         // No match - suggest creating new field
         mappings.push({
           sourceField: sourceField.name,
+          sourceType: sourceType,
           targetField: null,
           createNew: true,
           suggestedName: sourceField.name,
-          suggestedType: sourceField.type || 'text'
+          suggestedType: sourceField.type || 'text',
+          confidence: 0,
+          typeCompatibility: { score: 1.0, compatible: true, coercible: true, warning: null }
         });
       }
     }
@@ -9882,14 +9968,19 @@ class AddSourceToSetUI {
   }
 
   _renderFieldMapping(mapping, index, targetFields) {
+    const hasTypeMismatch = mapping.typeMismatch || mapping.warning;
+    const sourceType = mapping.sourceType || 'text';
+    const targetType = mapping.targetType || 'text';
+
     return `
-      <div class="asts-field-mapping-row" data-index="${index}">
+      <div class="asts-field-mapping-row ${hasTypeMismatch ? 'has-type-warning' : ''}" data-index="${index}">
         <div class="asts-fm-source-field">
           <span class="asts-field-name">${this._escapeHtml(mapping.sourceField)}</span>
+          <span class="asts-field-type-badge">${sourceType}</span>
         </div>
 
-        <div class="asts-fm-arrow">
-          <i class="ph ph-arrow-right"></i>
+        <div class="asts-fm-arrow ${hasTypeMismatch ? 'type-mismatch' : ''}">
+          <i class="ph ${hasTypeMismatch ? 'ph-warning' : 'ph-arrow-right'}"></i>
         </div>
 
         <div class="asts-fm-target-field">
@@ -9900,10 +9991,14 @@ class AddSourceToSetUI {
             </option>
             ${targetFields.map(f => `
               <option value="${f.name}" ${mapping.targetField === f.name ? 'selected' : ''}>
-                ${this._escapeHtml(f.name)}
+                ${this._escapeHtml(f.name)} (${f.type || 'text'})
               </option>
             `).join('')}
           </select>
+
+          ${mapping.targetField && !mapping.createNew ? `
+            <span class="asts-field-type-badge target">${targetType}</span>
+          ` : ''}
 
           ${mapping.createNew ? `
             <div class="asts-new-field-config">
@@ -9916,6 +10011,13 @@ class AddSourceToSetUI {
                 <option value="date" ${mapping.suggestedType === 'date' ? 'selected' : ''}>Date</option>
                 <option value="boolean" ${mapping.suggestedType === 'boolean' ? 'selected' : ''}>Boolean</option>
               </select>
+            </div>
+          ` : ''}
+
+          ${hasTypeMismatch ? `
+            <div class="asts-type-warning">
+              <i class="ph ph-warning"></i>
+              <span>${this._escapeHtml(mapping.warning || 'Type mismatch')}</span>
             </div>
           ` : ''}
         </div>
@@ -9950,6 +10052,12 @@ class AddSourceToSetUI {
               <span class="asts-summary-label">New Fields</span>
               <span class="asts-summary-value">${this._fieldMapping.filter(m => m.createNew).length}</span>
             </div>
+            ${this._fieldMapping.filter(m => m.typeMismatch || m.warning).length > 0 ? `
+            <div class="asts-summary-item" style="background: rgba(253, 203, 110, 0.1); border: 1px solid rgba(253, 203, 110, 0.3);">
+              <span class="asts-summary-label" style="color: var(--warning, #fdcb6e);"><i class="ph ph-warning"></i> Type Warnings</span>
+              <span class="asts-summary-value" style="color: var(--warning, #fdcb6e);">${this._fieldMapping.filter(m => m.typeMismatch || m.warning).length}</span>
+            </div>
+            ` : ''}
           </div>
 
           <div class="asts-info-card">
@@ -10260,18 +10368,46 @@ class AddSourceToSetUI {
           select.addEventListener('change', (e) => {
             const index = parseInt(e.target.dataset.index);
             const value = e.target.value;
+            const mapping = this._fieldMapping[index];
 
             if (value === '__create_new__') {
-              this._fieldMapping[index].targetField = null;
-              this._fieldMapping[index].createNew = true;
-              this._fieldMapping[index].suggestedName = this._fieldMapping[index].sourceField;
-              this._fieldMapping[index].suggestedType = 'text';
+              mapping.targetField = null;
+              mapping.createNew = true;
+              mapping.suggestedName = mapping.sourceField;
+              mapping.suggestedType = mapping.sourceType || 'text';
+              // Clear type warnings for new fields
+              mapping.targetType = null;
+              mapping.typeCompatibility = { score: 1.0, compatible: true, coercible: true, warning: null };
+              mapping.typeMismatch = false;
+              mapping.warning = null;
+              mapping.confidence = 0;
             } else if (value === '') {
-              this._fieldMapping[index].targetField = null;
-              this._fieldMapping[index].createNew = false;
+              mapping.targetField = null;
+              mapping.createNew = false;
+              mapping.targetType = null;
+              mapping.typeCompatibility = null;
+              mapping.typeMismatch = false;
+              mapping.warning = null;
+              mapping.confidence = 0;
             } else {
-              this._fieldMapping[index].targetField = value;
-              this._fieldMapping[index].createNew = false;
+              mapping.targetField = value;
+              mapping.createNew = false;
+
+              // Find target field and recalculate type compatibility
+              const targetField = this._targetSet.fields.find(f => f.name === value);
+              if (targetField) {
+                mapping.targetType = targetField.type || 'text';
+                const typeCompat = this.sourceMerger.checkTypeCompatibility(
+                  mapping.sourceType || 'text',
+                  mapping.targetType
+                );
+                // Recalculate confidence with type compatibility
+                const nameMatch = mapping.sourceField.toLowerCase() === value.toLowerCase() ? 1.0 : 0.7;
+                mapping.confidence = Math.round((nameMatch * 0.6 + typeCompat.score * 0.4) * 100) / 100;
+                mapping.typeCompatibility = typeCompat;
+                mapping.typeMismatch = !typeCompat.compatible;
+                mapping.warning = typeCompat.warning;
+              }
             }
 
             this._render();
@@ -10873,6 +11009,64 @@ class AddSourceToSetUI {
       .asts-fm-confidence.high { color: var(--success, #00b894); }
       .asts-fm-confidence.medium { color: var(--warning, #fdcb6e); }
       .asts-fm-confidence.low { color: var(--text-secondary, #888); }
+
+      /* Field Type Badges */
+      .asts-field-type-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        background: rgba(108, 92, 231, 0.2);
+        color: var(--accent, #6c5ce7);
+        margin-left: 8px;
+      }
+
+      .asts-field-type-badge.target {
+        background: rgba(0, 184, 148, 0.2);
+        color: var(--success, #00b894);
+      }
+
+      /* Type Mismatch Warning Styles */
+      .asts-field-mapping-row.has-type-warning {
+        background: rgba(253, 203, 110, 0.08);
+        border-left: 3px solid var(--warning, #fdcb6e);
+      }
+
+      .asts-fm-arrow.type-mismatch {
+        color: var(--warning, #fdcb6e);
+      }
+
+      .asts-fm-arrow.type-mismatch i {
+        animation: pulse-warning 2s infinite;
+      }
+
+      @keyframes pulse-warning {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .asts-type-warning {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: rgba(253, 203, 110, 0.15);
+        border: 1px solid rgba(253, 203, 110, 0.3);
+        border-radius: 4px;
+        font-size: 11px;
+        color: var(--warning, #fdcb6e);
+      }
+
+      .asts-type-warning i {
+        font-size: 14px;
+      }
+
+      .asts-fm-source-field {
+        display: flex;
+        align-items: center;
+      }
 
       .asts-unmapped-info {
         margin-top: 16px;
