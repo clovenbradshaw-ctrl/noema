@@ -1702,18 +1702,19 @@ function clearAllData() {
 }
 
 function clearSampleData() {
-  if (!window.wb) return;
+  const wb = getDataWorkbench();
+  if (!wb) return;
 
   // Find all sample projects (using isSample flag)
-  const sampleProjects = window.wb.projects?.filter(p => p.isSample === true) || [];
+  const sampleProjects = wb.projects?.filter(p => p.isSample === true) || [];
 
   // Also find any orphaned sample sources/sets (for backwards compatibility)
-  const sampleSources = window.wb.sources?.filter(s => s.isSample === true) || [];
-  const sampleSets = window.wb.sets?.filter(s => s.isSample === true) || [];
+  const sampleSources = wb.sources?.filter(s => s.isSample === true) || [];
+  const sampleSets = wb.sets?.filter(s => s.isSample === true) || [];
 
   if (sampleProjects.length === 0 && sampleSources.length === 0 && sampleSets.length === 0) {
-    if (typeof window.wb._showToast === 'function') {
-      window.wb._showToast('No sample data found', 'info');
+    if (typeof wb._showToast === 'function') {
+      wb._showToast('No sample data found', 'info');
     } else {
       alert('No sample data found');
     }
@@ -1737,48 +1738,48 @@ function clearSampleData() {
 
   // Remove associated sources
   if (sourceIdsToRemove.size > 0) {
-    window.wb.sources = window.wb.sources?.filter(s => !sourceIdsToRemove.has(s.id)) || [];
+    wb.sources = wb.sources?.filter(s => !sourceIdsToRemove.has(s.id)) || [];
   }
 
   // Remove associated sets
   if (setIdsToRemove.size > 0) {
-    window.wb.sets = window.wb.sets?.filter(s => !setIdsToRemove.has(s.id)) || [];
+    wb.sets = wb.sets?.filter(s => !setIdsToRemove.has(s.id)) || [];
   }
 
   // Remove associated definitions
   if (definitionIdsToRemove.size > 0) {
-    window.wb.definitions = window.wb.definitions?.filter(d => !definitionIdsToRemove.has(d.id)) || [];
+    wb.definitions = wb.definitions?.filter(d => !definitionIdsToRemove.has(d.id)) || [];
   }
 
   // Remove associated exports
   if (exportIdsToRemove.size > 0) {
-    window.wb.exports = window.wb.exports?.filter(e => !exportIdsToRemove.has(e.id)) || [];
+    wb.exports = wb.exports?.filter(e => !exportIdsToRemove.has(e.id)) || [];
   }
 
   // Remove the sample projects
-  window.wb.projects = window.wb.projects?.filter(p => p.isSample !== true) || [];
+  wb.projects = wb.projects?.filter(p => p.isSample !== true) || [];
 
   // Clear current project selection if it was a sample project
-  if (sampleProjects.some(p => p.id === window.wb.currentProjectId)) {
-    window.wb.currentProjectId = null;
+  if (sampleProjects.some(p => p.id === wb.currentProjectId)) {
+    wb.currentProjectId = null;
   }
 
   // Save and refresh
-  if (typeof window.wb._saveData === 'function') {
-    window.wb._saveData();
+  if (typeof wb._saveData === 'function') {
+    wb._saveData();
   }
-  if (typeof window.wb._renderSidebar === 'function') {
-    window.wb._renderSidebar();
+  if (typeof wb._renderSidebar === 'function') {
+    wb._renderSidebar();
   }
-  if (typeof window.wb._updateBreadcrumb === 'function') {
-    window.wb._updateBreadcrumb();
+  if (typeof wb._updateBreadcrumb === 'function') {
+    wb._updateBreadcrumb();
   }
 
   // Close the settings modal
   closeModal();
 
-  if (typeof window.wb._showToast === 'function') {
-    window.wb._showToast('Sample data cleared', 'success');
+  if (typeof wb._showToast === 'function') {
+    wb._showToast('Sample data cleared', 'success');
   }
 }
 
