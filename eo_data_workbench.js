@@ -21450,6 +21450,51 @@ class EODataWorkbench {
   }
 
   /**
+   * Format a field value for display (handles SELECT/MULTI_SELECT by looking up choice names)
+   * @param {*} value - The raw value
+   * @param {Object} field - The field definition
+   * @param {number} maxLength - Maximum length before truncation
+   * @returns {string} - Formatted display value
+   */
+  _formatFieldValueForDisplay(value, field, maxLength = 100) {
+    if (value === null || value === undefined || value === '') {
+      return 'Empty';
+    }
+
+    if (!field) {
+      return this._truncate(String(value), maxLength);
+    }
+
+    switch (field.type) {
+      case FieldTypes.SELECT:
+        const choice = field.options?.choices?.find(c => c.id === value);
+        return choice ? choice.name : String(value);
+
+      case FieldTypes.MULTI_SELECT:
+        if (Array.isArray(value)) {
+          const names = value.map(v => {
+            const c = field.options?.choices?.find(ch => ch.id === v);
+            return c ? c.name : String(v);
+          });
+          return names.join(', ');
+        }
+        return String(value);
+
+      case FieldTypes.CHECKBOX:
+        return value ? 'Yes' : 'No';
+
+      case FieldTypes.DATE:
+        return this._formatDate(value, field) || String(value);
+
+      default:
+        if (typeof value === 'object') {
+          return this._truncate(JSON.stringify(value), maxLength);
+        }
+        return this._truncate(String(value), maxLength);
+    }
+  }
+
+  /**
    * Get provenance tooltip text
    */
   _getProvenanceTooltip(set) {
@@ -25550,6 +25595,26 @@ class EODataWorkbench {
     this._attachTableEventListeners();
     this._attachProvenanceClickHandlers();
     this._attachLoadMoreHandlers();
+    this._attachAddRecordHandlers();
+  }
+
+  /**
+   * Attach direct click handlers for add record elements
+   * This provides a fallback in case delegated handlers don't work
+   */
+  _attachAddRecordHandlers() {
+    const addRowBtn = document.getElementById('add-row-btn');
+    const addRowCell = document.getElementById('add-row-cell');
+    const addFirstRecord = document.getElementById('add-first-record');
+
+    const handleAddRecord = (e) => {
+      e.stopPropagation();
+      this.addRecord();
+    };
+
+    addRowBtn?.addEventListener('click', handleAddRecord);
+    addRowCell?.addEventListener('click', handleAddRecord);
+    addFirstRecord?.addEventListener('click', handleAddRecord);
   }
 
   /**
@@ -26387,7 +26452,7 @@ class EODataWorkbench {
       this._endCellEdit();
     });
 
-    // Close on click outside and save
+    // Close on click outside and save - use longer delay to avoid race conditions
     setTimeout(() => {
       const closeHandler = (e) => {
         if (!e.target.closest('.multiselect-dropdown')) {
@@ -26397,7 +26462,7 @@ class EODataWorkbench {
         }
       };
       document.addEventListener('click', closeHandler);
-    }, 10);
+    }, 100);
   }
 
   _renderLinkEditor(cell, field, currentValue) {
@@ -26508,7 +26573,7 @@ class EODataWorkbench {
       });
     });
 
-    // Close on click outside and save
+    // Close on click outside and save - use longer delay to avoid race conditions
     setTimeout(() => {
       const closeHandler = (e) => {
         if (!e.target.closest('.link-dropdown')) {
@@ -26518,7 +26583,7 @@ class EODataWorkbench {
         }
       };
       document.addEventListener('click', closeHandler);
-    }, 10);
+    }, 100);
   }
 
   _closeLinkEditor = (e) => {
@@ -27559,9 +27624,11 @@ class EODataWorkbench {
     }
 
     // Find grouping field (must be a select field)
+    // Check for groupByFieldId (preferred) or kanbanField (legacy)
     let groupField = set?.fields.find(f => f.type === FieldTypes.SELECT);
-    if (view?.config.kanbanField) {
-      groupField = set?.fields.find(f => f.id === view.config.kanbanField) || groupField;
+    const groupFieldId = view?.config.groupByFieldId || view?.config.kanbanField;
+    if (groupFieldId) {
+      groupField = set?.fields.find(f => f.id === groupFieldId) || groupField;
     }
 
     if (!groupField) {
@@ -33440,9 +33507,10 @@ class EODataWorkbench {
       });
     });
 
-    // Close on click outside
+    // Close on click outside - use longer delay to avoid race conditions with opening click
     setTimeout(() => {
       const closeHandler = (e) => {
+        // Check if click is outside the editor element
         if (!el.contains(e.target)) {
           el.classList.remove('editing');
           el.innerHTML = this._renderDetailFieldValue(field, currentValue);
@@ -33450,7 +33518,7 @@ class EODataWorkbench {
         }
       };
       document.addEventListener('click', closeHandler);
-    }, 10);
+    }, 100);
   }
 
   _showMultiSelectDetailEditor(el, field, recordId, currentValue) {
@@ -33528,7 +33596,7 @@ class EODataWorkbench {
       this._renderView();
     });
 
-    // Close on click outside
+    // Close on click outside - use longer delay to avoid race conditions
     setTimeout(() => {
       const closeHandler = (e) => {
         if (!el.contains(e.target)) {
@@ -33541,7 +33609,7 @@ class EODataWorkbench {
         }
       };
       document.addEventListener('click', closeHandler);
-    }, 10);
+    }, 100);
   }
 
   // --------------------------------------------------------------------------
@@ -33644,7 +33712,7 @@ class EODataWorkbench {
       this._renderView();
     });
 
-    // Close on click outside
+    // Close on click outside - use longer delay to avoid race conditions
     setTimeout(() => {
       const closeHandler = (e) => {
         if (!el.contains(e.target)) {
@@ -33657,7 +33725,7 @@ class EODataWorkbench {
         }
       };
       document.addEventListener('click', closeHandler);
-    }, 10);
+    }, 100);
   }
 
   // --------------------------------------------------------------------------
@@ -37277,13 +37345,32 @@ class EODataWorkbench {
     // Determine provenance source for display
     let provenanceSource = 'dataset';
     let effectiveProv = datasetProv;
-    if (fieldProv && Object.values(fieldProv).some(v => v !== null)) {
+    if (fieldProv && Object.values(fieldProv).some(v => v !== null && v !== undefined)) {
       provenanceSource = 'field';
       effectiveProv = fieldProv;
-    } else if (recordProv && Object.values(recordProv).some(v => v !== null)) {
+    } else if (recordProv && Object.values(recordProv).some(v => v !== null && v !== undefined)) {
       provenanceSource = 'record';
       effectiveProv = recordProv;
     }
+
+    // Helper to get provenance value - handles both simple and EO-style provenance
+    const getProvValue = (prov, simpleKey, eoKey) => {
+      if (!prov) return null;
+      // Try simple key first (agent, method, source)
+      if (prov[simpleKey]) {
+        return typeof prov[simpleKey] === 'object' ? prov[simpleKey].value : prov[simpleKey];
+      }
+      // Fall back to EO-style key (asserting_agent, designation_mechanism, etc.)
+      if (prov[eoKey]) {
+        return typeof prov[eoKey] === 'object' ? prov[eoKey].value : prov[eoKey];
+      }
+      return null;
+    };
+
+    const provAgent = getProvValue(effectiveProv, 'agent', 'asserting_agent');
+    const provMethod = getProvValue(effectiveProv, 'method', 'designation_mechanism');
+    const provSource = getProvValue(effectiveProv, 'source', 'identity_kind');
+    const hasProvenance = provAgent || provMethod || provSource;
 
     return `
       <div class="field-history-popover" data-field-id="${field.id}" data-record-id="${record.id}">
@@ -37301,7 +37388,7 @@ class EODataWorkbench {
           <div class="field-history-current-label">Current Value</div>
           <div class="field-history-current-value">
             ${currentValue !== null && currentValue !== undefined
-              ? this._escapeHtml(this._truncate(String(currentValue), 100))
+              ? this._escapeHtml(this._formatFieldValueForDisplay(currentValue, field, 100))
               : '<span class="empty-value">Empty</span>'}
           </div>
         </div>
@@ -37313,37 +37400,25 @@ class EODataWorkbench {
             <span class="provenance-source-badge ${provenanceSource}">${provenanceSource}</span>
           </div>
           <div class="field-history-provenance-grid">
-            ${effectiveProv?.agent ? `
+            ${provAgent ? `
               <div class="prov-item">
                 <span class="prov-label">Agent</span>
-                <span class="prov-value">${this._escapeHtml(
-                  typeof effectiveProv.agent === 'object'
-                    ? effectiveProv.agent.value || '-'
-                    : effectiveProv.agent || '-'
-                )}</span>
+                <span class="prov-value">${this._escapeHtml(provAgent)}</span>
               </div>
             ` : ''}
-            ${effectiveProv?.method ? `
+            ${provMethod ? `
               <div class="prov-item">
                 <span class="prov-label">Method</span>
-                <span class="prov-value">${this._escapeHtml(
-                  typeof effectiveProv.method === 'object'
-                    ? effectiveProv.method.value || '-'
-                    : effectiveProv.method || '-'
-                )}</span>
+                <span class="prov-value">${this._escapeHtml(provMethod)}</span>
               </div>
             ` : ''}
-            ${effectiveProv?.source ? `
+            ${provSource ? `
               <div class="prov-item">
                 <span class="prov-label">Source</span>
-                <span class="prov-value">${this._escapeHtml(
-                  typeof effectiveProv.source === 'object'
-                    ? effectiveProv.source.value || '-'
-                    : effectiveProv.source || '-'
-                )}</span>
+                <span class="prov-value">${this._escapeHtml(provSource)}</span>
               </div>
             ` : ''}
-            ${!effectiveProv?.agent && !effectiveProv?.method && !effectiveProv?.source ? `
+            ${!hasProvenance ? `
               <div class="prov-item empty">
                 <span class="prov-value">No provenance set</span>
               </div>
@@ -37360,7 +37435,7 @@ class EODataWorkbench {
 
           ${hasHistory ? `
             <div class="field-history-events">
-              ${fieldHistory.slice().reverse().map(event => this._renderFieldHistoryEvent(event, field.id, record.id, true)).join('')}
+              ${fieldHistory.slice().reverse().map(event => this._renderFieldHistoryEvent(event, field, record.id, true)).join('')}
             </div>
           ` : `
             <div class="field-history-empty">
@@ -37388,16 +37463,26 @@ class EODataWorkbench {
   /**
    * Render a single field history event
    * @param {Object} event - The history event
-   * @param {string} fieldId - The field ID
+   * @param {Object} field - The field object (or fieldId string for backwards compatibility)
    * @param {string} recordId - The record ID (for restore functionality)
    * @param {boolean} showRestore - Whether to show restore button
    */
-  _renderFieldHistoryEvent(event, fieldId, recordId = null, showRestore = true) {
+  _renderFieldHistoryEvent(event, field, recordId = null, showRestore = true) {
+    // Support both field object and fieldId string for backwards compatibility
+    const fieldId = typeof field === 'string' ? field : field?.id;
+    const fieldObj = typeof field === 'object' ? field : null;
+
     const action = event.payload?.action || 'unknown';
     const timestamp = event.timestamp ? new Date(event.timestamp) : null;
     const actor = event.actor || 'system';
     const previousValue = event.payload?.previousValue ?? event.payload?.oldValue;
     const newValue = event.payload?.newValue ?? event.payload?.value;
+
+    // Format values for display (handles SELECT/MULTI_SELECT by looking up choice names)
+    const formattedPrevValue = fieldObj ? this._formatFieldValueForDisplay(previousValue, fieldObj, 25) : this._truncate(String(previousValue ?? ''), 25);
+    const formattedNewValue = fieldObj ? this._formatFieldValueForDisplay(newValue, fieldObj, 25) : this._truncate(String(newValue ?? ''), 25);
+    const fullPrevValue = fieldObj ? this._formatFieldValueForDisplay(previousValue, fieldObj, 200) : String(previousValue ?? '');
+    const fullNewValue = fieldObj ? this._formatFieldValueForDisplay(newValue, fieldObj, 200) : String(newValue ?? '');
 
     // Determine event type and styling
     let icon = 'ph-circle';
@@ -37442,10 +37527,10 @@ class EODataWorkbench {
           ${isFieldSpecific && (previousValue !== undefined || newValue !== undefined) ? `
             <div class="event-change">
               ${previousValue !== undefined ? `
-                <span class="old-value" title="${this._escapeHtml(String(previousValue))}">${this._escapeHtml(this._truncate(previousValue, 25))}</span>
+                <span class="old-value" title="${this._escapeHtml(fullPrevValue)}">${this._escapeHtml(formattedPrevValue)}</span>
                 <i class="ph ph-arrow-right"></i>
               ` : ''}
-              <span class="new-value" title="${this._escapeHtml(String(newValue))}">${this._escapeHtml(this._truncate(newValue, 25))}</span>
+              <span class="new-value" title="${this._escapeHtml(fullNewValue)}">${this._escapeHtml(formattedNewValue)}</span>
             </div>
           ` : ''}
           <div class="event-footer">
