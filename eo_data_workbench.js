@@ -7264,18 +7264,15 @@ class EODataWorkbench {
       `;
     }).join('');
 
+    // Only show the section header without individual definition items in the sidebar dropdown
     return `
-      <div class="project-section definitions-section ${isExpanded ? 'expanded' : ''}"
+      <div class="project-section definitions-section"
            data-section="definitions" data-project-id="${projectId}">
         <div class="project-section-header" data-section="definitions" data-project-id="${projectId}">
-          <i class="ph ph-caret-right section-expand-icon"></i>
           <i class="ph ph-book-open section-icon"></i>
           <span class="section-title">Definitions</span>
           <span class="section-badge meant-badge">MEANT</span>
           <span class="section-count" title="${boundCount} defined of ${totalCount} keys">${boundCount}/${totalCount}</span>
-        </div>
-        <div class="project-section-content">
-          ${definitionsListHtml}
         </div>
       </div>
     `;
