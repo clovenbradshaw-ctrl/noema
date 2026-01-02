@@ -4123,16 +4123,12 @@ class EODataWorkbench {
           return;
         }
 
-        // Otherwise expand the set and open tab for default view
+        // Otherwise expand the set and open the dashboard
         this.expandedSets[setId] = true;
         containerEl?.classList.add('expanded');
 
-        const set = this.sets.find(s => s.id === setId);
-        if (set && set.views && set.views.length > 0) {
-          const defaultView = set.views[0];
-          this._openViewTab(setId, defaultView.id);
-        }
-        this._renderSidebar();
+        // Open set dashboard (detail panel showing set metadata, sources, etc.)
+        this._selectSet(setId);
       });
 
       header.addEventListener('contextmenu', (e) => {
@@ -7053,16 +7049,12 @@ class EODataWorkbench {
           return;
         }
 
-        // Otherwise expand the set and open tab for default view
+        // Otherwise expand the set and open the dashboard
         this.expandedSets[setId] = true;
         containerEl?.classList.add('expanded');
 
-        const set = this.sets.find(s => s.id === setId);
-        if (set && set.views && set.views.length > 0) {
-          const defaultView = set.views[0];
-          this._openViewTab(setId, defaultView.id);
-        }
-        this._renderSidebar();
+        // Open set dashboard (detail panel showing set metadata, sources, etc.)
+        this._selectSet(setId);
       });
 
       header.addEventListener('contextmenu', (e) => {
