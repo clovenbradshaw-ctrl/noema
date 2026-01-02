@@ -2,32 +2,38 @@
  * EO Relational Merge - Phase-Space Mode
  *
  * A principled approach to data merging based on EO's merge-local coordinate system.
- * Users don't choose joins — they choose recognition, boundary handling, and decision
- * timing, and the system derives the appropriate operation.
+ *
+ * ONE-LINE SUMMARY (the design's spine):
+ * Users don't choose joins. They choose how recognition, boundaries, and resolution
+ * behave — and the system does the rest.
  *
  * IMPORTANT DISTINCTION:
  * - Phaseposts describe what kind of thing EXISTS (ontological states)
  * - Merges describe how two descriptions are RELATED (relational operators)
  *
  * This module operates at the MERGE level, not the ontological level.
- * A merge is a local phase transition operator, not a world-state.
+ * A merge is a local phase transition operator acting on already-existing states,
+ * not a world-state itself. We intentionally flatten the abstraction here.
  *
- * THE THREE MERGE-LOCAL AXES:
+ * THE THREE MERGE-LOCAL AXES (restricted subspace of EO):
  *
- * 1. RECOGNITION (R): Who is recognized as a row/entity
- *    −1 = Mutual only (both sides must recognize → INNER-like)
- *    +1 = One-sided (ground side recognized regardless → LEFT/RIGHT-like)
- *     0 = Independent (each side recognized independently → FULL-like)
+ * 1. RECOGNITION (R): How rows are recognized relative to each other
+ *    −1 = Mutual recognition only (both sides must recognize → INNER-like)
+ *    +1 = One-sided recognition (ground side recognized regardless → LEFT/RIGHT-like)
+ *     0 = Independent recognition (each side recognized independently → FULL-like)
+ *    ⚠️ Note: No φ here. We are not talking about archetypes.
  *
  * 2. BOUNDARY HANDLING (B): What happens to mismatches/absence
- *    −1 = Drop (erase mismatches)
- *    +1 = Mark (NULLs, placeholders)
+ *    −1 = Drop mismatches (erase absence)
+ *    +1 = Mark mismatches (NULLs, placeholders)
  *    √2 = Expose structure (counts, diagnostics, gap tables, audit rows)
+ *    This is the ONLY axis where √2 is appropriate — boundary complexity, not being.
  *
- * 3. DECISION TIMING (D): When the merge becomes final
+ * 3. DECISION TIMING (D): When the merge enforces a decision
  *    −1 = Immediate (merge result is authoritative)
  *    +1 = Deferred (merge feeds later logic)
  *     0 = Non-final (merge is exploratory/inspect-only)
+ *    ⚠️ Again: no τ. No recursion metaphysics. Just pipeline behavior.
  *
  * A merge mode is written: [R, B, D]
  * This gives 3 × 3 × 3 = 27 merge-local modes.
@@ -36,6 +42,12 @@
  * INNER / LEFT / FULL are not identities — they are commitment bundles.
  * By decomposing into recognition, boundary handling, and decision timing,
  * we get EO's value without pretending a merge defines ontology.
+ *
+ * SQL EQUIVALENCE:
+ * - INNER / LEFT / FULL each occupy 9 positions, not 1
+ * - SQL exposes mostly B = −1 or +1, D = −1
+ * - √2 is where EO adds value: seeing boundary structure
+ * - 0 on Decision is crucial: inspection without enforcement
  */
 
 // ============================================================================
@@ -124,14 +136,21 @@ const MERGE_MODES = {
 /**
  * Recognition Options (R-axis)
  * How rows are recognized relative to each other
+ *
+ * Values:
+ *   −1 = Mutual only (both sides must recognize → INNER-like)
+ *   +1 = One-sided (ground side recognized regardless → LEFT/RIGHT-like)
+ *    0 = Independent (each side recognized independently → FULL-like)
+ *
+ * Note: No φ here. We are not talking about archetypes.
  */
 const RECOGNITION_OPTIONS = {
   MUTUAL: {
     id: 'mutual',
     phaseValue: -1,
-    title: 'Mutual recognition',
-    description: 'Both sides must recognize the entity.',
-    details: 'Only rows matched by both sources survive. Unmatched rows do not appear in the result. Use when enforcing shared definitions.',
+    title: 'Mutual recognition only',
+    description: 'Both sides must recognize.',
+    details: 'An entity exists only if both sides recognize it. Identity requires agreement. Unmatched entities do not instantiate. Use when enforcing shared definitions.',
     tag: 'Consensus-only',
     icon: 'ph-handshake',
     sqlFamily: 'INNER'
@@ -140,8 +159,8 @@ const RECOGNITION_OPTIONS = {
     id: 'one_sided',
     phaseValue: 1,
     title: 'One-sided recognition',
-    description: 'One side grants recognition unilaterally.',
-    details: 'The ground side defines what "counts." The other side may enrich but cannot contradict existence. Direction must be chosen.',
+    description: 'Ground side recognized regardless.',
+    details: 'One side grants recognition unilaterally. One dataset defines what "counts." The other may enrich but not contradict existence. Direction must be chosen explicitly.',
     tag: 'Asymmetric ground',
     icon: 'ph-crown-simple',
     requiresDirection: true,
@@ -151,9 +170,9 @@ const RECOGNITION_OPTIONS = {
     id: 'independent',
     phaseValue: 0,
     title: 'Independent recognition',
-    description: 'Each side is recognized independently.',
-    details: 'Both sides contribute rows regardless of matches. Conflicting or unmatched rows may coexist. Use for exploration and reconciliation.',
-    tag: 'Full inclusion',
+    description: 'Each side recognized independently.',
+    details: 'Each side grants recognition independently. Existence does not require agreement. Conflicting identities may coexist. Use for exploration, comparison, reconciliation.',
+    tag: 'Independent existence',
     icon: 'ph-users-three',
     sqlFamily: 'FULL'
   }
@@ -162,6 +181,14 @@ const RECOGNITION_OPTIONS = {
 /**
  * Boundary Handling Options (B-axis)
  * What happens to mismatches/absence
+ *
+ * Values:
+ *   −1 = Drop mismatches (erase absence)
+ *   +1 = Mark mismatches (NULLs, placeholders)
+ *   √2 = Expose structure (counts, diagnostics, gap tables, audit rows)
+ *
+ * This is the only axis where √2 is appropriate — because this is about
+ * boundary complexity, not being.
  */
 const BOUNDARY_OPTIONS = {
   DROP: {
@@ -172,14 +199,14 @@ const BOUNDARY_OPTIONS = {
     details: 'Missing relationships are discarded. Boundaries are hard. Clean but brittle.',
     tag: 'Hard boundary',
     icon: 'ph-prohibit',
-    warning: 'Mismatches will not be inspectable downstream.'
+    warning: 'Absence will not be inspectable downstream.'
   },
   MARK: {
     id: 'mark',
     phaseValue: 1,
     title: 'Mark mismatches',
     description: 'Absence is preserved.',
-    details: 'Gaps are marked with NULLs or placeholders. Mismatches are visible but not emphasized.',
+    details: 'Gaps are preserved but de-emphasized. Typically paired with privileged identity. Boundaries are asymmetric.',
     tag: 'Soft boundary',
     icon: 'ph-minus-circle'
   },
@@ -188,8 +215,8 @@ const BOUNDARY_OPTIONS = {
     phaseValue: '√2',
     title: 'Expose mismatch structure',
     description: 'Absence is information.',
-    details: 'Gap structure is fully exposed: counts, diagnostics, gap tables, audit rows. Mismatch patterns are analytically relevant.',
-    tag: 'Structural boundary',
+    details: 'Gaps are preserved as signals. Mismatch is analytically relevant. Boundaries are relational / fractal. Includes counts, diagnostics, gap tables, audit rows.',
+    tag: 'Permeable boundary',
     icon: 'ph-chart-bar'
   }
 };
@@ -197,33 +224,40 @@ const BOUNDARY_OPTIONS = {
 /**
  * Decision Timing Options (D-axis)
  * When the merge becomes final
+ *
+ * Values:
+ *   −1 = Immediate (merge result is authoritative)
+ *   +1 = Deferred (merge feeds later logic)
+ *    0 = Non-final (merge is exploratory / inspect-only)
+ *
+ * Again: no τ. No recursion metaphysics. Just pipeline behavior.
  */
 const DECISION_OPTIONS = {
   IMMEDIATE: {
     id: 'immediate',
     phaseValue: -1,
-    title: 'Decide immediately',
+    title: 'Resolve now',
     description: 'Merge result is authoritative.',
-    details: 'Decision is made during merge. Produces a single, stable output. Suitable for reporting and enforcement.',
-    tag: 'Final',
+    details: 'Differences eliminated during merge. Produces a single, stable output. Suitable for reporting and enforcement.',
+    tag: 'Static resolution',
     icon: 'ph-lightning'
   },
   DEFERRED: {
     id: 'deferred',
     phaseValue: 1,
-    title: 'Defer decision',
+    title: 'Inspect first, resolve later',
     description: 'Merge feeds later logic.',
-    details: 'Result preserved through merge. Resolution happens downstream via filters, rules, or review. Supports staged workflows.',
-    tag: 'Staged',
+    details: 'Plurality preserved through merge. Resolution happens downstream via filters, rules, or review. Supports analysis and review.',
+    tag: 'Dynamic resolution',
     icon: 'ph-hourglass-medium'
   },
   NON_FINAL: {
     id: 'non_final',
     phaseValue: 0,
-    title: 'Non-final (exploratory)',
+    title: 'Differences persist',
     description: 'Merge is for inspection only.',
-    details: 'No authoritative decision made. Used for sensemaking, preview, and analysis. Results may not be persisted.',
-    tag: 'Exploratory',
+    details: 'Multiple perspectives remain active. System supports ongoing reconciliation. Suitable for longitudinal sensemaking.',
+    tag: 'Recursive resolution',
     icon: 'ph-magnifying-glass'
   }
 };
@@ -704,14 +738,16 @@ class RelationalMergeConfig {
     const boundaryLabel = this.boundary
       ? BOUNDARY_OPTIONS[this.boundary.toUpperCase()]?.title || this.boundary
       : 'Not set';
-    const decisionLabel = this.decision
+    const resolutionLabel = this.decision
       ? DECISION_OPTIONS[this.decision.toUpperCase()]?.title || this.decision
       : 'Not set';
 
     return {
       recognition: recognitionLabel,
       boundary: boundaryLabel,
-      decision: decisionLabel
+      resolution: resolutionLabel,
+      // Legacy alias for backward compatibility
+      decision: resolutionLabel
     };
   }
 
@@ -723,43 +759,43 @@ class RelationalMergeConfig {
     // Recognition description
     switch (this.recognition) {
       case 'mutual':
-        parts.push('only rows matched by both sources survive');
+        parts.push('enforces mutual recognition');
         break;
       case 'one_sided':
-        parts.push(`all rows from ${this.recognitionDirection === 'right' ? 'Source B' : 'Source A'} are preserved`);
+        parts.push(`preserves ${this.recognitionDirection === 'right' ? 'Source B' : 'Source A'} as ground`);
         break;
       case 'independent':
-        parts.push('rows from both sources are preserved independently');
+        parts.push('preserves independent existence');
         break;
     }
 
     // Boundary description
     switch (this.boundary) {
       case 'drop':
-        parts.push('mismatches are discarded');
+        parts.push('treats gaps as noise');
         break;
       case 'mark':
-        parts.push('mismatches are marked with NULLs');
+        parts.push('treats gaps as notable');
         break;
       case 'expose':
-        parts.push('mismatch structure is fully exposed');
+        parts.push('treats gaps as signals');
         break;
     }
 
-    // Decision description
+    // Resolution description
     switch (this.decision) {
       case 'immediate':
-        parts.push('decision is final');
+        parts.push('collapses immediately');
         break;
       case 'deferred':
-        parts.push('decision is deferred to downstream logic');
+        parts.push('delays consensus');
         break;
       case 'non_final':
-        parts.push('result is exploratory only');
+        parts.push('persists plurality');
         break;
     }
 
-    return `This merge ${parts.join(', ')}.`;
+    return `This configuration ${parts.join(', ')}.`;
   }
 
   getGuardrailWarnings() {
@@ -768,12 +804,12 @@ class RelationalMergeConfig {
 
     // Independent + non-final = exploration mode
     if (this.recognition === 'independent' && this.decision === 'non_final') {
-      warnings.push('This is a pure exploration mode. Results should not be used for authoritative decisions.');
+      warnings.push('This configuration preserves plurality indefinitely. Ensure downstream systems can handle multiple truths.');
     }
 
     // Drop boundary warning
     if (this.boundary === 'drop') {
-      warnings.push('Dropped mismatches cannot be recovered or inspected downstream.');
+      warnings.push('Erased absence cannot be recovered or inspected downstream.');
     }
 
     // One-sided without direction
@@ -783,15 +819,10 @@ class RelationalMergeConfig {
 
     // Custom logic required
     if (op?.requiresCustomLogic) {
-      warnings.push('This configuration requires staged or custom logic beyond standard SQL.');
+      warnings.push('No single standard join corresponds to this configuration. This merge requires staged or custom logic.');
     }
 
-    // Recommended configuration
-    if (op?.isRecommended) {
-      warnings.push('This is an EO-recommended configuration for safe exploration.');
-    }
-
-    return warnings.filter(w => !w.includes('recommended')); // Don't show "recommended" as warning
+    return warnings;
   }
 
   getRecommendations() {
@@ -895,7 +926,7 @@ class RelationalMergeUI {
     return `
       <div class="relational-merge-header">
         <h2><i class="ph ph-git-merge"></i> Relational Merge</h2>
-        <p class="relational-merge-subtitle">Define how realities coexist before they are combined</p>
+        <p class="relational-merge-subtitle">Phase-Space Mode</p>
         <button class="relational-merge-close" id="rm-close-btn">
           <i class="ph ph-x"></i>
         </button>
@@ -1009,7 +1040,7 @@ class RelationalMergeUI {
       <div class="rm-step-content rm-relational-content">
         ${!this._purposeShown ? `
           <div class="rm-purpose-banner" id="rm-purpose-banner">
-            <p><em>A merge is a choice about recognition, boundaries, and when you're willing to decide.</em></p>
+            <p><em>Define how realities are allowed to coexist before they are combined.</em></p>
             <button class="rm-purpose-dismiss" id="rm-purpose-dismiss">
               <i class="ph ph-x"></i>
             </button>
@@ -1032,7 +1063,7 @@ class RelationalMergeUI {
       <div class="rm-panel ${this.config.recognition ? 'rm-panel-set' : ''}">
         <div class="rm-panel-header">
           <h3><i class="ph ph-users"></i> Recognition</h3>
-          <span class="rm-panel-question">Who is recognized as a row?</span>
+          <span class="rm-panel-question">Who is recognized as a row/entity?</span>
         </div>
         <p class="rm-panel-prompt">How are rows recognized relative to each other?</p>
 
@@ -1079,9 +1110,9 @@ class RelationalMergeUI {
       <div class="rm-panel ${this.config.boundary ? 'rm-panel-set' : ''}">
         <div class="rm-panel-header">
           <h3><i class="ph ph-map-trifold"></i> Boundary Handling</h3>
-          <span class="rm-panel-question">What happens to mismatches?</span>
+          <span class="rm-panel-question">What happens to mismatches/absence?</span>
         </div>
-        <p class="rm-panel-prompt">When an expected relationship is missing, how should the system handle it?</p>
+        <p class="rm-panel-prompt">When an expected relationship is missing, how should the system interpret that gap?</p>
 
         <div class="rm-options">
           ${Object.values(BOUNDARY_OPTIONS).map(opt => `
@@ -1115,9 +1146,9 @@ class RelationalMergeUI {
       <div class="rm-panel ${this.config.decision ? 'rm-panel-set' : ''}">
         <div class="rm-panel-header">
           <h3><i class="ph ph-clock"></i> Decision Timing</h3>
-          <span class="rm-panel-question">When does this become final?</span>
+          <span class="rm-panel-question">When do differences collapse?</span>
         </div>
-        <p class="rm-panel-prompt">When does the merge result become authoritative?</p>
+        <p class="rm-panel-prompt">How long is plurality allowed to exist?</p>
 
         <div class="rm-options">
           ${Object.values(DECISION_OPTIONS).map(opt => `
@@ -1145,9 +1176,9 @@ class RelationalMergeUI {
         <div class="rm-phase-summary rm-phase-incomplete">
           <div class="rm-phase-header">
             <i class="ph ph-compass"></i>
-            <span>Merge Mode</span>
+            <span>Relational Position</span>
           </div>
-          <p class="rm-phase-message">Select an option from each panel to define your merge mode.</p>
+          <p class="rm-phase-message">Select an option from each panel to define the relational position.</p>
         </div>
       `;
     }
@@ -1164,8 +1195,8 @@ class RelationalMergeUI {
       <div class="rm-phase-summary rm-phase-complete">
         <div class="rm-phase-header">
           <i class="ph ph-check-circle"></i>
-          <span>Merge Mode Defined</span>
-          ${mode ? `<code class="rm-mode-code">[${coords.join(', ')}]</code>` : ''}
+          <span>Relational Position Defined</span>
+          ${mode ? `<code class="rm-mode-code">${mode.key} [${coords.join(', ')}]</code>` : ''}
         </div>
 
         ${mode ? `<div class="rm-mode-name">${mode.name}</div>` : ''}
@@ -1180,7 +1211,7 @@ class RelationalMergeUI {
             <span>${summary.boundary}</span>
           </div>
           <div class="rm-phase-value">
-            <label>Decision:</label>
+            <label>Resolution:</label>
             <span>${summary.decision}</span>
           </div>
         </div>
@@ -1235,33 +1266,32 @@ class RelationalMergeUI {
 
   _getDerivedBehaviorText() {
     const behaviors = [];
-    const op = this.config.getDerivedOperation();
 
     // Recognition behavior
     if (this.config.recognition === 'mutual') {
-      behaviors.push('Only rows matched by both sources survive');
+      behaviors.push('Preserve only entities recognized by both sources');
     } else if (this.config.recognition === 'one_sided') {
-      behaviors.push(`All rows from ${this.config.recognitionDirection === 'right' ? 'Source B' : 'Source A'} are preserved`);
+      behaviors.push(`Preserve all entities from ${this.config.recognitionDirection === 'right' ? 'Source B' : 'Source A'}`);
     } else {
-      behaviors.push('Rows from both sources are preserved independently');
+      behaviors.push('Preserve all entities from both sources');
     }
 
     // Boundary behavior
     if (this.config.boundary === 'drop') {
-      behaviors.push('Discard mismatches');
+      behaviors.push('Discard missing relationships');
     } else if (this.config.boundary === 'expose') {
-      behaviors.push('Expose mismatch structure (gap tables, diagnostics)');
+      behaviors.push('Represent missing relationships explicitly (gap tables, diagnostics)');
     } else {
-      behaviors.push('Mark mismatches with NULLs');
+      behaviors.push('Mark missing relationships with NULLs');
     }
 
-    // Decision behavior
+    // Resolution behavior
     if (this.config.decision === 'immediate') {
-      behaviors.push('Decision is final');
+      behaviors.push('Collapse differences immediately');
     } else if (this.config.decision === 'deferred') {
-      behaviors.push('Decision deferred to downstream logic');
+      behaviors.push('Defer consolidation to downstream logic');
     } else {
-      behaviors.push('Result is exploratory only');
+      behaviors.push('Preserve plurality for inspection');
     }
 
     return behaviors.join('</li><li>');
@@ -1392,11 +1422,11 @@ class RelationalMergeUI {
             </div>
 
             <div class="rm-review-item">
-              <label>Merge Mode</label>
+              <label>Relational Position</label>
               <div class="rm-review-position">
                 <span><strong>Recognition:</strong> ${summary.recognition}</span>
                 <span><strong>Boundaries:</strong> ${summary.boundary}</span>
-                <span><strong>Decision:</strong> ${summary.decision}</span>
+                <span><strong>Resolution:</strong> ${summary.resolution}</span>
               </div>
             </div>
 
@@ -1463,6 +1493,7 @@ class RelationalMergeUI {
             ${isLastStep ? '<i class="ph ph-check"></i> Apply relational assumptions' : 'Continue <i class="ph ph-arrow-right"></i>'}
           </button>
         </div>
+        ${isLastStep ? '<p class="rm-footer-warning">You can revise these later. What you erase now cannot be recovered.</p>' : ''}
       </div>
     `;
   }
