@@ -9300,6 +9300,12 @@ button:disabled {
   background: var(--bg-hover);
 }
 
+.field-type-item.keyboard-focused {
+  background: var(--bg-hover);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .field-type-item i {
   font-size: 16px;
   color: var(--text-muted);
