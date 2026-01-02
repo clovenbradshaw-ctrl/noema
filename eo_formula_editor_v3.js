@@ -225,6 +225,9 @@ class EOFormulaEditorV3 {
     this.autocompleteSuggestions = [];
     this.autocompleteIndex = 0;
 
+    // Debounce timer for formula updates (prevents UI freezing)
+    this._updateDebounceTimer = null;
+
     // Function categories (inherited from V2 for function browser)
     this.functionCategories = this._getFunctionCategories();
 
@@ -256,11 +259,12 @@ class EOFormulaEditorV3 {
    * Internal method to show the modal
    */
   _showModal(title, isEdit) {
-    // Destroy any existing modal
+    // Destroy any existing modal and clear pending timers
     if (this.modal) {
       this.modal.destroy();
       this.modal = null;
     }
+    clearTimeout(this._updateDebounceTimer);
 
     const set = this.workbench.getCurrentSet();
     const fields = set?.fields || [];
@@ -277,6 +281,7 @@ class EOFormulaEditorV3 {
       closable: true,
       buttons: [], // Custom footer rendered in content
       onClose: () => {
+        clearTimeout(this._updateDebounceTimer);
         if (this.onCancel) this.onCancel();
       },
     });
@@ -608,7 +613,12 @@ class EOFormulaEditorV3 {
     const formulaInput = modalEl.querySelector('#formula-input-v3');
     if (formulaInput) {
       formulaInput.addEventListener('input', (e) => {
-        this._updateFromFormula(formulaInput.value);
+        // Debounce expensive formula parsing and evaluation to prevent UI freezing
+        clearTimeout(this._updateDebounceTimer);
+        this._updateDebounceTimer = setTimeout(() => {
+          this._updateFromFormula(formulaInput.value);
+        }, 150);
+        // Keep autocomplete responsive (lightweight operation)
         this._handleAutocomplete(formulaInput);
       });
 
