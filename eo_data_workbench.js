@@ -35071,6 +35071,15 @@ class EODataWorkbench {
           }).join(' ');
         }
         return '<span class="cell-empty">No files - click to add</span>';
+      case FieldTypes.FORMULA:
+        // Evaluate the formula using the current detail record
+        const set = this.getCurrentSet();
+        const record = set?.records.find(r => r.id === this.currentDetailRecordId);
+        if (record) {
+          const formulaResult = this._evaluateFormula(field.options?.formula, record);
+          return `<span class="cell-formula">${formulaResult}</span>`;
+        }
+        return '<span class="cell-empty">-</span>';
       default:
         if (typeof value === 'object') {
           return `<code style="font-size: 11px;">${this._escapeHtml(JSON.stringify(value, null, 2).substring(0, 100))}...</code>`;
