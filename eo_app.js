@@ -1245,12 +1245,14 @@ function clearAllData() {
 function clearSampleData() {
   if (!window.wb) return;
 
-  // Find the Sample project
-  const sampleProject = window.wb.projects?.find(p =>
-    p.name === 'Sample' && p.description === 'Sample project with demo data'
-  );
+  // Find all sample projects (using isSample flag)
+  const sampleProjects = window.wb.projects?.filter(p => p.isSample === true) || [];
 
-  if (!sampleProject) {
+  // Also find any orphaned sample sources/sets (for backwards compatibility)
+  const sampleSources = window.wb.sources?.filter(s => s.isSample === true) || [];
+  const sampleSets = window.wb.sets?.filter(s => s.isSample === true) || [];
+
+  if (sampleProjects.length === 0 && sampleSources.length === 0 && sampleSets.length === 0) {
     if (typeof window.wb._showToast === 'function') {
       window.wb._showToast('No sample data found', 'info');
     } else {
@@ -1259,33 +1261,46 @@ function clearSampleData() {
     return;
   }
 
-  if (!confirm('Clear sample data? This will remove the Sample project and all its contents.')) return;
+  if (!confirm('Clear sample data? This will permanently remove all sample projects and their contents.')) return;
+
+  // Collect all IDs to remove from sample projects
+  const sourceIdsToRemove = new Set(sampleSources.map(s => s.id));
+  const setIdsToRemove = new Set(sampleSets.map(s => s.id));
+  const definitionIdsToRemove = new Set();
+  const exportIdsToRemove = new Set();
+
+  for (const project of sampleProjects) {
+    (project.sourceIds || []).forEach(id => sourceIdsToRemove.add(id));
+    (project.setIds || []).forEach(id => setIdsToRemove.add(id));
+    (project.definitionIds || []).forEach(id => definitionIdsToRemove.add(id));
+    (project.exportIds || []).forEach(id => exportIdsToRemove.add(id));
+  }
 
   // Remove associated sources
-  if (sampleProject.sourceIds?.length) {
-    window.wb.sources = window.wb.sources?.filter(s => !sampleProject.sourceIds.includes(s.id)) || [];
+  if (sourceIdsToRemove.size > 0) {
+    window.wb.sources = window.wb.sources?.filter(s => !sourceIdsToRemove.has(s.id)) || [];
   }
 
   // Remove associated sets
-  if (sampleProject.setIds?.length) {
-    window.wb.sets = window.wb.sets?.filter(s => !sampleProject.setIds.includes(s.id)) || [];
+  if (setIdsToRemove.size > 0) {
+    window.wb.sets = window.wb.sets?.filter(s => !setIdsToRemove.has(s.id)) || [];
   }
 
   // Remove associated definitions
-  if (sampleProject.definitionIds?.length) {
-    window.wb.definitions = window.wb.definitions?.filter(d => !sampleProject.definitionIds.includes(d.id)) || [];
+  if (definitionIdsToRemove.size > 0) {
+    window.wb.definitions = window.wb.definitions?.filter(d => !definitionIdsToRemove.has(d.id)) || [];
   }
 
   // Remove associated exports
-  if (sampleProject.exportIds?.length) {
-    window.wb.exports = window.wb.exports?.filter(e => !sampleProject.exportIds.includes(e.id)) || [];
+  if (exportIdsToRemove.size > 0) {
+    window.wb.exports = window.wb.exports?.filter(e => !exportIdsToRemove.has(e.id)) || [];
   }
 
-  // Remove the project itself
-  window.wb.projects = window.wb.projects?.filter(p => p.id !== sampleProject.id) || [];
+  // Remove the sample projects
+  window.wb.projects = window.wb.projects?.filter(p => p.isSample !== true) || [];
 
-  // Clear current project selection if it was the sample project
-  if (window.wb.currentProjectId === sampleProject.id) {
+  // Clear current project selection if it was a sample project
+  if (sampleProjects.some(p => p.id === window.wb.currentProjectId)) {
     window.wb.currentProjectId = null;
   }
 
