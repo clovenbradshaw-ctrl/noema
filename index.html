@@ -283,6 +283,10 @@
                   <i class="ph ph-columns"></i>
                   <span>Fields</span>
                 </button>
+                <button class="tools-dropdown-item" id="btn-pipeline-dropdown" title="Manage data pipeline (merge, filter, transform)">
+                  <i class="ph ph-git-merge"></i>
+                  <span>Pipeline</span>
+                </button>
                 <div class="tools-dropdown-divider"></div>
                 <button class="tools-dropdown-item" id="btn-import-dropdown" title="Import CSV or JSON">
                   <i class="ph ph-download"></i>
@@ -435,6 +439,44 @@
           <i class="ph ph-cursor-click"></i>
           <p>Select a record to view details</p>
         </div>
+      </div>
+    </aside>
+
+    <!-- Pipeline Panel (Right Sidebar for pipeline management) -->
+    <aside class="pipeline-panel" id="pipeline-panel">
+      <div class="pipeline-panel-header">
+        <div class="pipeline-header-title">
+          <i class="ph ph-git-merge"></i>
+          <h3>Data Pipeline</h3>
+        </div>
+        <div class="pipeline-header-actions">
+          <button class="pipeline-action-btn" id="pipeline-run-btn" title="Run pipeline">
+            <i class="ph ph-play"></i>
+          </button>
+          <button class="pipeline-panel-close" id="pipeline-panel-close">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="pipeline-panel-body" id="pipeline-panel-body">
+        <div class="empty-state-small">
+          <i class="ph ph-git-merge"></i>
+          <p>No pipeline steps yet</p>
+          <button class="btn btn-sm btn-primary" id="pipeline-add-first-step">
+            <i class="ph ph-plus"></i>
+            Add Step
+          </button>
+        </div>
+      </div>
+      <div class="pipeline-panel-footer">
+        <button class="btn btn-sm btn-primary" id="pipeline-add-step-btn">
+          <i class="ph ph-plus"></i>
+          Add Step
+        </button>
+        <button class="btn btn-sm" id="pipeline-history-btn" title="View execution history">
+          <i class="ph ph-clock-counter-clockwise"></i>
+          History
+        </button>
       </div>
     </aside>
   </div>
@@ -1026,6 +1068,7 @@
   <script src="eo_sql_query.js"></script>     <!-- SQL Query Interface with EO-IR Provenance -->
   <script src="eo_source_join.js"></script>   <!-- Source Storage & No-Code Join Builder -->
   <script src="eo_relational_merge.js"></script>   <!-- Phase-Space Relational Merge UI -->
+  <script src="eo_pipeline.js"></script>          <!-- Pipeline Engine for Set Transformations -->
 
   <!-- EO Integration Layer -->
   <script src="eo_nine_operators.js"></script>       <!-- The 9 Canonical Operators -->

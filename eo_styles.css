@@ -5536,6 +5536,348 @@ mark.search-highlight {
   height: calc(100% - 52px);
 }
 
+/* ===== Pipeline Panel ===== */
+.pipeline-panel {
+  width: 0;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-primary);
+  overflow: hidden;
+  transition: width var(--transition-normal);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pipeline-panel.open {
+  width: 380px;
+}
+
+.pipeline-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.pipeline-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pipeline-header-title i {
+  color: var(--primary-500);
+  font-size: 18px;
+}
+
+.pipeline-header-title h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.pipeline-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pipeline-action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pipeline-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--primary-500);
+}
+
+.pipeline-panel-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pipeline-panel-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pipeline-panel-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.pipeline-panel-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Pipeline Steps List */
+.pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pipeline-step {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  cursor: grab;
+  transition: all var(--transition-fast);
+}
+
+.pipeline-step:hover {
+  border-color: var(--primary-400);
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.pipeline-step.disabled {
+  opacity: 0.5;
+}
+
+.pipeline-step.dragging {
+  opacity: 0.7;
+  transform: scale(1.02);
+  cursor: grabbing;
+}
+
+.pipeline-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.pipeline-step-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pipeline-step-type i {
+  font-size: 14px;
+}
+
+.pipeline-step-type.source { color: var(--given-color); }
+.pipeline-step-type.merge { color: var(--primary-500); }
+.pipeline-step-type.filter { color: var(--purple-500); }
+.pipeline-step-type.transform { color: var(--orange-500); }
+.pipeline-step-type.dedupe { color: var(--teal-500); }
+
+.pipeline-step-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.pipeline-step:hover .pipeline-step-actions {
+  opacity: 1;
+}
+
+.pipeline-step-action {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.pipeline-step-action:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pipeline-step-action.danger:hover {
+  color: var(--error-color);
+}
+
+.pipeline-step-content {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pipeline-step-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.pipeline-step-tag {
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+}
+
+/* Pipeline Step Arrow Connector */
+.pipeline-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+  color: var(--text-muted);
+}
+
+.pipeline-connector i {
+  font-size: 12px;
+}
+
+/* Pipeline Step Stats */
+.pipeline-step-stats {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-primary);
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+}
+
+.pipeline-step-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pipeline-step-stat i {
+  font-size: 12px;
+}
+
+/* Add Step Modal Options */
+.pipeline-step-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pipeline-step-option {
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.pipeline-step-option:hover {
+  border-color: var(--primary-400);
+  background: var(--bg-hover);
+}
+
+.pipeline-step-option i {
+  font-size: 24px;
+  color: var(--primary-500);
+  margin-bottom: 8px;
+}
+
+.pipeline-step-option-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.pipeline-step-option-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Merge Strategy Selector */
+.merge-strategy-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.merge-strategy-item {
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.merge-strategy-item:hover,
+.merge-strategy-item.selected {
+  border-color: var(--primary-400);
+  background: var(--primary-50);
+}
+
+.merge-strategy-item.selected {
+  border-width: 2px;
+}
+
+/* Pipeline History Panel */
+.pipeline-history {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.pipeline-history-entry {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.pipeline-history-entry:last-child {
+  border-bottom: none;
+}
+
+.pipeline-history-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.pipeline-history-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.pipeline-history-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ===== Data Table ===== */
 /*
  * TABLE RENDERING RULES - CSS Safeguards
