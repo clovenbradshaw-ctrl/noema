@@ -3142,8 +3142,30 @@ function showImportModal() {
       <!-- Progress Section (hidden initially) -->
       <div class="import-progress" id="import-progress" style="display: none;">
         <div class="progress-content">
-          <div class="progress-icon">
-            <i class="ph ph-spinner ph-spin"></i>
+          <div class="import-animation">
+            <div class="import-animation-container">
+              <div class="import-target">
+                <div class="import-target-header">
+                  <div class="import-target-col"></div>
+                  <div class="import-target-col"></div>
+                  <div class="import-target-col"></div>
+                  <div class="import-target-col"></div>
+                </div>
+                <div class="import-target-body">
+                  <div class="import-target-row filled"></div>
+                  <div class="import-target-row filled"></div>
+                  <div class="import-target-row filled"></div>
+                  <div class="import-target-row receiving"></div>
+                </div>
+              </div>
+              <div class="import-stream">
+                <div class="import-row-particle" style="--delay: 0s;"></div>
+                <div class="import-row-particle" style="--delay: 0.3s;"></div>
+                <div class="import-row-particle" style="--delay: 0.6s;"></div>
+                <div class="import-row-particle" style="--delay: 0.9s;"></div>
+                <div class="import-row-particle" style="--delay: 1.2s;"></div>
+              </div>
+            </div>
           </div>
           <p class="progress-text" id="progress-text">Importing data...</p>
           <div class="progress-bar-container">
@@ -4155,19 +4177,122 @@ importStyles.textContent = `
     max-width: 400px;
   }
 
-  .progress-icon {
-    font-size: 48px;
-    color: var(--primary);
-    margin-bottom: 16px;
+  /* Import Animation Styles */
+  .import-animation {
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: center;
   }
 
-  .progress-icon .ph-spin {
-    animation: spin 1s linear infinite;
+  .import-animation-container {
+    position: relative;
+    width: 200px;
+    height: 120px;
   }
 
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  .import-target {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 140px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-primary);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .import-target-header {
+    display: flex;
+    gap: 4px;
+    padding: 8px;
+    background: var(--primary);
+    border-bottom: 1px solid var(--border-primary);
+  }
+
+  .import-target-col {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 2px;
+  }
+
+  .import-target-body {
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .import-target-row {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .import-target-row.filled {
+    background: var(--primary-light, #e3f2fd);
+    opacity: 0.6;
+  }
+
+  .import-target-row.receiving {
+    animation: rowFill 1.5s ease-in-out infinite;
+  }
+
+  @keyframes rowFill {
+    0%, 100% {
+      background: linear-gradient(90deg, var(--primary) 0%, transparent 0%);
+    }
+    50% {
+      background: linear-gradient(90deg, var(--primary) 100%, transparent 100%);
+    }
+  }
+
+  .import-stream {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 60px;
+  }
+
+  .import-row-particle {
+    position: absolute;
+    width: 36px;
+    height: 6px;
+    background: var(--primary);
+    border-radius: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    animation: streamDown 1.5s ease-in infinite;
+    animation-delay: var(--delay);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  @keyframes streamDown {
+    0% {
+      top: -10px;
+      opacity: 0;
+      transform: translateX(-50%) scale(0.8);
+    }
+    20% {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+    80% {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+    100% {
+      top: 50px;
+      opacity: 0;
+      transform: translateX(-50%) scale(0.6);
+    }
   }
 
   .progress-text {
