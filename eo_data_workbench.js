@@ -2744,6 +2744,23 @@ class EODataWorkbench {
       this._closeDetailPanel();
     });
 
+    // Pipeline panel events
+    document.getElementById('pipeline-panel-close')?.addEventListener('click', () => {
+      this._closePipelinePanel();
+    });
+    document.getElementById('pipeline-run-btn')?.addEventListener('click', () => {
+      this._runPipeline();
+    });
+    document.getElementById('pipeline-add-step-btn')?.addEventListener('click', () => {
+      this._showAddStepModal();
+    });
+    document.getElementById('pipeline-add-first-step')?.addEventListener('click', () => {
+      this._showAddStepModal();
+    });
+    document.getElementById('pipeline-history-btn')?.addEventListener('click', () => {
+      this._showPipelineHistory();
+    });
+
     // Modal close handlers
     document.getElementById('modal-close')?.addEventListener('click', () => this._closeModal());
     document.getElementById('modal-cancel')?.addEventListener('click', () => this._closeModal());
@@ -2901,6 +2918,10 @@ class EODataWorkbench {
     document.getElementById('btn-fields-dropdown')?.addEventListener('click', () => {
       this._hideToolsDropdown();
       this._toggleFieldsPanel();
+    });
+    document.getElementById('btn-pipeline-dropdown')?.addEventListener('click', () => {
+      this._hideToolsDropdown();
+      this._togglePipelinePanel();
     });
     document.getElementById('btn-import-dropdown')?.addEventListener('click', () => {
       this._hideToolsDropdown();
@@ -38196,6 +38217,905 @@ class EODataWorkbench {
       sets: this.sets,
       exportedAt: new Date().toISOString()
     };
+  }
+
+  // ==========================================================================
+  // PIPELINE MANAGEMENT METHODS
+  // ==========================================================================
+
+  /**
+   * Initialize the pipeline manager
+   */
+  _initPipelineManager() {
+    if (typeof PipelineManager !== 'undefined') {
+      this.pipelineManager = new PipelineManager(this);
+    }
+  }
+
+  /**
+   * Toggle the pipeline panel open/closed
+   */
+  _togglePipelinePanel() {
+    const panel = document.getElementById('pipeline-panel');
+    if (!panel) return;
+
+    // Close detail panel if open
+    this._closeDetailPanel();
+
+    if (panel.classList.contains('open')) {
+      this._closePipelinePanel();
+    } else {
+      this._openPipelinePanel();
+    }
+  }
+
+  /**
+   * Open the pipeline panel
+   */
+  _openPipelinePanel() {
+    const panel = document.getElementById('pipeline-panel');
+    if (panel) {
+      panel.classList.add('open');
+      this._renderPipelinePanel();
+    }
+  }
+
+  /**
+   * Close the pipeline panel
+   */
+  _closePipelinePanel() {
+    const panel = document.getElementById('pipeline-panel');
+    if (panel) {
+      panel.classList.remove('open');
+    }
+  }
+
+  /**
+   * Render the pipeline panel contents
+   */
+  _renderPipelinePanel() {
+    const body = document.getElementById('pipeline-panel-body');
+    if (!body) return;
+
+    const set = this.getCurrentSet();
+    if (!set) {
+      body.innerHTML = `
+        <div class="empty-state-small">
+          <i class="ph ph-warning"></i>
+          <p>Select a set to manage its pipeline</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Initialize pipeline if not exists
+    if (!set.pipeline) {
+      set.pipeline = {
+        steps: [],
+        history: [],
+        lastExecutedAt: null
+      };
+    }
+
+    const steps = set.pipeline.steps || [];
+
+    if (steps.length === 0) {
+      body.innerHTML = `
+        <div class="empty-state-small">
+          <i class="ph ph-git-merge"></i>
+          <p>No pipeline steps yet</p>
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+            Add steps to merge sources, filter records, or transform data
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    // Render pipeline steps
+    let html = '<div class="pipeline-steps">';
+
+    steps.forEach((step, idx) => {
+      const icon = (typeof PipelineStepIcons !== 'undefined' && PipelineStepIcons[step.type]) || 'ph-circle';
+      const isDisabled = !step.enabled;
+      const stats = step.lastExecution?.stats || {};
+
+      html += `
+        <div class="pipeline-step ${isDisabled ? 'disabled' : ''}" data-step-id="${step.id}" draggable="true">
+          <div class="pipeline-step-header">
+            <div class="pipeline-step-type ${step.type}">
+              <i class="ph ${icon}"></i>
+              <span>${this._formatStepType(step.type)}</span>
+            </div>
+            <div class="pipeline-step-actions">
+              <button class="pipeline-step-action" data-action="toggle" title="${isDisabled ? 'Enable' : 'Disable'}">
+                <i class="ph ${isDisabled ? 'ph-eye-slash' : 'ph-eye'}"></i>
+              </button>
+              <button class="pipeline-step-action" data-action="edit" title="Edit">
+                <i class="ph ph-pencil"></i>
+              </button>
+              <button class="pipeline-step-action danger" data-action="delete" title="Delete">
+                <i class="ph ph-trash"></i>
+              </button>
+            </div>
+          </div>
+          <div class="pipeline-step-content">
+            ${this._renderStepSummary(step)}
+          </div>
+          ${Object.keys(stats).length > 0 ? `
+            <div class="pipeline-step-stats">
+              ${stats.added ? `<span class="pipeline-step-stat"><i class="ph ph-plus"></i> ${stats.added}</span>` : ''}
+              ${stats.matched ? `<span class="pipeline-step-stat"><i class="ph ph-check"></i> ${stats.matched}</span>` : ''}
+              ${stats.removed ? `<span class="pipeline-step-stat"><i class="ph ph-minus"></i> ${stats.removed}</span>` : ''}
+            </div>
+          ` : ''}
+        </div>
+        ${idx < steps.length - 1 ? '<div class="pipeline-connector"><i class="ph ph-arrow-down"></i></div>' : ''}
+      `;
+    });
+
+    html += '</div>';
+
+    // Add execution info
+    if (set.pipeline.lastExecutedAt) {
+      const lastRun = new Date(set.pipeline.lastExecutedAt);
+      html += `
+        <div style="margin-top: 16px; font-size: 11px; color: var(--text-muted);">
+          <i class="ph ph-clock"></i>
+          Last run: ${lastRun.toLocaleString()}
+        </div>
+      `;
+    }
+
+    body.innerHTML = html;
+
+    // Add event listeners for step actions
+    body.querySelectorAll('.pipeline-step-action').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const stepEl = btn.closest('.pipeline-step');
+        const stepId = stepEl?.dataset.stepId;
+        const action = btn.dataset.action;
+
+        if (stepId && action) {
+          this._handleStepAction(stepId, action);
+        }
+      });
+    });
+
+    // Add drag-and-drop for reordering
+    this._initPipelineStepDragDrop();
+  }
+
+  /**
+   * Format step type for display
+   */
+  _formatStepType(type) {
+    const names = {
+      source: 'Source',
+      merge: 'Merge',
+      filter: 'Filter',
+      transform: 'Transform',
+      dedupe: 'Dedupe',
+      rollup: 'Rollup',
+      sort: 'Sort',
+      link: 'Link'
+    };
+    return names[type] || type;
+  }
+
+  /**
+   * Render a summary of what the step does
+   */
+  _renderStepSummary(step) {
+    const config = step.config || {};
+
+    switch (step.type) {
+      case 'source': {
+        const source = this.sources?.find(s => s.id === config.sourceId);
+        const name = source?.name || source?.payload?.name || 'Unknown source';
+        return `<div class="pipeline-step-summary"><span class="pipeline-step-tag">${this._escapeHtml(name)}</span></div>`;
+      }
+
+      case 'merge': {
+        const source = this.sources?.find(s => s.id === config.sourceId);
+        const name = source?.name || source?.payload?.name || 'Unknown source';
+        const matchFields = config.matchFields?.map(f => typeof f === 'string' ? f : f.field).join(', ') || 'auto';
+        return `
+          <div class="pipeline-step-summary">
+            <span class="pipeline-step-tag">${this._escapeHtml(name)}</span>
+            <span class="pipeline-step-tag">on: ${matchFields}</span>
+          </div>
+        `;
+      }
+
+      case 'filter': {
+        const conditions = config.conditions || [];
+        const condStr = conditions.map(c => `${c.field} ${c.operator}`).join(', ');
+        return `<div class="pipeline-step-summary"><span class="pipeline-step-tag">${condStr || 'No conditions'}</span></div>`;
+      }
+
+      case 'transform': {
+        const transforms = config.transformations || [];
+        return `<div class="pipeline-step-summary"><span class="pipeline-step-tag">${transforms.length} transformation(s)</span></div>`;
+      }
+
+      case 'dedupe': {
+        const fields = config.matchFields?.join(', ') || 'all fields';
+        return `<div class="pipeline-step-summary"><span class="pipeline-step-tag">on: ${fields}</span></div>`;
+      }
+
+      default:
+        return step.note ? `<div class="pipeline-step-summary">${this._escapeHtml(step.note)}</div>` : '';
+    }
+  }
+
+  /**
+   * Handle step action (toggle, edit, delete)
+   */
+  _handleStepAction(stepId, action) {
+    const set = this.getCurrentSet();
+    if (!set?.pipeline) return;
+
+    const step = set.pipeline.steps.find(s => s.id === stepId);
+    if (!step) return;
+
+    switch (action) {
+      case 'toggle':
+        step.enabled = !step.enabled;
+        this._saveData();
+        this._renderPipelinePanel();
+        this._showToast(`Step ${step.enabled ? 'enabled' : 'disabled'}`, 'info');
+        break;
+
+      case 'edit':
+        this._showEditStepModal(step);
+        break;
+
+      case 'delete':
+        const idx = set.pipeline.steps.findIndex(s => s.id === stepId);
+        if (idx !== -1) {
+          set.pipeline.steps.splice(idx, 1);
+          this._saveData();
+          this._renderPipelinePanel();
+          this._showToast('Step removed', 'info');
+        }
+        break;
+    }
+  }
+
+  /**
+   * Initialize drag and drop for pipeline steps
+   */
+  _initPipelineStepDragDrop() {
+    const body = document.getElementById('pipeline-panel-body');
+    if (!body) return;
+
+    const steps = body.querySelectorAll('.pipeline-step');
+    let draggedStep = null;
+
+    steps.forEach(step => {
+      step.addEventListener('dragstart', (e) => {
+        draggedStep = step;
+        step.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      step.addEventListener('dragend', () => {
+        step.classList.remove('dragging');
+        draggedStep = null;
+      });
+
+      step.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+
+      step.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!draggedStep || draggedStep === step) return;
+
+        // Reorder steps
+        const set = this.getCurrentSet();
+        if (!set?.pipeline?.steps) return;
+
+        const fromId = draggedStep.dataset.stepId;
+        const toId = step.dataset.stepId;
+        const fromIdx = set.pipeline.steps.findIndex(s => s.id === fromId);
+        const toIdx = set.pipeline.steps.findIndex(s => s.id === toId);
+
+        if (fromIdx !== -1 && toIdx !== -1) {
+          const [moved] = set.pipeline.steps.splice(fromIdx, 1);
+          set.pipeline.steps.splice(toIdx, 0, moved);
+          this._saveData();
+          this._renderPipelinePanel();
+        }
+      });
+    });
+  }
+
+  /**
+   * Show modal to add a new pipeline step
+   */
+  _showAddStepModal() {
+    const set = this.getCurrentSet();
+    if (!set) {
+      this._showToast('Select a set first', 'warning');
+      return;
+    }
+
+    const stepOptions = [
+      { type: 'source', icon: 'ph-database', name: 'Source', desc: 'Pull records from a source' },
+      { type: 'merge', icon: 'ph-git-merge', name: 'Merge', desc: 'Layer in data by matching key' },
+      { type: 'filter', icon: 'ph-funnel', name: 'Filter', desc: 'Remove records by condition' },
+      { type: 'transform', icon: 'ph-magic-wand', name: 'Transform', desc: 'Modify field values' },
+      { type: 'dedupe', icon: 'ph-users-three', name: 'Dedupe', desc: 'Collapse duplicate records' },
+      { type: 'sort', icon: 'ph-sort-ascending', name: 'Sort', desc: 'Order records' }
+    ];
+
+    const optionsHtml = stepOptions.map(opt => `
+      <div class="pipeline-step-option" data-step-type="${opt.type}">
+        <i class="ph ${opt.icon}"></i>
+        <div class="pipeline-step-option-name">${opt.name}</div>
+        <div class="pipeline-step-option-desc">${opt.desc}</div>
+      </div>
+    `).join('');
+
+    this._showModal('Add Pipeline Step', `
+      <p style="margin-bottom: 16px; color: var(--text-secondary);">
+        Choose a step type to add to the pipeline:
+      </p>
+      <div class="pipeline-step-options">
+        ${optionsHtml}
+      </div>
+    `);
+
+    // Add click handlers for options
+    setTimeout(() => {
+      document.querySelectorAll('.pipeline-step-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          const type = opt.dataset.stepType;
+          this._closeModal();
+          this._showStepConfigModal(type);
+        });
+      });
+    }, 100);
+  }
+
+  /**
+   * Show configuration modal for a specific step type
+   */
+  _showStepConfigModal(type) {
+    switch (type) {
+      case 'source':
+        this._showSourceStepConfig();
+        break;
+      case 'merge':
+        this._showMergeStepConfig();
+        break;
+      case 'filter':
+        this._showFilterStepConfig();
+        break;
+      case 'transform':
+        this._showTransformStepConfig();
+        break;
+      case 'dedupe':
+        this._showDedupeStepConfig();
+        break;
+      case 'sort':
+        this._showSortStepConfig();
+        break;
+      default:
+        this._showToast(`Unknown step type: ${type}`, 'error');
+    }
+  }
+
+  /**
+   * Show source step configuration
+   */
+  _showSourceStepConfig() {
+    const sources = this.sources || [];
+
+    if (sources.length === 0) {
+      this._showToast('No sources available. Import a file first.', 'warning');
+      return;
+    }
+
+    const sourcesHtml = sources.map(src => {
+      const name = src.name || src.payload?.name || 'Unknown';
+      const count = src.recordCount || src.records?.length || 0;
+      return `<option value="${src.id}">${this._escapeHtml(name)} (${count} records)</option>`;
+    }).join('');
+
+    this._showModal('Add Source Step', `
+      <div class="form-group">
+        <label class="form-label">Select Source</label>
+        <select class="form-select" id="step-source-id">
+          ${sourcesHtml}
+        </select>
+      </div>
+    `, [
+      { label: 'Cancel', action: 'cancel' },
+      { label: 'Add Step', action: 'confirm', primary: true }
+    ], () => {
+      const sourceId = document.getElementById('step-source-id')?.value;
+      if (!sourceId) return;
+
+      this._addPipelineStep('source', { sourceId });
+    });
+  }
+
+  /**
+   * Show merge step configuration
+   */
+  _showMergeStepConfig() {
+    const sources = this.sources || [];
+    const set = this.getCurrentSet();
+    const fields = set?.fields || [];
+
+    if (sources.length === 0) {
+      this._showToast('No sources available. Import a file first.', 'warning');
+      return;
+    }
+
+    const sourcesHtml = sources.map(src => {
+      const name = src.name || src.payload?.name || 'Unknown';
+      const count = src.recordCount || src.records?.length || 0;
+      return `<option value="${src.id}">${this._escapeHtml(name)} (${count} records)</option>`;
+    }).join('');
+
+    const fieldsHtml = fields.map(f => `
+      <option value="${f.id}">${this._escapeHtml(f.name)}</option>
+    `).join('');
+
+    const strategiesHtml = Object.entries(typeof MergeStrategyLabels !== 'undefined' ? MergeStrategyLabels : {
+      keepFirst: 'Keep first',
+      preferNonEmpty: 'Prefer non-empty',
+      concat: 'Concatenate',
+      keepLast: 'Keep last'
+    }).map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+
+    this._showModal('Add Merge Step', `
+      <div class="form-group">
+        <label class="form-label">Source to Merge</label>
+        <select class="form-select" id="merge-source-id">
+          ${sourcesHtml}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Match on Field</label>
+        <select class="form-select" id="merge-match-field">
+          <option value="">Select field...</option>
+          ${fieldsHtml}
+        </select>
+        <p class="form-hint">Records with the same value in this field will be merged</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Merge Strategy</label>
+        <select class="form-select" id="merge-strategy">
+          ${strategiesHtml}
+        </select>
+        <p class="form-hint">How to resolve conflicts when both records have values</p>
+      </div>
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" id="merge-add-unmatched" checked>
+          <span>Add unmatched records as new</span>
+        </label>
+      </div>
+    `, [
+      { label: 'Cancel', action: 'cancel' },
+      { label: 'Add Merge Step', action: 'confirm', primary: true }
+    ], () => {
+      const sourceId = document.getElementById('merge-source-id')?.value;
+      const matchField = document.getElementById('merge-match-field')?.value;
+      const strategy = document.getElementById('merge-strategy')?.value;
+      const addUnmatched = document.getElementById('merge-add-unmatched')?.checked;
+
+      if (!sourceId) {
+        this._showToast('Select a source', 'warning');
+        return;
+      }
+
+      // Find the field name from the set
+      const field = set.fields.find(f => f.id === matchField);
+      const matchFieldName = field?.name || matchField;
+
+      this._addPipelineStep('merge', {
+        sourceId,
+        matchFields: matchFieldName ? [matchFieldName] : [],
+        defaultStrategy: strategy || 'preferNonEmpty',
+        addUnmatched
+      });
+    });
+  }
+
+  /**
+   * Show filter step configuration
+   */
+  _showFilterStepConfig() {
+    const set = this.getCurrentSet();
+    const fields = set?.fields || [];
+
+    const fieldsHtml = fields.map(f => `
+      <option value="${f.name}">${this._escapeHtml(f.name)}</option>
+    `).join('');
+
+    const operatorsHtml = [
+      ['equals', 'Equals'],
+      ['notEquals', 'Not equals'],
+      ['contains', 'Contains'],
+      ['notContains', 'Does not contain'],
+      ['isEmpty', 'Is empty'],
+      ['isNotEmpty', 'Is not empty'],
+      ['greaterThan', 'Greater than'],
+      ['lessThan', 'Less than']
+    ].map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+
+    this._showModal('Add Filter Step', `
+      <div class="form-group">
+        <label class="form-label">Filter Condition</label>
+        <div style="display: flex; gap: 8px;">
+          <select class="form-select" id="filter-field" style="flex: 1;">
+            ${fieldsHtml}
+          </select>
+          <select class="form-select" id="filter-operator" style="flex: 1;">
+            ${operatorsHtml}
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="filter-value-group">
+        <label class="form-label">Value</label>
+        <input type="text" class="form-input" id="filter-value" placeholder="Enter value...">
+      </div>
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" id="filter-invert">
+          <span>Invert (keep records that DON'T match)</span>
+        </label>
+      </div>
+    `, [
+      { label: 'Cancel', action: 'cancel' },
+      { label: 'Add Filter Step', action: 'confirm', primary: true }
+    ], () => {
+      const field = document.getElementById('filter-field')?.value;
+      const operator = document.getElementById('filter-operator')?.value;
+      const value = document.getElementById('filter-value')?.value;
+      const invert = document.getElementById('filter-invert')?.checked;
+
+      if (!field || !operator) {
+        this._showToast('Configure the filter condition', 'warning');
+        return;
+      }
+
+      this._addPipelineStep('filter', {
+        conditions: [{ field, operator, value }],
+        logic: 'and',
+        invert
+      });
+    });
+  }
+
+  /**
+   * Show transform step configuration
+   */
+  _showTransformStepConfig() {
+    const set = this.getCurrentSet();
+    const fields = set?.fields || [];
+
+    const fieldsHtml = fields.map(f => `
+      <option value="${f.name}">${this._escapeHtml(f.name)}</option>
+    `).join('');
+
+    const operationsHtml = [
+      ['uppercase', 'Uppercase'],
+      ['lowercase', 'Lowercase'],
+      ['trim', 'Trim whitespace'],
+      ['replace', 'Find & Replace'],
+      ['prefix', 'Add prefix'],
+      ['suffix', 'Add suffix']
+    ].map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+
+    this._showModal('Add Transform Step', `
+      <div class="form-group">
+        <label class="form-label">Field to Transform</label>
+        <select class="form-select" id="transform-field">
+          ${fieldsHtml}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Operation</label>
+        <select class="form-select" id="transform-operation">
+          ${operationsHtml}
+        </select>
+      </div>
+      <div class="form-group" id="transform-params-group" style="display: none;">
+        <label class="form-label" id="transform-param-label">Value</label>
+        <input type="text" class="form-input" id="transform-param" placeholder="">
+      </div>
+    `, [
+      { label: 'Cancel', action: 'cancel' },
+      { label: 'Add Transform Step', action: 'confirm', primary: true }
+    ], () => {
+      const field = document.getElementById('transform-field')?.value;
+      const operation = document.getElementById('transform-operation')?.value;
+      const param = document.getElementById('transform-param')?.value;
+
+      if (!field || !operation) {
+        this._showToast('Configure the transformation', 'warning');
+        return;
+      }
+
+      let params = {};
+      if (operation === 'replace') {
+        params = { find: param, replace: '' };
+      } else if (operation === 'prefix') {
+        params = { prefix: param };
+      } else if (operation === 'suffix') {
+        params = { suffix: param };
+      }
+
+      this._addPipelineStep('transform', {
+        transformations: [{ field, operation, params }]
+      });
+    });
+
+    // Show/hide params based on operation
+    setTimeout(() => {
+      const opSelect = document.getElementById('transform-operation');
+      const paramsGroup = document.getElementById('transform-params-group');
+      const paramLabel = document.getElementById('transform-param-label');
+
+      opSelect?.addEventListener('change', () => {
+        const op = opSelect.value;
+        if (['replace', 'prefix', 'suffix'].includes(op)) {
+          paramsGroup.style.display = 'block';
+          if (op === 'replace') paramLabel.textContent = 'Find text';
+          else if (op === 'prefix') paramLabel.textContent = 'Prefix';
+          else if (op === 'suffix') paramLabel.textContent = 'Suffix';
+        } else {
+          paramsGroup.style.display = 'none';
+        }
+      });
+    }, 100);
+  }
+
+  /**
+   * Show dedupe step configuration
+   */
+  _showDedupeStepConfig() {
+    const set = this.getCurrentSet();
+    const fields = set?.fields || [];
+
+    const fieldsHtml = fields.map(f => `
+      <label class="form-check">
+        <input type="checkbox" class="dedupe-field" value="${f.name}">
+        <span>${this._escapeHtml(f.name)}</span>
+      </label>
+    `).join('');
+
+    this._showModal('Add Dedupe Step', `
+      <div class="form-group">
+        <label class="form-label">Match on Fields</label>
+        <p class="form-hint">Records matching on ALL selected fields will be merged</p>
+        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 8px;">
+          ${fieldsHtml}
+        </div>
+      </div>
+    `, [
+      { label: 'Cancel', action: 'cancel' },
+      { label: 'Add Dedupe Step', action: 'confirm', primary: true }
+    ], () => {
+      const matchFields = Array.from(document.querySelectorAll('.dedupe-field:checked'))
+        .map(cb => cb.value);
+
+      if (matchFields.length === 0) {
+        this._showToast('Select at least one field', 'warning');
+        return;
+      }
+
+      this._addPipelineStep('dedupe', { matchFields });
+    });
+  }
+
+  /**
+   * Show sort step configuration
+   */
+  _showSortStepConfig() {
+    const set = this.getCurrentSet();
+    const fields = set?.fields || [];
+
+    const fieldsHtml = fields.map(f => `
+      <option value="${f.name}">${this._escapeHtml(f.name)}</option>
+    `).join('');
+
+    this._showModal('Add Sort Step', `
+      <div class="form-group">
+        <label class="form-label">Sort by Field</label>
+        <select class="form-select" id="sort-field">
+          ${fieldsHtml}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Direction</label>
+        <select class="form-select" id="sort-direction">
+          <option value="asc">Ascending (A-Z, 0-9)</option>
+          <option value="desc">Descending (Z-A, 9-0)</option>
+        </select>
+      </div>
+    `, [
+      { label: 'Cancel', action: 'cancel' },
+      { label: 'Add Sort Step', action: 'confirm', primary: true }
+    ], () => {
+      const field = document.getElementById('sort-field')?.value;
+      const direction = document.getElementById('sort-direction')?.value;
+
+      if (!field) {
+        this._showToast('Select a field', 'warning');
+        return;
+      }
+
+      this._addPipelineStep('sort', {
+        sorts: [{ field, direction }]
+      });
+    });
+  }
+
+  /**
+   * Add a step to the current set's pipeline
+   */
+  _addPipelineStep(type, config) {
+    const set = this.getCurrentSet();
+    if (!set) return;
+
+    // Initialize pipeline if needed
+    if (!set.pipeline) {
+      set.pipeline = { steps: [], history: [], lastExecutedAt: null };
+    }
+
+    // Create the step using factory functions if available
+    let step;
+    if (type === 'source' && typeof createSourceStep === 'function') {
+      step = createSourceStep(config.sourceId, config);
+    } else if (type === 'merge' && typeof createMergeStep === 'function') {
+      step = createMergeStep(config.sourceId, config);
+    } else if (type === 'filter' && typeof createFilterStep === 'function') {
+      step = createFilterStep(config.conditions, config);
+    } else if (type === 'dedupe' && typeof createDedupeStep === 'function') {
+      step = createDedupeStep(config.matchFields, config);
+    } else if (typeof createPipelineStep === 'function') {
+      step = createPipelineStep(type, config);
+    } else {
+      // Fallback
+      step = {
+        id: `step_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+        type,
+        config,
+        enabled: true,
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    set.pipeline.steps.push(step);
+    this._saveData();
+    this._renderPipelinePanel();
+    this._showToast(`${this._formatStepType(type)} step added`, 'success');
+  }
+
+  /**
+   * Show edit modal for an existing step
+   */
+  _showEditStepModal(step) {
+    // For now, just show step details - full edit can be added later
+    this._showModal('Edit Step', `
+      <div class="form-group">
+        <label class="form-label">Step Type</label>
+        <div class="form-static">${this._formatStepType(step.type)}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <input type="text" class="form-input" id="step-note" value="${this._escapeHtml(step.note || '')}" placeholder="Add a note...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Configuration</label>
+        <pre style="background: var(--bg-tertiary); padding: 12px; border-radius: var(--radius-sm); font-size: 11px; overflow: auto; max-height: 200px;">${JSON.stringify(step.config, null, 2)}</pre>
+      </div>
+    `, [
+      { label: 'Cancel', action: 'cancel' },
+      { label: 'Save', action: 'confirm', primary: true }
+    ], () => {
+      const note = document.getElementById('step-note')?.value;
+      step.note = note;
+      step.updatedAt = new Date().toISOString();
+      this._saveData();
+      this._renderPipelinePanel();
+      this._showToast('Step updated', 'success');
+    });
+  }
+
+  /**
+   * Run the pipeline for the current set
+   */
+  _runPipeline() {
+    const set = this.getCurrentSet();
+    if (!set) {
+      this._showToast('No set selected', 'warning');
+      return;
+    }
+
+    if (!set.pipeline?.steps?.length) {
+      this._showToast('No pipeline steps to run', 'warning');
+      return;
+    }
+
+    // Initialize pipeline manager if needed
+    if (!this.pipelineManager && typeof PipelineManager !== 'undefined') {
+      this.pipelineManager = new PipelineManager(this);
+    }
+
+    if (!this.pipelineManager) {
+      this._showToast('Pipeline manager not available', 'error');
+      return;
+    }
+
+    this._showToast('Running pipeline...', 'info');
+
+    const result = this.pipelineManager.execute(set.id, {
+      onProgress: (progress) => {
+        console.log(`Pipeline step ${progress.step}/${progress.total}: ${progress.stepType}`);
+      }
+    });
+
+    if (result.success) {
+      this._showToast(`Pipeline complete: ${result.records.length} records`, 'success');
+      this._saveData();
+      this._renderPipelinePanel();
+      this._renderView();
+    } else {
+      this._showToast(`Pipeline errors: ${result.errors.length}`, 'error');
+      console.error('Pipeline errors:', result.errors);
+    }
+  }
+
+  /**
+   * Show pipeline execution history
+   */
+  _showPipelineHistory() {
+    const set = this.getCurrentSet();
+    if (!set?.pipeline?.history?.length) {
+      this._showToast('No pipeline history', 'info');
+      return;
+    }
+
+    const history = set.pipeline.history.slice(-10).reverse();
+
+    const historyHtml = history.map(entry => `
+      <div class="pipeline-history-entry">
+        <div class="pipeline-history-time">
+          ${new Date(entry.executedAt).toLocaleString()}
+        </div>
+        <div class="pipeline-history-stats">
+          <span class="pipeline-history-stat">
+            <i class="ph ph-rows"></i>
+            ${entry.outputCount} records
+          </span>
+          ${entry.errors?.length > 0 ? `
+            <span class="pipeline-history-stat" style="color: var(--error-color);">
+              <i class="ph ph-warning"></i>
+              ${entry.errors.length} errors
+            </span>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    this._showModal('Pipeline History', `
+      <div class="pipeline-history">
+        ${historyHtml}
+      </div>
+    `, [
+      { label: 'Close', action: 'cancel' }
+    ]);
   }
 }
 
