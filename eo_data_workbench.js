@@ -36049,6 +36049,18 @@ class EODataWorkbench {
           </div>
         </div>
       </div>
+      <div class="form-divider" style="margin: 16px 0; border-top: 1px solid var(--border-color);"></div>
+      <div class="form-group">
+        <label class="form-label"><i class="ph ph-eye" style="margin-right: 4px;"></i>Preview Matches</label>
+        <div id="link-preview-container" style="background: var(--surface-secondary); border-radius: 6px; padding: 12px; min-height: 60px;">
+          <div class="link-preview-loading" style="color: var(--text-muted); font-size: 12px;">
+            Select a set to see preview matches...
+          </div>
+        </div>
+        <div class="form-hint" style="margin-top: 6px; font-size: 11px; color: var(--text-tertiary);">
+          Showing up to 3 sample records from the target set
+        </div>
+      </div>
     `, () => {
       const linkedSetId = document.getElementById('linked-set-select')?.value;
       const linkedViewId = document.getElementById('linked-view-select')?.value || null;
@@ -36080,12 +36092,88 @@ class EODataWorkbench {
       if (callback) {
         callback({ linkedSetId, linkedViewId, linkedFieldId, allowMultiple, convertFromFieldId, enableEdgeData, edgeFields });
       }
-    });
+    }, { confirmText: '<i class="ph ph-link"></i> Link' });
 
     // Update view and field dropdowns when set selection changes
     const setSelect = document.getElementById('linked-set-select');
     const viewSelect = document.getElementById('linked-view-select');
     const fieldSelect = document.getElementById('linked-field-select');
+    const previewContainer = document.getElementById('link-preview-container');
+
+    // Function to update preview with sample records from selected set
+    const updatePreview = (set, viewId, fieldId) => {
+      if (!previewContainer) return;
+
+      if (!set) {
+        previewContainer.innerHTML = `
+          <div class="link-preview-loading" style="color: var(--text-muted); font-size: 12px;">
+            Select a set to see preview matches...
+          </div>
+        `;
+        return;
+      }
+
+      // Get records (filtered by view if selected)
+      let records = [...(set.records || [])];
+      if (viewId && set.views) {
+        const view = set.views.find(v => v.id === viewId);
+        if (view?.config?.filters?.length > 0) {
+          records = records.filter(record => {
+            return view.config.filters.every(filter => {
+              if (filter.enabled === false) return true;
+              const value = record.values?.[filter.fieldId];
+              return this._matchesFilter(value, filter);
+            });
+          });
+        }
+      }
+
+      // Get the field to display (primary if not specified)
+      let displayField;
+      if (fieldId) {
+        displayField = set.fields?.find(f => f.id === fieldId);
+      }
+      if (!displayField) {
+        displayField = set.fields?.find(f => f.isPrimary) || set.fields?.[0];
+      }
+
+      if (records.length === 0) {
+        previewContainer.innerHTML = `
+          <div style="color: var(--text-muted); font-size: 12px;">
+            <i class="ph ph-empty" style="margin-right: 4px;"></i>
+            No records in this set${viewId ? ' (with current view filter)' : ''}
+          </div>
+        `;
+        return;
+      }
+
+      // Show up to 3 sample records
+      const sampleRecords = records.slice(0, 3);
+      const totalCount = records.length;
+      const moreCount = totalCount - sampleRecords.length;
+
+      const previewItems = sampleRecords.map(record => {
+        const value = displayField ? record.values?.[displayField.id] : '';
+        const displayValue = value !== null && value !== undefined ? this._escapeHtml(String(value)) : '(empty)';
+        return `
+          <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface-primary); border-radius: 4px; margin-bottom: 4px;">
+            <i class="ph ph-link" style="color: var(--text-muted); font-size: 12px;"></i>
+            <span style="font-size: 13px; color: var(--text-primary);">${displayValue}</span>
+          </div>
+        `;
+      }).join('');
+
+      const moreHtml = moreCount > 0 ? `
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+          +${moreCount} more record${moreCount !== 1 ? 's' : ''} available
+        </div>
+      ` : '';
+
+      previewContainer.innerHTML = previewItems + moreHtml;
+    };
+
+    // Initial preview for pre-selected set
+    updatePreview(preSelectedSet, existingOptions.linkedViewId, existingOptions.linkedFieldId);
 
     setSelect?.addEventListener('change', () => {
       const selectedSetId = setSelect.value;
@@ -36108,6 +36196,27 @@ class EODataWorkbench {
       if (fieldSelect) {
         fieldSelect.innerHTML = buildLinkedFieldOptions(selectedSet, null);
       }
+
+      // Update preview
+      updatePreview(selectedSet, null, null);
+    });
+
+    // Update preview when view changes
+    viewSelect?.addEventListener('change', () => {
+      const selectedSetId = setSelect?.value;
+      const selectedSet = availableSets.find(s => s.id === selectedSetId);
+      const selectedViewId = viewSelect.value || null;
+      const selectedFieldId = fieldSelect?.value || null;
+      updatePreview(selectedSet, selectedViewId, selectedFieldId);
+    });
+
+    // Update preview when field changes
+    fieldSelect?.addEventListener('change', () => {
+      const selectedSetId = setSelect?.value;
+      const selectedSet = availableSets.find(s => s.id === selectedSetId);
+      const selectedViewId = viewSelect?.value || null;
+      const selectedFieldId = fieldSelect.value || null;
+      updatePreview(selectedSet, selectedViewId, selectedFieldId);
     });
 
     // Toggle edge data section visibility
