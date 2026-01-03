@@ -36114,11 +36114,17 @@ class EODataWorkbench {
       }
 
       // Get records (filtered by view if selected)
-      let records = set.records || [];
+      let records = [...(set.records || [])];
       if (viewId && set.views) {
         const view = set.views.find(v => v.id === viewId);
         if (view?.config?.filters?.length > 0) {
-          records = this._filterRecords(records, view.config.filters, set.fields);
+          records = records.filter(record => {
+            return view.config.filters.every(filter => {
+              if (filter.enabled === false) return true;
+              const value = record.values?.[filter.fieldId];
+              return this._matchesFilter(value, filter);
+            });
+          });
         }
       }
 
