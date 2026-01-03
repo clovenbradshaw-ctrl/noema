@@ -4768,18 +4768,6 @@ class EODataWorkbench {
         `;
       }).join('');
 
-      // Schema item (Structure & Meaning) - renamed from "Fields"
-      const isFieldsActive = isActiveSet && this.showingSetFields;
-      const fieldsItem = `
-        <div class="set-view-item set-fields-item ${isFieldsActive ? 'active' : ''}"
-             data-set-id="${set.id}"
-             data-action="fields"
-             title="Schema: Structure (GIVEN) & Meaning (MEANT)">
-          <i class="ph ph-blueprint"></i>
-          <span>Schema</span>
-          <span class="view-item-count">${fieldCount}</span>
-        </div>
-      `;
 
       // Render nested lenses (sub-objects of this set)
       const lenses = set.lenses || [];
@@ -4843,7 +4831,6 @@ class EODataWorkbench {
             </div>
           </div>
           <div class="set-views-list">
-            ${fieldsItem}
             ${lensesHtml}
             ${viewsHtml}
             <button class="set-add-view-btn" data-set-id="${set.id}">
@@ -7466,29 +7453,6 @@ class EODataWorkbench {
       const derivation = this._getSetDerivationInfo(set);
       const operatorBadge = this._getOperatorBadgeHTML(derivation.operator);
 
-      // Render Schema item with Structure and Meaning subsections
-      const isFieldsActive = isActiveSet && this.showingSetFields;
-      const meaningBindingsList = (set.fields || [])
-        .filter(f => f.definitionId || f.boundDefinitionId || f.semanticBinding?.definitionId)
-        .slice(0, 3)
-        .map(f => this._escapeHtml(f.name))
-        .join(', ');
-      const moreBindingsCount = Math.max(0, fieldsWithMeaning - 3);
-
-      const schemaItem = `
-        <div class="set-view-item set-fields-item ${isFieldsActive ? 'active' : ''}"
-             data-set-id="${set.id}"
-             data-action="fields"
-             title="Schema: ${fieldCount} fields${fieldsWithMeaning > 0 ? `\nMeaning (Bindings): ${meaningBindingsList}${moreBindingsCount > 0 ? ` +${moreBindingsCount} more` : ''}` : ''}">
-          <i class="ph ph-blueprint"></i>
-          <div class="schema-item-content">
-            <span class="schema-item-label">Schema</span>
-            ${fieldsWithMeaning > 0 ? `<span class="schema-bindings-hint">${fieldsWithMeaning} bound</span>` : ''}
-          </div>
-          <span class="view-item-count">${fieldCount} fields</span>
-        </div>
-      `;
-
       // Render views
       const viewsHtml = views.map(view => {
         const isActiveView = view.id === this.currentViewId && isActiveSet;
@@ -7575,10 +7539,8 @@ class EODataWorkbench {
             <span class="set-item-name">${this._escapeHtml(set.name)}</span>
             ${meaningHealthHtml}
             <span class="set-item-count">${recordCount}</span>
-            <span class="epistemic-mini-badge schema-mini">SCHEMA</span>
           </div>
           <div class="set-views-list">
-            ${schemaItem}
             ${lensesHtml}
             ${viewsHtml}
           </div>
