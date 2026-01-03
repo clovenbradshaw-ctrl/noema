@@ -656,7 +656,7 @@ function setupGlobalHandlers() {
 // ============================================================================
 
 const SEARCH_PREFIXES = {
-  '@': { name: 'fields', icon: 'ph-text-aa', description: 'Search field values' },
+  '@': { name: 'fields', icon: 'ph-text-aa', description: 'Search fields and values' },
   '#': { name: 'sets', icon: 'ph-database', description: 'Search sets by name' },
   '/': { name: 'views', icon: 'ph-eye', description: 'Search views/lenses' },
   '?': { name: 'sources', icon: 'ph-download-simple', description: 'Search data sources' },
@@ -1090,15 +1090,40 @@ function searchRecordsPrimary(workbench, query) {
 function searchFieldValues(workbench, query) {
   const results = [];
   // Parse field:value format if present
-  const [fieldPart, valuePart] = query.includes(':') ? query.split(':') : ['', query];
+  const hasColon = query.includes(':');
+  const [fieldPart, valuePart] = hasColon ? query.split(':') : ['', query];
+  const searchTerm = valuePart || query;
 
+  // First, search for field definitions that match the query
+  // (when user searches @status, show fields named "status")
+  if (!hasColon && query.length > 0) {
+    const seenFields = new Set();
+    workbench.getSets().forEach(set => {
+      set.fields.forEach(field => {
+        const fieldKey = `${set.id}:${field.id}`;
+        if (field.name.toLowerCase().includes(query) && !seenFields.has(fieldKey)) {
+          seenFields.add(fieldKey);
+          results.push({
+            type: 'field_definition',
+            id: field.id,
+            setId: set.id,
+            title: field.name,
+            subtitle: `${field.type} field in ${set.name}`,
+            icon: 'ph-text-aa'
+          });
+        }
+      });
+    });
+  }
+
+  // Then, search for field values in records
   workbench.getSets().forEach(set => {
     set.records.forEach(record => {
       set.fields.forEach(field => {
         if (fieldPart && !field.name.toLowerCase().includes(fieldPart)) return;
 
         const value = record.values[field.id];
-        if (value && String(value).toLowerCase().includes(valuePart || query)) {
+        if (value && String(value).toLowerCase().includes(searchTerm)) {
           const primaryField = set.fields.find(f => f.isPrimary) || set.fields[0];
           const primaryValue = record.values[primaryField?.id] || record.id;
           results.push({
@@ -1455,7 +1480,7 @@ function handleSearchResultClick(item) {
 function executeCommand(action) {
   switch (action) {
     case 'newRecord':
-      _dataWorkbench?._addRecord();
+      _dataWorkbench?.addRecord();
       break;
     case 'newSet':
       _dataWorkbench?._showNewSetModal?.() || document.getElementById('btn-new-set')?.click();

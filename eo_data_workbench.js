@@ -3322,7 +3322,14 @@ class EODataWorkbench {
     document.getElementById('bulk-duplicate')?.addEventListener('click', () => this._bulkDuplicate());
     document.getElementById('bulk-export')?.addEventListener('click', () => this._bulkExport());
     document.getElementById('bulk-delete')?.addEventListener('click', () => this._bulkDelete());
-    document.getElementById('bulk-actions-close')?.addEventListener('click', () => this._clearSelection());
+    // Use event delegation for close button to handle clicks on icon child element
+    const closeBtn = document.getElementById('bulk-actions-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._clearSelection();
+      });
+    }
 
     // Filter/Focus panel - Focus button opens the filter panel for creating focused views (Rule 5)
     document.getElementById('btn-filter')?.addEventListener('click', () => this._toggleFilterPanel());
@@ -23622,6 +23629,11 @@ class EODataWorkbench {
     this.showingSetDetail = false;
     this.showingSetFields = false;
 
+    // Clear search when switching views to avoid confusion
+    this.viewSearchTerm = '';
+    const searchInput = document.getElementById('view-search');
+    if (searchInput) searchInput.value = '';
+
     // Remember this view for the current set
     if (this.currentSetId) {
       this.lastViewPerSet[this.currentSetId] = viewId;
@@ -23653,6 +23665,11 @@ class EODataWorkbench {
     }
 
     this.currentViewId = view.id;
+
+    // Clear search when switching view types to avoid confusion
+    this.viewSearchTerm = '';
+    const searchInput = document.getElementById('view-search');
+    if (searchInput) searchInput.value = '';
 
     // Remember this view for the current set
     if (this.currentSetId) {
@@ -24379,6 +24396,11 @@ class EODataWorkbench {
 
     // Inject view tabs header at the top of the content area
     this._injectViewTabsHeader();
+
+    // Refresh detail panel if it's open to keep it in sync with the view
+    if (this.currentDetailRecordId && this.elements.detailPanel?.classList.contains('open')) {
+      this._showRecordDetail(this.currentDetailRecordId);
+    }
   }
 
   /**
@@ -37772,6 +37794,21 @@ class EODataWorkbench {
       this._navigateDatePicker(el, field, recordId, 1);
     });
 
+    // Helper to format date in local timezone (avoids UTC conversion issues)
+    const formatLocalDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const formatLocalDateTime = (date) => {
+      const dateStr = formatLocalDate(date);
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${dateStr}T${hours}:${minutes}`;
+    };
+
     // Attach day click handlers
     picker.querySelectorAll('.dp-day:not(.other-month):not(.empty)').forEach(day => {
       day.addEventListener('click', (e) => {
@@ -37779,7 +37816,7 @@ class EODataWorkbench {
         const selectedDay = parseInt(day.textContent);
         const displayedDate = new Date(picker.dataset.year, picker.dataset.month, selectedDay);
 
-        let value = displayedDate.toISOString().split('T')[0];
+        let value = formatLocalDate(displayedDate);
 
         if (includeTime) {
           const timeInput = picker.querySelector('.dp-time-input');
@@ -37799,9 +37836,9 @@ class EODataWorkbench {
     picker.querySelector('.dp-today')?.addEventListener('click', (e) => {
       e.stopPropagation();
       const today = new Date();
-      let value = today.toISOString().split('T')[0];
+      let value = formatLocalDate(today);
       if (includeTime) {
-        value = today.toISOString().slice(0, 16);
+        value = formatLocalDateTime(today);
       }
       this._updateRecordValue(recordId, field.id, value);
       el.classList.remove('editing', 'date-picker-open');
@@ -38657,10 +38694,17 @@ class EODataWorkbench {
       }
     }
 
-    // Cmd/Ctrl + A to select all
-    if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !e.target.closest('input, textarea')) {
-      e.preventDefault();
-      this._selectAll();
+    // Cmd/Ctrl + A to select all (but not when inside any editable element)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+      const isEditable = e.target.closest('input, textarea, select, [contenteditable="true"]') ||
+                         e.target.isContentEditable ||
+                         e.target.tagName === 'INPUT' ||
+                         e.target.tagName === 'TEXTAREA' ||
+                         e.target.tagName === 'SELECT';
+      if (!isEditable) {
+        e.preventDefault();
+        this._selectAll();
+      }
     }
 
     // Cmd/Ctrl + F for filter
@@ -39885,7 +39929,7 @@ class EODataWorkbench {
 
   _clearSelection() {
     this.selectedRecords.clear();
-    this._renderTableView();
+    this._renderView();  // Use _renderView() to handle any view type
     this._updateBulkActionsToolbar();
   }
 
