@@ -201,6 +201,15 @@ class RelationalMergeConfig {
     this.setResolution(decision);
   }
 
+  // Source setters for programmatic configuration
+  setLeftSource(source) {
+    this.leftSource = source;
+  }
+
+  setRightSource(source) {
+    this.rightSource = source;
+  }
+
   _rebuildPosition() {
     if (this._recognition && this._boundary && this._resolution) {
       this._position = new Questions.MergePosition(
