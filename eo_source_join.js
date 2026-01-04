@@ -7032,10 +7032,30 @@ class DataPipelineUI {
 
     // Wizard step state
     // Step 1: Source overview and data preview
-    // Step 2: Record types configuration (only if multiple types detected)
-    // Step 3: Final naming and create
+    // Step 2: Field types review (if any types were inferred)
+    // Step 3: Record types configuration (only if multiple types detected)
+    // Step 4: Final naming and create
     this._currentStep = 1;
-    this._totalSteps = 2; // Will be updated to 3 if multiple types detected
+    this._totalSteps = 2; // Will be updated based on detected types
+
+    // Field type review state
+    // Tracks whether we detected inferred types that should be reviewed
+    this._hasInferredTypes = false;
+    // Whether user wants to review field types ('review' | 'accept' | null)
+    this._fieldTypeReviewChoice = null;
+
+    // Available field types for the dropdown
+    this._availableFieldTypes = [
+      { id: 'text', name: 'Text', icon: 'ph-text-aa' },
+      { id: 'longText', name: 'Long Text', icon: 'ph-text-align-left' },
+      { id: 'number', name: 'Number', icon: 'ph-hash' },
+      { id: 'date', name: 'Date', icon: 'ph-calendar' },
+      { id: 'checkbox', name: 'Checkbox', icon: 'ph-check-square' },
+      { id: 'email', name: 'Email', icon: 'ph-envelope' },
+      { id: 'url', name: 'URL', icon: 'ph-globe' },
+      { id: 'phone', name: 'Phone', icon: 'ph-phone' },
+      { id: 'select', name: 'Select', icon: 'ph-list-bullets' }
+    ];
   }
 
   /**
@@ -7087,15 +7107,27 @@ class DataPipelineUI {
 
   _initFieldsFromSources() {
     this._selectedFields = [];
+    this._hasInferredTypes = false;
+
     for (const { source } of this._sources) {
       if (source.schema?.fields && source.schema.fields.length > 0) {
         // Use schema fields if available
         for (const field of source.schema.fields) {
+          // Even with schema fields, infer types if field type is 'raw'
+          let typeInfo = { type: field.type, confidence: 1, wasInferred: false, sampleValues: [] };
+          if (field.type === 'raw' && source.records && source.records.length > 0) {
+            typeInfo = this._inferFieldTypeWithDetails(source.records, field.name);
+            if (typeInfo.wasInferred) {
+              this._hasInferredTypes = true;
+            }
+          }
+
           this._selectedFields.push({
             sourceId: source.id,
             sourceName: source.name,
             name: field.name,
-            type: field.type,
+            type: typeInfo.type,
+            typeInfo: typeInfo,
             rename: null,
             include: true
           });
@@ -7133,13 +7165,18 @@ class DataPipelineUI {
           }
         }
 
-        // Add inferred fields to selectedFields
+        // Add inferred fields to selectedFields with detailed type info
         for (const fieldName of fieldOrder) {
+          const typeInfo = this._inferFieldTypeWithDetails(source.records, fieldName);
+          if (typeInfo.wasInferred) {
+            this._hasInferredTypes = true;
+          }
           this._selectedFields.push({
             sourceId: source.id,
             sourceName: source.name,
             name: fieldName,
-            type: this._inferFieldType(source.records, fieldName),
+            type: typeInfo.type,
+            typeInfo: typeInfo,
             rename: null,
             include: true
           });
@@ -7152,48 +7189,130 @@ class DataPipelineUI {
   }
 
   /**
-   * Infer field type from record values
-   * Simple inference based on sample values
+   * Infer field type from record values with detailed analysis
+   * Returns type info with confidence score and sample values
    * Handles both flat records and {values: {...}} format
    */
-  _inferFieldType(records, fieldName) {
+  _inferFieldTypeWithDetails(records, fieldName) {
     const sampleSize = Math.min(records.length, 100);
-    let numberCount = 0;
-    let dateCount = 0;
-    let boolCount = 0;
+    const typeCounts = {
+      email: 0,
+      url: 0,
+      phone: 0,
+      date: 0,
+      number: 0,
+      checkbox: 0,
+      longText: 0,
+      text: 0
+    };
+
     let nonEmptyCount = 0;
+    const sampleValues = [];
+    const uniqueValues = new Set();
+
+    // Patterns for type detection
+    const patterns = {
+      email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      url: /^(https?:\/\/|www\.)[^\s]+$/i,
+      phone: /^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/,
+      date: /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?/,
+      dateAlt: /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/,
+      number: /^-?[\d,]+\.?\d*$/,
+      boolean: /^(true|false|yes|no|1|0)$/i
+    };
 
     for (let i = 0; i < sampleSize; i++) {
       const record = records[i];
-      // Handle both flat records and {values: {...}} format
       const value = record.values?.[fieldName] ?? record[fieldName];
       if (value === null || value === undefined || value === '') continue;
 
       nonEmptyCount++;
-      const strValue = String(value);
+      const strValue = String(value).trim();
+      uniqueValues.add(strValue.toLowerCase());
 
-      // Check for number
-      if (!isNaN(parseFloat(strValue)) && isFinite(strValue)) {
-        numberCount++;
+      // Collect sample values (max 5)
+      if (sampleValues.length < 5) {
+        sampleValues.push(strValue.length > 50 ? strValue.slice(0, 47) + '...' : strValue);
       }
-      // Check for date patterns
-      else if (/^\d{4}-\d{2}-\d{2}/.test(strValue) || /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(strValue)) {
-        dateCount++;
-      }
-      // Check for boolean
-      else if (/^(true|false|yes|no)$/i.test(strValue)) {
-        boolCount++;
+
+      // Detect type
+      if (patterns.email.test(strValue)) {
+        typeCounts.email++;
+      } else if (patterns.url.test(strValue)) {
+        typeCounts.url++;
+      } else if (patterns.phone.test(strValue)) {
+        typeCounts.phone++;
+      } else if (patterns.date.test(strValue) || patterns.dateAlt.test(strValue)) {
+        typeCounts.date++;
+      } else if (patterns.number.test(strValue.replace(/,/g, ''))) {
+        typeCounts.number++;
+      } else if (patterns.boolean.test(strValue)) {
+        typeCounts.checkbox++;
+      } else if (strValue.length > 100) {
+        typeCounts.longText++;
+      } else {
+        typeCounts.text++;
       }
     }
 
-    if (nonEmptyCount === 0) return 'text';
+    if (nonEmptyCount === 0) {
+      return { type: 'text', confidence: 0.5, wasInferred: false, sampleValues: [] };
+    }
 
-    const threshold = nonEmptyCount * 0.8;
-    if (numberCount >= threshold) return 'number';
-    if (dateCount >= threshold) return 'date';
-    if (boolCount >= threshold) return 'boolean';
+    // Calculate confidence for each type
+    const candidates = Object.entries(typeCounts)
+      .map(([type, count]) => ({
+        type,
+        count,
+        confidence: count / nonEmptyCount
+      }))
+      .filter(c => c.count > 0)
+      .sort((a, b) => b.confidence - a.confidence);
 
-    return 'text';
+    const threshold = 0.7;
+
+    // Check specific types first (ordered by specificity)
+    if (typeCounts.email / nonEmptyCount > threshold) {
+      return { type: 'email', confidence: typeCounts.email / nonEmptyCount, wasInferred: true, sampleValues, candidates };
+    }
+    if (typeCounts.url / nonEmptyCount > threshold) {
+      return { type: 'url', confidence: typeCounts.url / nonEmptyCount, wasInferred: true, sampleValues, candidates };
+    }
+    if (typeCounts.phone / nonEmptyCount > threshold) {
+      return { type: 'phone', confidence: typeCounts.phone / nonEmptyCount, wasInferred: true, sampleValues, candidates };
+    }
+    if (typeCounts.date / nonEmptyCount > threshold) {
+      return { type: 'date', confidence: typeCounts.date / nonEmptyCount, wasInferred: true, sampleValues, candidates };
+    }
+    if (typeCounts.number / nonEmptyCount > threshold) {
+      return { type: 'number', confidence: typeCounts.number / nonEmptyCount, wasInferred: true, sampleValues, candidates };
+    }
+    if (typeCounts.checkbox / nonEmptyCount > threshold) {
+      return { type: 'checkbox', confidence: typeCounts.checkbox / nonEmptyCount, wasInferred: true, sampleValues, candidates };
+    }
+    if (typeCounts.longText / nonEmptyCount > 0.3) {
+      return { type: 'longText', confidence: typeCounts.longText / nonEmptyCount, wasInferred: true, sampleValues, candidates };
+    }
+
+    // Check for select (low cardinality text field)
+    const uniqueCount = uniqueValues.size;
+    if (uniqueCount <= 20 && uniqueCount < nonEmptyCount * 0.5 && nonEmptyCount > 5) {
+      const textRatio = typeCounts.text / nonEmptyCount;
+      if (textRatio > 0.5) {
+        return { type: 'select', confidence: 0.85, wasInferred: true, sampleValues, candidates, uniqueCount };
+      }
+    }
+
+    // Default to text
+    return { type: 'text', confidence: 0.8, wasInferred: false, sampleValues, candidates };
+  }
+
+  /**
+   * Simple type inference (legacy compatibility)
+   */
+  _inferFieldType(records, fieldName) {
+    const result = this._inferFieldTypeWithDetails(records, fieldName);
+    return result.type;
   }
 
   /**
@@ -7516,6 +7635,11 @@ class DataPipelineUI {
       { id: 'source', shortTitle: 'Source', title: 'Review Source Data' }
     ];
 
+    // Add field types step if we have inferred types
+    if (this._hasInferredTypes) {
+      steps.push({ id: 'fieldTypes', shortTitle: 'Field Types', title: 'Review Field Types' });
+    }
+
     if (this._hasMultipleRecordTypes()) {
       steps.push({ id: 'types', shortTitle: 'Record Types', title: 'Configure Record Types' });
     }
@@ -7537,6 +7661,8 @@ class DataPipelineUI {
     switch (currentStepDef.id) {
       case 'source':
         return this._renderStep1_SourceOverview();
+      case 'fieldTypes':
+        return this._renderStepFieldTypes();
       case 'types':
         return this._renderStep2_RecordTypes();
       case 'create':
@@ -7659,6 +7785,153 @@ class DataPipelineUI {
               ` : ''}
             </div>
           ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Step: Field Types Review
+   * Shows auto-detected field types and allows user to review/edit them
+   */
+  _renderStepFieldTypes() {
+    const inferredFields = this._selectedFields.filter(f => f.include && f.typeInfo?.wasInferred);
+    const otherFields = this._selectedFields.filter(f => f.include && !f.typeInfo?.wasInferred);
+
+    // Get icon for field type
+    const getTypeIcon = (type) => {
+      const icons = {
+        text: 'ph-text-aa',
+        longText: 'ph-text-align-left',
+        number: 'ph-hash',
+        date: 'ph-calendar',
+        checkbox: 'ph-check-square',
+        email: 'ph-envelope',
+        url: 'ph-globe',
+        phone: 'ph-phone',
+        select: 'ph-list-bullets',
+        raw: 'ph-file-text'
+      };
+      return icons[type] || 'ph-text-aa';
+    };
+
+    // Get display name for field type
+    const getTypeName = (type) => {
+      const names = {
+        text: 'Text',
+        longText: 'Long Text',
+        number: 'Number',
+        date: 'Date',
+        checkbox: 'Checkbox',
+        email: 'Email',
+        url: 'URL',
+        phone: 'Phone',
+        select: 'Select',
+        raw: 'Raw'
+      };
+      return names[type] || 'Text';
+    };
+
+    // Render confidence badge
+    const renderConfidenceBadge = (confidence) => {
+      if (confidence >= 0.9) {
+        return `<span class="confidence-badge high" title="${Math.round(confidence * 100)}% confidence">High</span>`;
+      } else if (confidence >= 0.7) {
+        return `<span class="confidence-badge medium" title="${Math.round(confidence * 100)}% confidence">Medium</span>`;
+      } else {
+        return `<span class="confidence-badge low" title="${Math.round(confidence * 100)}% confidence">Low</span>`;
+      }
+    };
+
+    return `
+      <div class="wizard-step wizard-step-field-types">
+        <h3 class="wizard-step-title">
+          <i class="ph ph-magic-wand"></i>
+          Review Field Types
+        </h3>
+        <p class="wizard-step-description">
+          We detected field types for your data. Review the inferred types below and make changes if needed.
+        </p>
+
+        <div class="wizard-step-content">
+          ${inferredFields.length > 0 ? `
+            <div class="field-types-section">
+              <h4 class="section-title">
+                <i class="ph ph-sparkle"></i>
+                Auto-Detected Types
+                <span class="section-count">${inferredFields.length} field${inferredFields.length !== 1 ? 's' : ''}</span>
+              </h4>
+              <div class="field-types-list">
+                ${inferredFields.map((field, idx) => {
+                  const fieldIdx = this._selectedFields.findIndex(f => f.name === field.name && f.sourceId === field.sourceId);
+                  return `
+                    <div class="field-type-row" data-field-index="${fieldIdx}">
+                      <div class="field-info">
+                        <span class="field-name">${this._escapeHtml(field.name)}</span>
+                        ${field.typeInfo?.sampleValues?.length > 0 ? `
+                          <span class="field-samples" title="Sample values: ${this._escapeHtml(field.typeInfo.sampleValues.join(', '))}">
+                            e.g., ${this._escapeHtml(field.typeInfo.sampleValues[0])}
+                          </span>
+                        ` : ''}
+                      </div>
+                      <div class="field-type-controls">
+                        ${renderConfidenceBadge(field.typeInfo?.confidence || 0.5)}
+                        <div class="field-type-select-wrapper">
+                          <i class="ph ${getTypeIcon(field.type)}"></i>
+                          <select class="field-type-dropdown" data-field-index="${fieldIdx}">
+                            ${this._availableFieldTypes.map(t => `
+                              <option value="${t.id}" ${field.type === t.id ? 'selected' : ''}>
+                                ${t.name}
+                              </option>
+                            `).join('')}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${otherFields.length > 0 ? `
+            <div class="field-types-section field-types-other">
+              <h4 class="section-title">
+                <i class="ph ph-list"></i>
+                Other Fields
+                <span class="section-count">${otherFields.length} field${otherFields.length !== 1 ? 's' : ''}</span>
+              </h4>
+              <div class="field-types-list compact">
+                ${otherFields.map((field, idx) => {
+                  const fieldIdx = this._selectedFields.findIndex(f => f.name === field.name && f.sourceId === field.sourceId);
+                  return `
+                    <div class="field-type-row compact" data-field-index="${fieldIdx}">
+                      <div class="field-info">
+                        <span class="field-name">${this._escapeHtml(field.name)}</span>
+                      </div>
+                      <div class="field-type-controls">
+                        <div class="field-type-select-wrapper">
+                          <i class="ph ${getTypeIcon(field.type)}"></i>
+                          <select class="field-type-dropdown" data-field-index="${fieldIdx}">
+                            ${this._availableFieldTypes.map(t => `
+                              <option value="${t.id}" ${field.type === t.id ? 'selected' : ''}>
+                                ${t.name}
+                              </option>
+                            `).join('')}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="field-types-tip">
+            <i class="ph ph-lightbulb"></i>
+            <span>Field types help with sorting, filtering, and data validation. You can always change them later.</span>
+          </div>
         </div>
       </div>
     `;
@@ -8077,6 +8350,33 @@ class DataPipelineUI {
     // Create
     this.container.querySelector('#pipeline-create-btn')?.addEventListener('click', () => {
       this._createSet();
+    });
+
+    // Field type dropdowns in field types step
+    this.container.querySelectorAll('.field-type-dropdown').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const fieldIndex = parseInt(e.target.dataset.fieldIndex);
+        if (!isNaN(fieldIndex) && this._selectedFields[fieldIndex]) {
+          this._selectedFields[fieldIndex].type = e.target.value;
+          // Update the icon next to the dropdown
+          const wrapper = e.target.closest('.field-type-select-wrapper');
+          const icon = wrapper?.querySelector('i');
+          if (icon) {
+            const iconMap = {
+              text: 'ph-text-aa',
+              longText: 'ph-text-align-left',
+              number: 'ph-hash',
+              date: 'ph-calendar',
+              checkbox: 'ph-check-square',
+              email: 'ph-envelope',
+              url: 'ph-globe',
+              phone: 'ph-phone',
+              select: 'ph-list-bullets'
+            };
+            icon.className = `ph ${iconMap[e.target.value] || 'ph-text-aa'}`;
+          }
+        }
+      });
     });
 
     // Record type mode selector (lenses/views/none) - for wizard step 2
