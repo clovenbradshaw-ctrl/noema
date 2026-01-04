@@ -727,7 +727,6 @@ class EODataWorkbench {
       overview: { id: 'overview', label: 'Overview', icon: 'ph-chart-bar', singleton: true },
       source: { id: 'source', label: 'Source', icon: 'ph-file-csv', singleton: true },
       transforms: { id: 'transforms', label: 'Transforms', icon: 'ph-shuffle', singleton: true },
-      fields: { id: 'fields', label: 'Fields', icon: 'ph-list-checks', singleton: true },
       definitions: { id: 'definitions', label: 'Definitions', icon: 'ph-book-open', singleton: true },
       exports: { id: 'exports', label: 'Exports', icon: 'ph-export', singleton: true },
       lenses: { id: 'lenses', label: 'Lenses', icon: 'ph-funnel', singleton: true },
@@ -24929,9 +24928,8 @@ class EODataWorkbench {
 
     // Initialize panel tabs if none are open
     if (this.panelTabs.length === 0) {
-      // Open default tabs: Overview, Fields, and Source
+      // Open default tabs: Overview and Source
       this._openPanelTab('overview');
-      this._openPanelTab('fields');
       this._openPanelTab('source');
     } else {
       // Just render the existing tabs
@@ -25578,9 +25576,6 @@ class EODataWorkbench {
       case 'transforms':
         this._renderTransformsPanelContent(container);
         break;
-      case 'fields':
-        this._renderFieldsPanelContent(container);
-        break;
       case 'definitions':
         this._renderDefinitionsPanelContent(container);
         break;
@@ -25784,57 +25779,6 @@ class EODataWorkbench {
 
     document.getElementById('transforms-view-fields')?.addEventListener('click', () => {
       this._selectSet(set.id, 'fields');
-    });
-  }
-
-  /**
-   * Render Field Overview panel content
-   */
-  _renderFieldsPanelContent(container) {
-    const set = this.getCurrentSet();
-    if (!set) {
-      container.innerHTML = '<div class="panel-tab-error">No set selected</div>';
-      return;
-    }
-
-    const fieldStats = this._calculateFieldStats(set);
-
-    container.innerHTML = `
-      <div class="panel-content fields-panel">
-        <div class="panel-content-header">
-          <h3><i class="ph ph-columns"></i> Field Overview</h3>
-          <button class="panel-action-btn" id="fields-panel-manage">
-            Manage Fields →
-          </button>
-        </div>
-        <div class="panel-content-body">
-          <div class="fields-grid">
-            ${fieldStats.map(field => `
-              <div class="field-item" data-field-id="${field.id}">
-                <div class="field-name" title="${this._escapeHtml(field.name)}">${this._escapeHtml(field.name)}</div>
-                <div class="field-type">
-                  <i class="ph ${this._getFieldTypeIcon(field.type)}"></i>
-                  ${field.type}
-                </div>
-                <div class="field-completeness">
-                  <div class="field-completeness-fill ${field.completeness < 50 ? 'danger' : field.completeness < 80 ? 'warning' : ''}"
-                       style="width: ${field.completeness}%"></div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('fields-panel-manage')?.addEventListener('click', () => {
-      this._selectSet(set.id, 'fields');
-    });
-
-    container.querySelectorAll('.field-item').forEach(item => {
-      item.addEventListener('click', () => {
-        this._selectSet(set.id, 'fields');
-      });
     });
   }
 
