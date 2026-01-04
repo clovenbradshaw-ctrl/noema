@@ -16365,17 +16365,41 @@ class EODataWorkbench {
       return;
     }
 
-    const provenanceFields = [
-      { key: 'agent', label: 'Agent', icon: 'ph-user', description: 'Who provided this data' },
-      { key: 'method', label: 'Method', icon: 'ph-gear', description: 'How it was produced' },
-      { key: 'source', label: 'Origin', icon: 'ph-link', description: 'Where it came from' },
-      { key: 'term', label: 'Term', icon: 'ph-tag', description: 'Key concept' },
-      { key: 'definition', label: 'Definition', icon: 'ph-book-open', description: 'What the term means' },
-      { key: 'jurisdiction', label: 'Jurisdiction', icon: 'ph-globe', description: 'Scope or authority' },
-      { key: 'scale', label: 'Scale', icon: 'ph-chart-line', description: 'Operational level' },
-      { key: 'timeframe', label: 'Timeframe', icon: 'ph-calendar', description: 'Observation period' },
-      { key: 'background', label: 'Background', icon: 'ph-info', description: 'Enabling conditions' }
+    const provenanceGroups = [
+      {
+        title: 'Source & Attribution',
+        subtitle: 'Where did this data come from?',
+        icon: 'ph-identification-card',
+        fields: [
+          { key: 'agent', label: 'Agent', icon: 'ph-user', description: 'Person, team, or system that provided or created this data' },
+          { key: 'method', label: 'Method', icon: 'ph-gear', description: 'How this data was collected or generated (e.g., survey, API, manual entry)' },
+          { key: 'source', label: 'Origin', icon: 'ph-link', description: 'Original file, database, or system where this data came from' }
+        ]
+      },
+      {
+        title: 'Meaning & Scope',
+        subtitle: 'What does this data represent?',
+        icon: 'ph-book-open-text',
+        fields: [
+          { key: 'term', label: 'Term', icon: 'ph-tag', description: 'The key concept or entity this data describes' },
+          { key: 'definition', label: 'Definition', icon: 'ph-book-open', description: 'Precise meaning of the term in this context' },
+          { key: 'jurisdiction', label: 'Jurisdiction', icon: 'ph-globe', description: 'Geographic region, legal authority, or organizational scope' }
+        ]
+      },
+      {
+        title: 'Context & Conditions',
+        subtitle: 'When and where does this apply?',
+        icon: 'ph-map-trifold',
+        fields: [
+          { key: 'scale', label: 'Scale', icon: 'ph-chart-line', description: 'Level of analysis (e.g., individual, department, company-wide)' },
+          { key: 'timeframe', label: 'Timeframe', icon: 'ph-calendar', description: 'Time period this data covers or when it was observed' },
+          { key: 'background', label: 'Background', icon: 'ph-info', description: 'Assumptions or conditions required for this data to be valid' }
+        ]
+      }
     ];
+
+    // Flatten for save processing
+    const provenanceFields = provenanceGroups.flatMap(g => g.fields);
 
     const html = `
       <div class="source-provenance-edit-modal">
@@ -16385,24 +16409,35 @@ class EODataWorkbench {
         </h3>
         <p class="modal-subtitle">All changes are tracked in edit history.</p>
 
-        <div class="provenance-edit-grid">
-          ${provenanceFields.map(field => {
-            const currentValue = this._getProvenanceValue(source.provenance?.[field.key]) || '';
-            return `
-              <div class="provenance-edit-field">
-                <label for="prov-${field.key}">
-                  <i class="ph ${field.icon}"></i>
-                  ${field.label}
-                </label>
-                <input type="text"
-                       id="prov-${field.key}"
-                       name="${field.key}"
-                       value="${this._escapeHtml(currentValue)}"
-                       placeholder="${field.description}">
+        ${provenanceGroups.map(group => `
+          <div class="provenance-edit-section">
+            <div class="provenance-section-header">
+              <i class="ph ${group.icon}"></i>
+              <div class="provenance-section-title">
+                <span class="section-name">${group.title}</span>
+                <span class="section-subtitle">${group.subtitle}</span>
               </div>
-            `;
-          }).join('')}
-        </div>
+            </div>
+            <div class="provenance-edit-grid">
+              ${group.fields.map(field => {
+                const currentValue = this._getProvenanceValue(source.provenance?.[field.key]) || '';
+                return `
+                  <div class="provenance-edit-field">
+                    <label for="prov-${field.key}">
+                      <i class="ph ${field.icon}"></i>
+                      ${field.label}
+                    </label>
+                    <input type="text"
+                           id="prov-${field.key}"
+                           name="${field.key}"
+                           value="${this._escapeHtml(currentValue)}"
+                           placeholder="${field.description}">
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `).join('')}
       </div>
     `;
 
