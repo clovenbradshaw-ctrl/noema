@@ -40780,6 +40780,29 @@ td.cell-editable.has-history:hover .cell-history-indicator {
   color: #fb923c;
 }
 
+/* Light theme overrides for badge colors - improved contrast */
+html.light-theme .formula-explainer-badge.badge-blue { color: #1d4ed8; }
+html.light-theme .formula-explainer-badge.badge-amber { color: #b45309; }
+html.light-theme .formula-explainer-badge.badge-emerald { color: #047857; }
+html.light-theme .formula-explainer-badge.badge-purple { color: #7c3aed; }
+html.light-theme .formula-explainer-badge.badge-rose { color: #be123c; }
+html.light-theme .formula-explainer-badge.badge-slate { color: #475569; }
+html.light-theme .formula-explainer-badge.badge-cyan { color: #0e7490; }
+html.light-theme .formula-explainer-badge.badge-pink { color: #be185d; }
+html.light-theme .formula-explainer-badge.badge-orange { color: #c2410c; }
+
+@media (prefers-color-scheme: light) {
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-blue { color: #1d4ed8; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-amber { color: #b45309; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-emerald { color: #047857; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-purple { color: #7c3aed; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-rose { color: #be123c; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-slate { color: #475569; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-cyan { color: #0e7490; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-pink { color: #be185d; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-badge.badge-orange { color: #c2410c; }
+}
+
 /* Syntax Box */
 .formula-explainer-syntax-box {
   background: var(--bg-primary);
@@ -41019,6 +41042,29 @@ td.cell-editable.has-history:hover .cell-history-indicator {
   color: #fb923c;
 }
 
+/* Light theme overrides for operator symbol colors - improved contrast */
+html.light-theme .formula-explainer-operator-symbol.operator-blue { color: #1d4ed8; }
+html.light-theme .formula-explainer-operator-symbol.operator-amber { color: #b45309; }
+html.light-theme .formula-explainer-operator-symbol.operator-emerald { color: #047857; }
+html.light-theme .formula-explainer-operator-symbol.operator-purple { color: #7c3aed; }
+html.light-theme .formula-explainer-operator-symbol.operator-rose { color: #be123c; }
+html.light-theme .formula-explainer-operator-symbol.operator-slate { color: #475569; }
+html.light-theme .formula-explainer-operator-symbol.operator-cyan { color: #0e7490; }
+html.light-theme .formula-explainer-operator-symbol.operator-pink { color: #be185d; }
+html.light-theme .formula-explainer-operator-symbol.operator-orange { color: #c2410c; }
+
+@media (prefers-color-scheme: light) {
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-blue { color: #1d4ed8; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-amber { color: #b45309; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-emerald { color: #047857; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-purple { color: #7c3aed; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-rose { color: #be123c; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-slate { color: #475569; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-cyan { color: #0e7490; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-pink { color: #be185d; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-operator-symbol.operator-orange { color: #c2410c; }
+}
+
 .formula-explainer-operator-info {
   flex: 1;
 }
@@ -41157,6 +41203,25 @@ td.cell-editable.has-history:hover .cell-history-indicator {
 .formula-explainer-fn-name.fn-rose { color: #fb7185; }
 .formula-explainer-fn-name.fn-cyan { color: #22d3ee; }
 .formula-explainer-fn-name.fn-slate { color: #94a3b8; }
+
+/* Light theme overrides for function name colors - improved contrast */
+html.light-theme .formula-explainer-fn-name.fn-purple { color: #7c3aed; }
+html.light-theme .formula-explainer-fn-name.fn-amber { color: #b45309; }
+html.light-theme .formula-explainer-fn-name.fn-emerald { color: #047857; }
+html.light-theme .formula-explainer-fn-name.fn-blue { color: #1d4ed8; }
+html.light-theme .formula-explainer-fn-name.fn-rose { color: #be123c; }
+html.light-theme .formula-explainer-fn-name.fn-cyan { color: #0e7490; }
+html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
+
+@media (prefers-color-scheme: light) {
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-fn-name.fn-purple { color: #7c3aed; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-fn-name.fn-amber { color: #b45309; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-fn-name.fn-emerald { color: #047857; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-fn-name.fn-blue { color: #1d4ed8; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-fn-name.fn-rose { color: #be123c; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-fn-name.fn-cyan { color: #0e7490; }
+  html:not(.dark-theme):not(.light-theme) .formula-explainer-fn-name.fn-slate { color: #475569; }
+}
 
 .formula-explainer-fn-sig {
   font-size: 11px;
