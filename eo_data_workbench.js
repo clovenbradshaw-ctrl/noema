@@ -16082,7 +16082,7 @@ class EODataWorkbench {
             this._selectSet(setId);
             break;
           case 'edit':
-            this._selectSet(setId, 'fields');
+            this._selectSet(setId, 'schema');
             break;
           case 'export':
             this._exportSet(setId);
@@ -25108,7 +25108,7 @@ class EODataWorkbench {
 
     // Edit button - go to fields
     document.getElementById('set-dashboard-edit-btn')?.addEventListener('click', () => {
-      this._selectSet(set.id, 'fields');
+      this._selectSet(set.id, 'schema');
     });
 
     // Delete button
@@ -25265,7 +25265,7 @@ class EODataWorkbench {
 
     // Edit button - go to fields
     document.getElementById('set-dashboard-edit-btn')?.addEventListener('click', () => {
-      this._selectSet(set.id, 'fields');
+      this._selectSet(set.id, 'schema');
     });
 
     // Delete button
@@ -25275,15 +25275,15 @@ class EODataWorkbench {
 
     // View fields links
     document.getElementById('set-dashboard-view-fields')?.addEventListener('click', () => {
-      this._selectSet(set.id, 'fields');
+      this._selectSet(set.id, 'schema');
     });
 
     document.getElementById('set-dashboard-manage-fields')?.addEventListener('click', () => {
-      this._selectSet(set.id, 'fields');
+      this._selectSet(set.id, 'schema');
     });
 
     document.getElementById('set-dashboard-show-all-fields')?.addEventListener('click', () => {
-      this._selectSet(set.id, 'fields');
+      this._selectSet(set.id, 'schema');
     });
 
     // Add source button - show modal to add/merge another source into this set
@@ -25328,7 +25328,7 @@ class EODataWorkbench {
     // Field item clicks
     document.querySelectorAll('.set-dashboard-field-item').forEach(item => {
       item.addEventListener('click', () => {
-        this._selectSet(set.id, 'fields');
+        this._selectSet(set.id, 'schema');
       });
     });
 
@@ -25950,7 +25950,7 @@ class EODataWorkbench {
     `;
 
     document.getElementById('transforms-view-fields')?.addEventListener('click', () => {
-      this._selectSet(set.id, 'fields');
+      this._selectSet(set.id, 'schema');
     });
   }
 
