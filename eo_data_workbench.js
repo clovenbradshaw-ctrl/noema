@@ -29690,15 +29690,9 @@ class EODataWorkbench {
     switch (field.type) {
       case FieldTypes.TEXT:
         if (value) {
-          const hasHtml = /<[a-z][\s\S]*>/i.test(value);
           const escapedValue = this._escapeHtml(String(value));
-          const truncatedTitle = value.length > 50 ? escapedValue : ''; // Only show tooltip if content is long
-          content = `<div class="cell-text-wrapper">
-            <span class="cell-text-content" ${truncatedTitle ? `title="${truncatedTitle}"` : ''}>${this._highlightText(value, searchTerm)}</span>
-            <button class="cell-expand-btn cell-html-preview-btn" data-field-id="${field.id}" data-has-html="${hasHtml}" title="${hasHtml ? 'Click to preview HTML' : 'Click to expand'}">
-              <i class="ph ${hasHtml ? 'ph-code' : 'ph-arrows-out-simple'}"></i>
-            </button>
-          </div>`;
+          const truncatedTitle = value.length > 50 ? escapedValue : '';
+          content = `<span class="cell-text-content" ${truncatedTitle ? `title="${truncatedTitle}"` : ''}>${this._highlightText(value, searchTerm)}</span>`;
         } else {
           content = '<span class="cell-empty">Empty</span>';
         }
@@ -29706,13 +29700,8 @@ class EODataWorkbench {
       case FieldTypes.LONG_TEXT:
         if (value) {
           const escapedLongText = this._escapeHtml(String(value));
-          const truncatedLongTitle = value.length > 100 ? escapedLongText.substring(0, 200) + '...' : ''; // Show preview in tooltip
-          content = `<div class="cell-longtext-wrapper">
-            <span class="cell-longtext-content" ${truncatedLongTitle ? `title="${truncatedLongTitle}"` : ''}>${this._highlightText(value, searchTerm)}</span>
-            <button class="cell-expand-btn" data-field-id="${field.id}" title="Click to expand">
-              <i class="ph ph-arrows-out-simple"></i>
-            </button>
-          </div>`;
+          const truncatedLongTitle = value.length > 100 ? escapedLongText.substring(0, 200) + '...' : '';
+          content = `<span class="cell-longtext-content" ${truncatedLongTitle ? `title="${truncatedLongTitle}"` : ''}>${this._highlightText(value, searchTerm)}</span>`;
         } else {
           content = '<span class="cell-empty">Empty</span>';
         }
@@ -30127,32 +30116,6 @@ class EODataWorkbench {
         return;
       }
 
-      // HTML preview button click (for TEXT fields)
-      const htmlPreviewBtn = target.closest('.cell-html-preview-btn');
-      if (htmlPreviewBtn) {
-        e.stopPropagation(); // Prevent row click and cell edit
-        const td = htmlPreviewBtn.closest('td');
-        const recordId = td?.closest('tr')?.dataset.recordId;
-        const fieldId = td?.dataset.fieldId;
-        if (recordId && fieldId) {
-          this._showHtmlPreviewModal(recordId, fieldId);
-        }
-        return;
-      }
-
-      // Long text expand button click
-      const expandBtn = target.closest('.cell-expand-btn:not(.cell-html-preview-btn)');
-      if (expandBtn) {
-        e.stopPropagation(); // Prevent row click and cell edit
-        const td = expandBtn.closest('td');
-        const recordId = td?.closest('tr')?.dataset.recordId;
-        const fieldId = td?.dataset.fieldId;
-        if (recordId && fieldId) {
-          this._showLongTextModal(recordId, fieldId);
-        }
-        return;
-      }
-
       // Field header dropdown
       const dropdown = target.closest('.th-dropdown');
       if (dropdown) {
@@ -30207,6 +30170,18 @@ class EODataWorkbench {
         return;
       }
 
+      // Cell click for inline editing + open right panel
+      const cell = target.closest('td.cell-editable');
+      if (cell && !cell.classList.contains('cell-editing') && target.type !== 'checkbox') {
+        const row = cell.closest('tr[data-record-id]');
+        if (row) {
+          // Start inline edit and show record detail panel
+          this._startCellEdit(cell);
+          this._showRecordDetail(row.dataset.recordId);
+        }
+        return;
+      }
+
       // Row click for detail panel (but not on checkboxes or editing cells)
       if (target.type !== 'checkbox' && !target.closest('.cell-editing')) {
         const row = target.closest('tr[data-record-id]');
@@ -30216,11 +30191,20 @@ class EODataWorkbench {
       }
     });
 
-    // Delegated double-click for cell editing
+    // Delegated double-click to open field modal with history/provenance
     table.addEventListener('dblclick', (e) => {
       const cell = e.target.closest('td.cell-editable');
-      if (cell && !cell.classList.contains('cell-editing')) {
-        this._startCellEdit(cell);
+      if (cell) {
+        e.preventDefault();
+        const recordId = cell.closest('tr')?.dataset.recordId;
+        const fieldId = cell.dataset.fieldId;
+        if (recordId && fieldId) {
+          // End any current editing first
+          if (this.editingCell) {
+            this._endCellEdit();
+          }
+          this._showLongTextModal(recordId, fieldId);
+        }
       }
     });
 
