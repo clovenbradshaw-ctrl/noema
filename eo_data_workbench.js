@@ -24544,6 +24544,33 @@ class EODataWorkbench {
     }
   }
 
+  /**
+   * Move a view tab to a new position within the current set
+   */
+  _moveView(viewId, newIndex) {
+    const set = this.getCurrentSet();
+    if (!set) return;
+
+    const currentIndex = set.views.findIndex(v => v.id === viewId);
+    if (currentIndex === -1) return;
+
+    // Don't move if already at the target position
+    if (currentIndex === newIndex) return;
+
+    // Adjust for removal when moving forward
+    if (currentIndex < newIndex) {
+      newIndex--;
+    }
+
+    // Move the view
+    const [view] = set.views.splice(currentIndex, 1);
+    set.views.splice(newIndex, 0, view);
+
+    // Re-render and save
+    this._injectViewTabsHeader();
+    this._saveData();
+  }
+
   _switchViewType(viewType) {
     const set = this.getCurrentSet();
     if (!set) return;
@@ -29047,12 +29074,10 @@ class EODataWorkbench {
       return `
         <button class="view-tab ${isActive ? 'active' : ''}"
                 data-view-id="${view.id}"
+                draggable="true"
                 title="${this._escapeHtml(view.name)} (${view.type})">
           <i class="ph ${icon}"></i>
           <span class="view-tab-name">${this._escapeHtml(view.name)}</span>
-          <span class="view-tab-close" data-view-id="${view.id}" title="Close tab">
-            <i class="ph ph-x"></i>
-          </span>
         </button>
       `;
     }).join('');
@@ -29116,26 +29141,61 @@ class EODataWorkbench {
     const header = this.elements.contentArea?.querySelector('.view-tabs-header');
     if (!header) return;
 
-    // View tab clicks
+    const scrollContainer = header.querySelector('.view-tabs-scroll');
+
+    // View tab clicks and drag-and-drop
     header.querySelectorAll('.view-tab').forEach(tab => {
+      const viewId = tab.dataset.viewId;
+
+      // Click to activate
       tab.addEventListener('click', (e) => {
-        // Don't switch tabs if clicking on the close button
-        if (e.target.closest('.view-tab-close')) return;
-        const viewId = tab.dataset.viewId;
         if (viewId && viewId !== this.currentViewId) {
           this._selectView(viewId);
         }
       });
-    });
 
-    // Tab close button clicks - just close (switch away), don't toss
-    header.querySelectorAll('.view-tab-close').forEach(closeBtn => {
-      closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const viewId = closeBtn.dataset.viewId;
-        if (viewId) {
-          this._closeView(viewId);
+      // Drag and drop for reordering
+      tab.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', viewId);
+        tab.classList.add('dragging');
+      });
+
+      tab.addEventListener('dragend', () => {
+        tab.classList.remove('dragging');
+        header.querySelectorAll('.view-tab').forEach(t => {
+          t.classList.remove('drag-over', 'drag-over-right');
+        });
+      });
+
+      tab.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const draggingTab = header.querySelector('.view-tab.dragging');
+        if (draggingTab && draggingTab !== tab) {
+          const rect = tab.getBoundingClientRect();
+          const midpoint = rect.left + rect.width / 2;
+          tab.classList.remove('drag-over', 'drag-over-right');
+          if (e.clientX < midpoint) {
+            tab.classList.add('drag-over');
+          } else {
+            tab.classList.add('drag-over-right');
+          }
         }
+      });
+
+      tab.addEventListener('dragleave', () => {
+        tab.classList.remove('drag-over', 'drag-over-right');
+      });
+
+      tab.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const draggedViewId = e.dataTransfer.getData('text/plain');
+        const set = this.getCurrentSet();
+        if (!set) return;
+        const targetIndex = set.views.findIndex(v => v.id === viewId);
+        const rect = tab.getBoundingClientRect();
+        const insertAfter = e.clientX >= rect.left + rect.width / 2;
+        this._moveView(draggedViewId, insertAfter ? targetIndex + 1 : targetIndex);
+        tab.classList.remove('drag-over', 'drag-over-right');
       });
     });
 

@@ -5392,6 +5392,22 @@ body:has(.header-simplified) .view-disclosure {
   text-overflow: ellipsis;
 }
 
+/* View tab drag-and-drop states */
+.view-tab.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.view-tab.drag-over {
+  border-left: 2px solid var(--primary-500);
+  margin-left: -2px;
+}
+
+.view-tab.drag-over-right {
+  border-right: 2px solid var(--primary-500);
+  margin-right: -2px;
+}
+
 .view-tab-close {
   display: flex;
   align-items: center;
