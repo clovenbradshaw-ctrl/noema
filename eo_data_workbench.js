@@ -11749,6 +11749,69 @@ class EODataWorkbench {
   }
 
   /**
+   * Open modal showing term details
+   */
+  _openTermDetailModal(definition, termName) {
+    const terms = definition.terms || definition.properties || [];
+    const term = terms.find(t => (t.name || t.term || t.label) === termName);
+
+    if (!term) {
+      this._showNotification('Term not found', 'error');
+      return;
+    }
+
+    const name = term.name || term.term || term.label || 'Unnamed';
+    const label = term.label || term.displayLabel || '';
+    const role = term.type || term.role || 'text';
+    const notes = term.description || term.notes || '';
+    const uri = term.uri || term.sourceUri || '';
+
+    // Get linkages for this term
+    const termLinkages = this._getTermSetLinkages(definition);
+    const linkage = termLinkages.get(name);
+    const linkedTo = linkage ? `${linkage.setName}.${linkage.fieldName}` : null;
+
+    const html = `
+      <div class="term-detail-modal">
+        <div class="form-group">
+          <label class="form-label">Term Name</label>
+          <div class="form-value">${this._escapeHtml(name)}</div>
+        </div>
+        ${label ? `
+          <div class="form-group">
+            <label class="form-label">Display Label</label>
+            <div class="form-value">${this._escapeHtml(label)}</div>
+          </div>
+        ` : ''}
+        <div class="form-group">
+          <label class="form-label">Role / Type</label>
+          <div class="form-value"><span class="term-role-badge">${this._escapeHtml(role)}</span></div>
+        </div>
+        ${notes ? `
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <div class="form-value">${this._escapeHtml(notes)}</div>
+          </div>
+        ` : ''}
+        ${uri ? `
+          <div class="form-group">
+            <label class="form-label">URI</label>
+            <div class="form-value">
+              <a href="${this._escapeHtml(uri)}" target="_blank" rel="noopener noreferrer">${this._escapeHtml(uri)}</a>
+            </div>
+          </div>
+        ` : ''}
+        <div class="form-group">
+          <label class="form-label">Linked To</label>
+          <div class="form-value">${linkedTo ? this._escapeHtml(linkedTo) : '<span style="color: var(--text-tertiary);">Not linked</span>'}</div>
+        </div>
+      </div>
+    `;
+
+    this._showModal(`Term: ${name}`, html, null, { hideFooter: true });
+  }
+
+  /**
    * Render DefinitionSource metadata section
    */
   _renderDefinitionSourceSection(defSource) {
