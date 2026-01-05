@@ -5382,6 +5382,98 @@ class EODataWorkbench {
   }
 
   /**
+   * Navigate to a specific field in a set's schema view
+   * Opens the schema tab and highlights the target field
+   */
+  _navigateToField(setId, fieldId) {
+    const set = this.sets.find(s => s.id === setId);
+    if (!set) {
+      this._showToast('Set not found', 'error');
+      return;
+    }
+
+    const field = set.fields?.find(f => f.id === fieldId);
+    if (!field) {
+      this._showToast('Field not found', 'error');
+      return;
+    }
+
+    // Open the schema tab for this set
+    this._openSchemaTab(setId);
+
+    // After a short delay (to let the tab render), highlight and scroll to the field
+    setTimeout(() => {
+      const fieldRow = document.querySelector(`[data-field-id="${fieldId}"]`);
+      if (fieldRow) {
+        // Scroll into view
+        fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Add highlight animation
+        fieldRow.classList.add('field-highlight');
+        setTimeout(() => {
+          fieldRow.classList.remove('field-highlight');
+        }, 2000);
+      }
+    }, 150);
+
+    this._showToast(`Navigated to "${field.name}" in ${set.name}`, 'info');
+  }
+
+  /**
+   * Show a picker dropdown when multiple fields are linked to a definition
+   */
+  _showLinkedFieldsPicker(linkedFields, anchorElement) {
+    // Remove any existing picker
+    document.querySelector('.linked-fields-picker')?.remove();
+
+    const picker = document.createElement('div');
+    picker.className = 'linked-fields-picker';
+
+    const items = linkedFields.map(lf => `
+      <div class="linked-field-item" data-set-id="${lf.setId}" data-field-id="${lf.fieldId}">
+        <span class="linked-field-set">${this._escapeHtml(lf.setName)}</span>
+        <i class="ph ph-arrow-right"></i>
+        <span class="linked-field-name">${this._escapeHtml(lf.fieldName)}</span>
+      </div>
+    `).join('');
+
+    picker.innerHTML = `
+      <div class="linked-fields-header">Linked Fields</div>
+      <div class="linked-fields-list">${items}</div>
+    `;
+
+    // Position the picker near the anchor element
+    const rect = anchorElement.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.top = `${rect.bottom + 4}px`;
+    picker.style.left = `${rect.left}px`;
+    picker.style.zIndex = '9999';
+
+    document.body.appendChild(picker);
+
+    // Add click handlers
+    picker.querySelectorAll('.linked-field-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const setId = item.dataset.setId;
+        const fieldId = item.dataset.fieldId;
+        picker.remove();
+        this._navigateToField(setId, fieldId);
+      });
+    });
+
+    // Close picker when clicking outside
+    const closeHandler = (e) => {
+      if (!picker.contains(e.target) && e.target !== anchorElement) {
+        picker.remove();
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener('click', closeHandler);
+    }, 10);
+  }
+
+  /**
    * Open a lens tab
    */
   _openLensTab(setId, lensId) {
@@ -17513,7 +17605,9 @@ class EODataWorkbench {
                 <thead>
                   <tr>
                     <th class="col-definition">Definition</th>
+                    <th class="col-role">Role</th>
                     <th class="col-description">Description / Values</th>
+                    <th class="col-source">Source</th>
                     <th class="col-status">Status</th>
                     <th class="col-usage">Used</th>
                   </tr>
@@ -17561,66 +17655,53 @@ class EODataWorkbench {
    */
   _renderDefinitionListRow(def) {
     const discovered = def.discoveredFrom || {};
-    const isStub = def.status === 'stub' || def.populationMethod === 'pending';
-    const isPartial = def.status === 'partial' && !def.term?.definitionText;
     const hasDefinitionText = def.term?.definitionText;
+    // Status remains STUB until a real definition is added
+    const isStub = !hasDefinitionText;
+    const isPartial = def.status === 'partial' && !hasDefinitionText;
 
     // Get type info
     const fieldType = discovered.fieldType || def.term?.type || 'text';
     const typeLabel = this._getTypeLabel(fieldType);
     const typeIcon = this._getTypeIcon(fieldType);
 
-    // Count linked fields
-    let linkedFieldCount = 0;
+    // Get role info
+    const role = def.role || def.term?.role || this._inferRoleFromType(fieldType, def.name);
+    const roleInfo = this._getRoleInfo(role);
+
+    // Get linked fields with full info for two-way linking
+    const linkedFields = [];
     this.sets.forEach(set => {
       (set.fields || []).forEach(field => {
         if (field.definitionRef?.definitionId === def.id ||
             field.semanticBinding?.definitionId === def.id) {
-          linkedFieldCount++;
+          linkedFields.push({
+            setId: set.id,
+            setName: set.name,
+            fieldId: field.id,
+            fieldName: field.name
+          });
         }
       });
     });
 
-    // Build description/values content
+    // Build description/values content with richer data insights
     let descriptionContent = '';
-    let valuesContent = '';
 
     if (hasDefinitionText) {
       // Show definition text for complete definitions
       const defText = def.term.definitionText;
       const truncated = defText.length > 80 ? defText.slice(0, 77) + '…' : defText;
       descriptionContent = `<span class="def-description">${this._escapeHtml(truncated)}</span>`;
-
-      // Show allowed values if it's a select type
-      if (discovered.fieldOptions || discovered.fieldUniqueValues) {
-        const values = discovered.fieldOptions?.choices || discovered.fieldUniqueValues || [];
-        if (values.length > 0 && values.length <= 10) {
-          valuesContent = `
-            <div class="def-values-row">
-              ${values.slice(0, 5).map(v => `<span class="def-value-chip">${this._escapeHtml(String(v).slice(0, 20))}</span>`).join('')}
-              ${values.length > 5 ? `<span class="def-values-more">+${values.length - 5}</span>` : ''}
-            </div>
-          `;
-        }
-      }
-    } else if (isStub || isPartial) {
-      // Show placeholder for stubs
-      descriptionContent = `<span class="def-description placeholder">No description yet</span>`;
-
-      // Show samples for stubs
-      const samples = discovered.fieldSamples || discovered.fieldUniqueValues || [];
-      if (samples.length > 0) {
-        valuesContent = `
-          <div class="def-samples-row">
-            <span class="samples-label">samples:</span>
-            ${samples.slice(0, 4).map(s => `<span class="def-sample-chip">"${this._escapeHtml(String(s).slice(0, 15))}"</span>`).join('')}
-            ${samples.length > 4 ? `<span class="def-samples-more">…</span>` : ''}
-          </div>
-        `;
-      }
+    } else {
+      // Show rich data insights for stubs
+      descriptionContent = this._buildDataInsights(discovered, fieldType);
     }
 
-    // Status badge
+    // Source info
+    const sourceInfo = this._getSourceInfo(def, discovered);
+
+    // Status badge - STUB until real definition added
     let statusBadge = '';
     if (hasDefinitionText) {
       statusBadge = `<span class="def-status-icon complete" title="Complete"><i class="ph ph-check-circle"></i></span>`;
@@ -17635,34 +17716,236 @@ class EODataWorkbench {
       ? `<span class="def-uri-badge" title="${this._escapeHtml(def.sourceUri)}"><i class="ph ph-link"></i></span>`
       : '';
 
+    // Build linked fields tooltip and display
+    const linkedFieldsTooltip = linkedFields.length > 0
+      ? linkedFields.map(lf => `${lf.setName}: ${lf.fieldName}`).join('\n')
+      : 'Not linked to any fields';
+
+    const linkedFieldsDisplay = linkedFields.length > 0
+      ? `<span class="def-usage-count has-usage clickable"
+           title="${this._escapeHtml(linkedFieldsTooltip)}"
+           data-linked-fields='${JSON.stringify(linkedFields)}'>
+           ${linkedFields.length} <i class="ph ph-arrow-right"></i>
+         </span>`
+      : `<span class="def-usage-count" title="Not linked to any fields">0</span>`;
+
     return `
       <tr class="def-list-row${isStub ? ' is-stub' : ''}${hasDefinitionText ? ' is-complete' : ''}" data-definition-id="${def.id}">
         <td class="col-definition">
           <div class="def-name-cell">
-            <i class="ph ${typeIcon} def-type-icon" title="${typeLabel}"></i>
+            <i class="ph ${roleInfo.icon} def-role-icon" style="color: ${roleInfo.color}" title="${roleInfo.label}"></i>
             <div class="def-name-info">
               <span class="def-name">${this._escapeHtml(def.name || def.term?.label || def.term?.term || 'Unnamed')}</span>
               <span class="def-type-label">${typeLabel}</span>
             </div>
           </div>
         </td>
+        <td class="col-role">
+          <span class="def-role-badge" style="background: ${roleInfo.bgColor}; color: ${roleInfo.color}">
+            ${roleInfo.label}
+          </span>
+        </td>
         <td class="col-description">
           <div class="def-desc-cell">
             ${descriptionContent}
-            ${valuesContent}
           </div>
+        </td>
+        <td class="col-source">
+          <span class="def-source-badge ${sourceInfo.class}" title="${this._escapeHtml(sourceInfo.tooltip)}">
+            ${sourceInfo.label}
+          </span>
         </td>
         <td class="col-status">
           ${statusBadge}
           ${uriBadge}
         </td>
         <td class="col-usage">
-          <span class="def-usage-count${linkedFieldCount > 0 ? ' has-usage' : ''}" title="${linkedFieldCount} field${linkedFieldCount !== 1 ? 's' : ''} using this definition">
-            ${linkedFieldCount}
-          </span>
+          ${linkedFieldsDisplay}
         </td>
       </tr>
     `;
+  }
+
+  /**
+   * Infer semantic role from field type and name
+   */
+  _inferRoleFromType(fieldType, fieldName) {
+    const name = (fieldName || '').toLowerCase();
+
+    // Check name patterns first
+    if (/^(id|code|ref|key|uuid)$/i.test(name) || name.endsWith('_id') || name.endsWith('Id')) {
+      return 'identifier';
+    }
+    if (/date|time|created|updated|due|start|end|timestamp/i.test(name)) {
+      return 'temporal';
+    }
+    if (/status|type|category|kind|state|priority|severity/i.test(name)) {
+      return 'categorical';
+    }
+    if (/amount|count|total|sum|price|cost|rate|estimate|hours|qty|quantity/i.test(name)) {
+      return 'quantity';
+    }
+    if (/address|location|city|country|region|zip|postal|lat|lng|coord/i.test(name)) {
+      return 'spatial';
+    }
+    if (/name|title|description|notes|comment|text|message/i.test(name)) {
+      return 'textual';
+    }
+
+    // Fall back to type-based inference
+    const typeRoles = {
+      'number': 'quantity',
+      'currency': 'quantity',
+      'percent': 'quantity',
+      'date': 'temporal',
+      'dateTime': 'temporal',
+      'time': 'temporal',
+      'select': 'categorical',
+      'multiSelect': 'categorical',
+      'checkbox': 'categorical',
+      'url': 'identifier',
+      'email': 'identifier',
+      'phone': 'identifier',
+      'text': 'property',
+      'longText': 'textual',
+      'richText': 'textual'
+    };
+
+    return typeRoles[fieldType] || 'property';
+  }
+
+  /**
+   * Get role display info (icon, color, label)
+   */
+  _getRoleInfo(role) {
+    const roles = {
+      quantity: { icon: 'ph-chart-bar', color: '#3b82f6', bgColor: '#eff6ff', label: 'Quantity' },
+      property: { icon: 'ph-tag', color: '#8b5cf6', bgColor: '#f5f3ff', label: 'Property' },
+      identifier: { icon: 'ph-key', color: '#10b981', bgColor: '#ecfdf5', label: 'Identifier' },
+      temporal: { icon: 'ph-calendar', color: '#f59e0b', bgColor: '#fffbeb', label: 'Temporal' },
+      spatial: { icon: 'ph-map-pin', color: '#06b6d4', bgColor: '#ecfeff', label: 'Spatial' },
+      categorical: { icon: 'ph-squares-four', color: '#ec4899', bgColor: '#fdf2f8', label: 'Category' },
+      textual: { icon: 'ph-text-aa', color: '#6b7280', bgColor: '#f9fafb', label: 'Text' }
+    };
+    return roles[role] || roles.property;
+  }
+
+  /**
+   * Build rich data insights for stub definitions
+   */
+  _buildDataInsights(discovered, fieldType) {
+    const parts = [];
+    const samples = discovered.fieldSamples || [];
+    const uniqueValues = discovered.fieldUniqueValues || [];
+    const options = discovered.fieldOptions?.choices || [];
+    const uniqueCount = discovered.fieldUniqueCount || uniqueValues.length;
+
+    // Sample count
+    if (samples.length > 0) {
+      parts.push(`${samples.length} sample${samples.length !== 1 ? 's' : ''}`);
+    }
+
+    // Value pattern detection
+    if (options.length > 0 && options.length <= 10) {
+      // Categorical with known options
+      const optionLabels = options.slice(0, 3).map(o => typeof o === 'object' ? o.name || o.label : o);
+      parts.push(optionLabels.join(', ') + (options.length > 3 ? ` (${options.length})` : ''));
+    } else if (uniqueValues.length > 0) {
+      // Analyze value patterns
+      const pattern = this._detectValuePattern(uniqueValues, fieldType);
+      if (pattern) parts.push(pattern);
+    } else if (samples.length > 0) {
+      // Analyze sample patterns
+      const pattern = this._detectValuePattern(samples, fieldType);
+      if (pattern) parts.push(pattern);
+    }
+
+    // Unique count info
+    if (uniqueCount > 0 && !options.length) {
+      parts.push(`${uniqueCount} unique`);
+    }
+
+    if (parts.length === 0) {
+      return `<span class="def-description placeholder">No description yet</span>`;
+    }
+
+    return `
+      <span class="def-data-insights">
+        ${parts.map(p => `<span class="insight-chip">${this._escapeHtml(p)}</span>`).join(' · ')}
+      </span>
+    `;
+  }
+
+  /**
+   * Detect value patterns from samples
+   */
+  _detectValuePattern(values, fieldType) {
+    if (!values || values.length === 0) return null;
+
+    // Check for numeric range
+    const nums = values.filter(v => !isNaN(parseFloat(v))).map(v => parseFloat(v));
+    if (nums.length === values.length && nums.length > 1) {
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      if (min !== max) {
+        return `Range: ${min}–${max}`;
+      }
+      return 'numeric';
+    }
+
+    // Check for date patterns
+    const datePatterns = values.filter(v => {
+      if (typeof v !== 'string') return false;
+      return /^\d{4}-\d{2}-\d{2}/.test(v) || /^\d{2}\/\d{2}\/\d{4}/.test(v);
+    });
+    if (datePatterns.length === values.length) {
+      return 'ISO date format';
+    }
+
+    // Check for free text
+    const avgLen = values.reduce((sum, v) => sum + String(v).length, 0) / values.length;
+    if (avgLen > 50) {
+      return 'Free text';
+    }
+
+    return null;
+  }
+
+  /**
+   * Get source info for display
+   */
+  _getSourceInfo(def, discovered) {
+    if (def.sourceUri) {
+      // Imported from URI
+      const uri = def.sourceUri;
+      let label = 'Imported';
+      if (uri.includes('wikidata')) label = 'Wikidata';
+      else if (uri.includes('dbpedia')) label = 'DBpedia';
+      else if (uri.includes('schema.org')) label = 'Schema.org';
+      return { label, class: 'source-imported', tooltip: uri };
+    }
+
+    if (def.definitionSource?.authority?.shortName) {
+      return {
+        label: def.definitionSource.authority.shortName,
+        class: 'source-authority',
+        tooltip: def.definitionSource.authority.name || def.definitionSource.authority.shortName
+      };
+    }
+
+    if (discovered.sourceName) {
+      return {
+        label: 'Discovered',
+        class: 'source-discovered',
+        tooltip: `From: ${discovered.sourceName}${discovered.fieldName ? ' → ' + discovered.fieldName : ''}`
+      };
+    }
+
+    if (def.populationMethod === 'created') {
+      return { label: 'Manual', class: 'source-manual', tooltip: 'Manually created' };
+    }
+
+    return { label: 'Discovered', class: 'source-discovered', tooltip: 'Discovered from data' };
   }
 
   /**
@@ -18074,9 +18357,34 @@ class EODataWorkbench {
 
     // Table row click to view definition detail
     document.querySelectorAll('.def-list-row').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', (e) => {
+        // Don't trigger row click if clicking on the linked fields badge
+        if (e.target.closest('.def-usage-count.clickable')) return;
         const definitionId = row.dataset.definitionId;
         this._showDefinitionDetail(definitionId);
+      });
+    });
+
+    // Linked fields click handler - navigate to linked field
+    document.querySelectorAll('.def-usage-count.clickable').forEach(badge => {
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const linkedFieldsData = badge.dataset.linkedFields;
+        if (!linkedFieldsData) return;
+
+        try {
+          const linkedFields = JSON.parse(linkedFieldsData);
+          if (linkedFields.length === 1) {
+            // Single linked field - navigate directly
+            const { setId, fieldId } = linkedFields[0];
+            this._navigateToField(setId, fieldId);
+          } else if (linkedFields.length > 1) {
+            // Multiple linked fields - show picker
+            this._showLinkedFieldsPicker(linkedFields, badge);
+          }
+        } catch (err) {
+          console.error('Error parsing linked fields:', err);
+        }
       });
     });
 
