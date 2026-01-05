@@ -916,6 +916,10 @@ class EODataWorkbench {
       }
 
       if (existingTab) {
+        // Update viewState for set tabs when re-opening (e.g., clicking set header to show dashboard)
+        if (type === 'set' && options.viewState) {
+          existingTab.viewState = options.viewState;
+        }
         this.activateTab(existingTab.id);
         // Close the newTab we were on (like browser behavior)
         if (newTabIdToClose) {
