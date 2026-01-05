@@ -11489,27 +11489,92 @@ class EODataWorkbench {
 
             <!-- SOURCE TAB -->
             <div class="def-profile-tab-pane ${this._definitionActiveTab === 'source' ? 'active' : ''}" data-pane="source">
-              ${defSource ? `
-                <div class="def-profile-source-grid">
-                  <div class="def-profile-source-card">
-                    <div class="source-card-label">Source</div>
-                    <div class="source-card-value">${this._escapeHtml(defSource.source?.title || defSource.authority?.name || '—')}</div>
-                  </div>
-                  <div class="def-profile-source-card">
-                    <div class="source-card-label">URI</div>
-                    <code class="source-card-value uri">${definition.sourceUri ? `<a href="${this._escapeHtml(definition.sourceUri)}" target="_blank">${this._escapeHtml(definition.sourceUri)}</a>` : '—'}</code>
-                  </div>
-                  ${defSource.validity ? `
-                    <div class="def-profile-source-card">
-                      <div class="source-card-label">Valid From</div>
-                      <div class="source-card-value">${defSource.validity.from || '—'}</div>
-                    </div>
-                    ${defSource.validity.to ? `
-                      <div class="def-profile-source-card">
-                        <div class="source-card-label">Valid Until</div>
-                        <div class="source-card-value">${defSource.validity.to}</div>
+              ${definition.sourceUri ? `
+                <div class="def-source-content">
+                  <!-- Linked URI Section -->
+                  <div class="def-source-section def-source-uri-section">
+                    <div class="def-source-section-header">
+                      <div class="def-source-section-icon linked">
+                        <i class="ph ph-link"></i>
                       </div>
-                    ` : ''}
+                      <div class="def-source-section-info">
+                        <h4 class="def-source-section-title">Linked Standard</h4>
+                        <p class="def-source-section-subtitle">This definition is linked to an external vocabulary</p>
+                      </div>
+                      <button class="btn btn-secondary btn-xs" id="btn-change-uri">
+                        <i class="ph ph-pencil-simple"></i> Change
+                      </button>
+                    </div>
+                    <div class="def-source-uri-display">
+                      <a href="${this._escapeHtml(definition.sourceUri)}" target="_blank" rel="noopener noreferrer" class="def-source-uri-link">
+                        <i class="ph ph-arrow-square-out"></i>
+                        <span>${this._escapeHtml(definition.sourceUri)}</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  ${defSource?.authority || defSource?.source ? `
+                    <!-- Authority/Source Section -->
+                    <div class="def-source-section">
+                      <div class="def-source-section-header">
+                        <div class="def-source-section-icon">
+                          <i class="ph ph-buildings"></i>
+                        </div>
+                        <div class="def-source-section-info">
+                          <h4 class="def-source-section-title">Authority</h4>
+                          <p class="def-source-section-subtitle">Source of this definition</p>
+                        </div>
+                      </div>
+                      <div class="def-source-details-grid">
+                        ${defSource.authority?.name ? `
+                          <div class="def-source-detail">
+                            <span class="def-source-detail-label">Organization</span>
+                            <span class="def-source-detail-value">${this._escapeHtml(defSource.authority.name)}</span>
+                          </div>
+                        ` : ''}
+                        ${defSource.source?.title ? `
+                          <div class="def-source-detail">
+                            <span class="def-source-detail-label">Publication</span>
+                            <span class="def-source-detail-value">${this._escapeHtml(defSource.source.title)}</span>
+                          </div>
+                        ` : ''}
+                        ${defSource.source?.citation ? `
+                          <div class="def-source-detail">
+                            <span class="def-source-detail-label">Citation</span>
+                            <span class="def-source-detail-value">${this._escapeHtml(defSource.source.citation)}</span>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  ${defSource?.validity ? `
+                    <!-- Validity Section -->
+                    <div class="def-source-section">
+                      <div class="def-source-section-header">
+                        <div class="def-source-section-icon">
+                          <i class="ph ph-calendar-check"></i>
+                        </div>
+                        <div class="def-source-section-info">
+                          <h4 class="def-source-section-title">Validity Period</h4>
+                          <p class="def-source-section-subtitle">When this definition applies</p>
+                        </div>
+                      </div>
+                      <div class="def-source-details-grid">
+                        ${defSource.validity.from ? `
+                          <div class="def-source-detail">
+                            <span class="def-source-detail-label">Effective From</span>
+                            <span class="def-source-detail-value">${this._escapeHtml(defSource.validity.from)}</span>
+                          </div>
+                        ` : ''}
+                        ${defSource.validity.to ? `
+                          <div class="def-source-detail">
+                            <span class="def-source-detail-label">Effective Until</span>
+                            <span class="def-source-detail-value">${this._escapeHtml(defSource.validity.to)}</span>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
                   ` : ''}
                 </div>
               ` : `
@@ -11688,6 +11753,12 @@ class EODataWorkbench {
     const linkUriBtn = this.elements.contentArea.querySelector('#btn-link-to-uri');
     if (linkUriBtn) {
       linkUriBtn.addEventListener('click', () => this._openLinkToUriModal(definition));
+    }
+
+    // Change URI button (for already linked definitions)
+    const changeUriBtn = this.elements.contentArea.querySelector('#btn-change-uri');
+    if (changeUriBtn) {
+      changeUriBtn.addEventListener('click', () => this._openLinkToUriModal(definition));
     }
 
     // Find Similar button

@@ -16216,8 +16216,8 @@ body.has-picked-up .browser-tab:hover {
 }
 
 .definition-detail-view {
-  padding: 24px;
-  max-width: 1000px;
+  padding: 28px 32px;
+  max-width: 1200px;
 }
 
 .definition-detail-header {
@@ -41921,7 +41921,7 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 .definition-profile-v2 {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 /* -----------------------------------------------------------------------------
@@ -41930,21 +41930,21 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 .def-profile-header {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
-  padding: 16px 20px;
+  border-radius: 14px;
+  padding: 20px 24px;
 }
 
 .def-profile-header-main {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 20px;
 }
 
 /* Icon */
 .def-profile-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41953,7 +41953,7 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 }
 
 .def-profile-icon i {
-  font-size: 20px;
+  font-size: 24px;
 }
 
 /* Main info */
@@ -41965,13 +41965,13 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 .def-profile-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .def-profile-name {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -41979,35 +41979,35 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 }
 
 .def-profile-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .def-profile-local-tag {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .def-profile-description {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
-  line-height: 1.5;
-  margin: 0 0 8px 0;
+  line-height: 1.6;
+  margin: 0 0 12px 0;
 }
 
 .def-profile-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .def-profile-uri {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .def-profile-uri a {
@@ -42069,7 +42069,7 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 .def-profile-tabs-container {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
 }
 
@@ -42078,13 +42078,13 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-primary);
-  padding: 0 16px;
+  padding: 0 20px;
   background: var(--bg-tertiary);
 }
 
 .def-profile-tab {
-  padding: 12px 16px;
-  font-size: 13px;
+  padding: 14px 18px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
   background: none;
@@ -42108,13 +42108,13 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  margin-left: 6px;
-  font-size: 11px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  margin-left: 8px;
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--bg-secondary);
   color: var(--text-muted);
 }
@@ -42126,7 +42126,7 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 
 /* Tab content */
 .def-profile-tab-content {
-  padding: 16px;
+  padding: 20px 24px;
 }
 
 .def-profile-tab-pane {
@@ -42330,8 +42330,139 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 }
 
 /* -----------------------------------------------------------------------------
-   SOURCE TAB
+   SOURCE TAB - REDESIGNED
    ----------------------------------------------------------------------------- */
+.def-source-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 0;
+}
+
+.def-source-section {
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  padding: 16px 20px;
+  border: 1px solid var(--border-primary);
+}
+
+.def-source-section.def-source-uri-section {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.06) 100%);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.def-source-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.def-source-section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.def-source-section-icon i {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.def-source-section-icon.linked {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.def-source-section-icon.linked i {
+  color: #10b981;
+}
+
+.def-source-section-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.def-source-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+}
+
+.def-source-section-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.def-source-uri-display {
+  margin-top: 4px;
+}
+
+.def-source-uri-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: all 0.15s ease;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.def-source-uri-link:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: var(--accent-primary);
+}
+
+.def-source-uri-link i {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.def-source-uri-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.def-source-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.def-source-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.def-source-detail-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.def-source-detail-value {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Legacy source grid styles (kept for backwards compatibility) */
 .def-profile-source-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -42453,7 +42584,7 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
    ----------------------------------------------------------------------------- */
 .def-profile-empty-state {
   text-align: center;
-  padding: 32px 20px;
+  padding: 48px 24px;
 }
 
 .def-profile-empty-state.centered {
@@ -42463,18 +42594,18 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 }
 
 .def-profile-empty-state .empty-state-icon {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   background: var(--bg-tertiary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .def-profile-empty-state .empty-state-icon i {
-  font-size: 20px;
+  font-size: 26px;
   color: var(--text-muted);
 }
 
@@ -42484,16 +42615,18 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
 }
 
 .def-profile-empty-state .empty-state-title {
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .def-profile-empty-state .empty-state-desc {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-muted);
-  margin-bottom: 16px;
-  max-width: 280px;
+  margin-bottom: 20px;
+  max-width: 340px;
+  line-height: 1.5;
 }
 
 .def-profile-empty-state .btn-link {
