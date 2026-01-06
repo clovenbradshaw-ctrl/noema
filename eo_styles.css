@@ -43628,6 +43628,136 @@ html.light-theme .formula-explainer-fn-name.fn-slate { color: #475569; }
   text-decoration: underline;
 }
 
+.def-profile-empty-state .empty-state-context {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 12px 0 16px;
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+/* Local definition badge (replaces warning style) */
+.def-profile-local-uri {
+  color: var(--primary-600);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.def-profile-local-uri i {
+  font-size: 14px;
+}
+
+/* -----------------------------------------------------------------------------
+   PRESSURE INDICATORS (Ontological Risk Management)
+   Reframes completeness as risk management, not bureaucracy
+   ----------------------------------------------------------------------------- */
+.pressure-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.pressure-indicator i {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* Low pressure - things are fine */
+.pressure-indicator.pressure-low {
+  background: var(--success-50);
+  color: var(--success-700);
+  border: 1px solid var(--success-100);
+}
+
+.pressure-indicator.pressure-low i {
+  color: var(--success-500);
+}
+
+/* Medium pressure - something to be aware of */
+.pressure-indicator.pressure-medium {
+  background: var(--warning-50);
+  color: var(--warning-700);
+  border: 1px solid var(--warning-100);
+}
+
+.pressure-indicator.pressure-medium i {
+  color: var(--warning-500);
+}
+
+/* High pressure - action needed */
+.pressure-indicator.pressure-high {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.pressure-indicator.pressure-high i {
+  color: #dc2626;
+}
+
+/* Info pressure - neutral information */
+.pressure-indicator.pressure-info {
+  background: var(--primary-50);
+  color: var(--primary-700);
+  border: 1px solid var(--primary-100);
+}
+
+.pressure-indicator.pressure-info i {
+  color: var(--primary-500);
+}
+
+/* Epistemic Status Display */
+.epistemic-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+  justify-content: center;
+}
+
+.epistemic-status .status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.epistemic-status .status-item.safe {
+  background: var(--success-50);
+  color: var(--success-700);
+}
+
+.epistemic-status .status-item.safe i {
+  color: var(--success-500);
+}
+
+.epistemic-status .status-item.risky {
+  background: var(--warning-50);
+  color: var(--warning-700);
+}
+
+.epistemic-status .status-item.risky i {
+  color: var(--warning-500);
+}
+
+.epistemic-status .status-item.critical {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.epistemic-status .status-item.critical i {
+  color: #dc2626;
+}
+
 /* -----------------------------------------------------------------------------
    CONTEXTUAL CTA BANNER
    ----------------------------------------------------------------------------- */

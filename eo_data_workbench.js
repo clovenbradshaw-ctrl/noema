@@ -11361,8 +11361,8 @@ class EODataWorkbench {
                     <a href="${this._escapeHtml(definition.sourceUri)}" target="_blank">${this._escapeHtml(definition.sourceUri)}</a>
                   </code>
                 ` : `
-                  <span class="def-profile-no-uri">
-                    <i class="ph ph-warning-circle"></i> No URI defined
+                  <span class="def-profile-local-uri" title="Local definition - cross-system comparisons may diverge">
+                    <i class="ph ph-house"></i> Local definition
                   </span>
                 `}
                 <span class="def-profile-sep">•</span>
@@ -11417,7 +11417,11 @@ class EODataWorkbench {
             <div class="def-profile-tab-pane ${this._definitionActiveTab === 'terms' ? 'active' : ''}" data-pane="terms">
               ${terms.length === 0 ? `
                 <div class="def-profile-empty-state">
-                  <p>No terms defined yet</p>
+                  <div class="pressure-indicator pressure-medium">
+                    <i class="ph ph-info"></i>
+                    <span>Humans can interpret, but automation is limited</span>
+                  </div>
+                  <p class="empty-state-context">Add terms to enable machine-readable semantics</p>
                   <button class="btn-link" id="btn-add-first-term">+ Add first term</button>
                 </div>
               ` : `
@@ -11465,12 +11469,12 @@ class EODataWorkbench {
                 </div>
               ` : `
                 <div class="def-profile-empty-state centered">
-                  <div class="empty-state-icon">
-                    <i class="ph ph-clipboard-text"></i>
+                  <div class="pressure-indicator pressure-low">
+                    <i class="ph ph-check-circle"></i>
+                    <span>Definition exists but isn't in use</span>
                   </div>
-                  <p class="empty-state-title">Not applied to any fields yet</p>
-                  <p class="empty-state-desc">Apply this definition to fields to make their meanings clear and consistent</p>
-                  <button class="btn btn-primary btn-sm" id="btn-apply-to-fields-empty">
+                  <p class="empty-state-context">Link to fields when you want this meaning to govern data interpretation</p>
+                  <button class="btn btn-secondary btn-sm" id="btn-apply-to-fields-empty">
                     <i class="ph ph-arrow-right"></i> Apply to Fields
                   </button>
                 </div>
@@ -11569,13 +11573,24 @@ class EODataWorkbench {
                 </div>
               ` : `
                 <div class="def-profile-empty-state centered">
-                  <div class="empty-state-icon">
-                    <i class="ph ph-globe"></i>
+                  <div class="pressure-indicator pressure-info">
+                    <i class="ph ph-house"></i>
+                    <span>Local definition—works within this system</span>
                   </div>
-                  <p class="empty-state-title">No provenance information</p>
-                  <p class="empty-state-desc">This is a locally-created definition. Link it to a standard URI for interoperability.</p>
+                  <div class="epistemic-status">
+                    <div class="status-item safe">
+                      <i class="ph ph-check"></i> Clear to humans
+                    </div>
+                    <div class="status-item safe">
+                      <i class="ph ph-check"></i> Stable over time
+                    </div>
+                    <div class="status-item risky">
+                      <i class="ph ph-warning"></i> Limited interoperability
+                    </div>
+                  </div>
+                  <p class="empty-state-context">Link to a standard if this definition needs to travel outside your system</p>
                   <button class="btn btn-secondary btn-sm" id="btn-link-to-uri">
-                    <i class="ph ph-link"></i> Link to URI
+                    <i class="ph ph-link"></i> Link to Standard
                   </button>
                 </div>
               `}
@@ -12683,10 +12698,44 @@ class EODataWorkbench {
 
   /**
    * Prompt to create a new definition for a term key
+   * Now uses the Definition Journey UI for human-centered ontology
    */
   _promptCreateDefinition(termKey, setId = null, fieldId = null) {
-    // Use the Definition Builder if available
-    if (window.EODefinitionBuilder?.showDefinitionBuilderModal) {
+    // Gather ground truth from the field context
+    const groundTruth = this._gatherFieldGroundTruth(termKey, setId, fieldId);
+
+    // Prefer the new Definition Journey UI (human-centered ontology)
+    if (window.EODefinitionJourney?.showDefinitionJourneyModal) {
+      window.EODefinitionJourney.showDefinitionJourneyModal({
+        frame: this.currentProjectId || 'default',
+        user: this._getCurrentUser(),
+        sessionId: this._getSessionId(),
+        api: window.EO?.getDefinitionAPI ? window.EO.getDefinitionAPI() : null,
+        fieldName: termKey,
+        term: termKey,
+        // Auto-captured ground truth
+        sourceFile: groundTruth.sourceFile,
+        valueShape: groundTruth.valueShape,
+        cardinality: groundTruth.cardinality,
+        nullRate: groundTruth.nullRate,
+        sampleValues: groundTruth.sampleValues,
+        systemOfOrigin: groundTruth.systemOfOrigin
+      }).then((definition) => {
+        if (definition) {
+          this._addDefinition(definition);
+
+          // Auto-bind if we have a field context
+          if (setId && fieldId) {
+            this._bindFieldDefinition(setId, fieldId, definition.id);
+          }
+
+          this._showToast('Definition created successfully', 'success');
+          this._renderSidebar();
+        }
+      });
+    }
+    // Fall back to Definition Builder if Journey not available
+    else if (window.EODefinitionBuilder?.showDefinitionBuilderModal) {
       window.EODefinitionBuilder.showDefinitionBuilderModal({
         frame: this.currentProjectId || 'default',
         user: this._getCurrentUser(),
@@ -12710,6 +12759,74 @@ class EODataWorkbench {
       // Fallback to simple modal
       this._showSimpleDefinitionModal(termKey, setId, fieldId);
     }
+  }
+
+  /**
+   * Gather ground truth from field context for auto-capture
+   * @private
+   */
+  _gatherFieldGroundTruth(termKey, setId, fieldId) {
+    const ground = {
+      sourceFile: null,
+      valueShape: null,
+      cardinality: null,
+      nullRate: null,
+      sampleValues: [],
+      systemOfOrigin: null
+    };
+
+    try {
+      // Get the set if available
+      const set = setId ? this.sets?.find(s => s.id === setId) : null;
+      if (set) {
+        ground.sourceFile = set.sourceFile || set.name;
+        ground.systemOfOrigin = set.systemOfOrigin || 'imported';
+
+        // Get field info
+        const field = fieldId ? set.schema?.fields?.find(f => f.id === fieldId || f.name === fieldId) : null;
+        if (field) {
+          ground.valueShape = field.type || field.dataType || 'string';
+        }
+
+        // Try to get sample values and stats from records
+        const records = set.records || [];
+        if (records.length > 0 && termKey) {
+          const values = records.map(r => r[termKey] || r[fieldId]).filter(v => v != null);
+          const uniqueValues = new Set(values);
+
+          // Cardinality classification
+          if (uniqueValues.size === records.length) {
+            ground.cardinality = 'unique';
+          } else if (uniqueValues.size < 10) {
+            ground.cardinality = 'few';
+          } else {
+            ground.cardinality = 'many';
+          }
+
+          // Null rate
+          const nullCount = records.filter(r => r[termKey] == null && r[fieldId] == null).length;
+          ground.nullRate = records.length > 0 ? (nullCount / records.length) : null;
+
+          // Sample values
+          ground.sampleValues = Array.from(uniqueValues).slice(0, 5);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to gather ground truth:', e);
+    }
+
+    return ground;
+  }
+
+  /**
+   * Get or create session ID
+   * @private
+   */
+  _getSessionId() {
+    if (!this._sessionId) {
+      this._sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+    return this._sessionId;
   }
 
   /**
@@ -12922,12 +13039,27 @@ class EODataWorkbench {
   }
 
   /**
-   * Show the Definition Builder modal for creating new definitions
-   * Uses the 9-parameter EO definition schema
+   * Show the Definition modal for creating new definitions
+   * Prefers the human-centered Definition Journey UI
    */
   _showNewDefinitionModal() {
-    // Use the Definition Builder if available
-    if (window.EODefinitionBuilder?.showDefinitionBuilderModal) {
+    // Prefer the new Definition Journey UI (human-centered ontology)
+    if (window.EODefinitionJourney?.showDefinitionJourneyModal) {
+      window.EODefinitionJourney.showDefinitionJourneyModal({
+        frame: this.currentProjectId || 'default',
+        user: this._getCurrentUser(),
+        sessionId: this._getSessionId(),
+        api: window.EO?.getDefinitionAPI ? window.EO.getDefinitionAPI() : null
+      }).then((definition) => {
+        if (definition) {
+          this._addDefinition(definition);
+          this._showToast('Definition created successfully', 'success');
+          this._renderDefinitionsNav();
+        }
+      });
+    }
+    // Fall back to Definition Builder if Journey not available
+    else if (window.EODefinitionBuilder?.showDefinitionBuilderModal) {
       window.EODefinitionBuilder.showDefinitionBuilderModal({
         frame: this.currentProjectId || 'default',
         user: this._getCurrentUser(),
