@@ -750,10 +750,10 @@ class RelationalMergeUI {
 
           <div class="rm-output-controls">
             <button class="rm-output-btn" id="rm-add-all-left-btn">
-              <i class="ph ph-check-square"></i> Add All from A
+              <i class="ph ph-check-square"></i> Add All from ${this._escapeHtml(this.config.leftSource?.name || 'A')}
             </button>
             <button class="rm-output-btn" id="rm-add-all-right-btn">
-              <i class="ph ph-check-square"></i> Add All from B
+              <i class="ph ph-check-square"></i> Add All from ${this._escapeHtml(this.config.rightSource?.name || 'B')}
             </button>
           </div>
 
@@ -780,7 +780,7 @@ class RelationalMergeUI {
     return `
       <div class="rm-condition" data-index="${index}">
         <select class="rm-condition-left">
-          <option value="">Select field from A...</option>
+          <option value="">Select field from ${this._escapeHtml(this.config.leftSource?.name || 'A')}...</option>
           ${leftFields.map(f => `
             <option value="${f.name}" ${condition.leftField === f.name ? 'selected' : ''}>
               ${this._escapeHtml(f.name)}
@@ -796,7 +796,7 @@ class RelationalMergeUI {
         </select>
 
         <select class="rm-condition-right">
-          <option value="">Select field from B...</option>
+          <option value="">Select field from ${this._escapeHtml(this.config.rightSource?.name || 'B')}...</option>
           ${rightFields.map(f => `
             <option value="${f.name}" ${condition.rightField === f.name ? 'selected' : ''}>
               ${this._escapeHtml(f.name)}
@@ -812,10 +812,13 @@ class RelationalMergeUI {
   }
 
   _renderOutputField(field, index) {
+    const sourceName = field.source === 'left'
+      ? (this.config.leftSource?.name || 'A')
+      : (this.config.rightSource?.name || 'B');
     return `
       <div class="rm-output-field" data-index="${index}">
         <span class="rm-output-source ${field.source}">
-          ${field.source === 'left' ? 'A' : 'B'}
+          ${this._escapeHtml(sourceName)}
         </span>
         <span class="rm-output-name">${this._escapeHtml(field.field)}</span>
         <button class="rm-output-remove" title="Remove field">
