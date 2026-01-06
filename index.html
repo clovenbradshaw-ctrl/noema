@@ -260,47 +260,6 @@
             </div>
           </div>
         </div>
-        <div class="header-right">
-          <div class="header-actions">
-            <!-- Tools Dropdown (consolidates Focus, Sort, Fields, Export) -->
-            <div class="tools-dropdown-container">
-              <button class="header-btn" id="btn-tools" title="View & Data Tools">
-                <i class="ph ph-sliders-horizontal"></i>
-                <span class="btn-label">Tools</span>
-                <i class="ph ph-caret-down"></i>
-              </button>
-              <div class="tools-dropdown" id="tools-dropdown" style="display: none;">
-                <button class="tools-dropdown-item" id="btn-filter-dropdown" title="Create Focus (Rule 5: Restrict only)">
-                  <i class="ph ph-funnel"></i>
-                  <span>Focus</span>
-                  <span class="shortcut-hint">Ctrl+F</span>
-                </button>
-                <button class="tools-dropdown-item" id="btn-sort-dropdown" title="Sort records">
-                  <i class="ph ph-sort-ascending"></i>
-                  <span>Sort</span>
-                </button>
-                <button class="tools-dropdown-item" id="btn-fields-dropdown" title="Show/hide and reorder fields">
-                  <i class="ph ph-columns"></i>
-                  <span>Fields</span>
-                </button>
-                <button class="tools-dropdown-item" id="btn-pipeline-dropdown" title="Manage data pipeline (merge, filter, transform)">
-                  <i class="ph ph-git-merge"></i>
-                  <span>Pipeline</span>
-                </button>
-                <div class="tools-dropdown-divider"></div>
-                <button class="tools-dropdown-item" id="btn-import-dropdown" title="Import CSV or JSON">
-                  <i class="ph ph-download"></i>
-                  <span>Import</span>
-                </button>
-                <button class="tools-dropdown-item" id="btn-export-dropdown" title="Create Export (Rule 9: Immutable, downloads and records)">
-                  <i class="ph ph-export"></i>
-                  <span>Export</span>
-                  <span class="shortcut-hint">Ctrl+S</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       </header>
 
       <!-- Architecture Chain Header (SOURCE → SET → LENS → VIEW) -->
@@ -368,6 +327,39 @@
         <div class="tab-bar-actions">
           <button class="tab-bar-action-btn" id="tab-list-btn" title="View all tabs">
             <i class="ph ph-caret-down"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Toolbar (contextual tools for current tab) -->
+      <div class="tab-toolbar" id="tab-toolbar">
+        <div class="tab-toolbar-group">
+          <button class="tab-toolbar-btn" id="btn-filter-dropdown" title="Focus (Ctrl+F)">
+            <i class="ph ph-funnel"></i>
+            <span>Focus</span>
+          </button>
+          <button class="tab-toolbar-btn" id="btn-sort-dropdown" title="Sort records">
+            <i class="ph ph-sort-ascending"></i>
+            <span>Sort</span>
+          </button>
+          <button class="tab-toolbar-btn" id="btn-fields-dropdown" title="Show/hide fields">
+            <i class="ph ph-columns"></i>
+            <span>Fields</span>
+          </button>
+          <button class="tab-toolbar-btn" id="btn-pipeline-dropdown" title="Pipeline">
+            <i class="ph ph-git-merge"></i>
+            <span>Pipeline</span>
+          </button>
+        </div>
+        <div class="tab-toolbar-divider"></div>
+        <div class="tab-toolbar-group">
+          <button class="tab-toolbar-btn" id="btn-import-dropdown" title="Import CSV or JSON">
+            <i class="ph ph-download"></i>
+            <span>Import</span>
+          </button>
+          <button class="tab-toolbar-btn" id="btn-export-dropdown" title="Export (Ctrl+S)">
+            <i class="ph ph-export"></i>
+            <span>Export</span>
           </button>
         </div>
       </div>

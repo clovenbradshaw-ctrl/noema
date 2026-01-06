@@ -3351,44 +3351,30 @@ class EODataWorkbench {
       });
     });
 
-    // Tools dropdown (consolidated actions)
-    document.getElementById('btn-tools')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._toggleToolsDropdown();
-    });
+    // Tab toolbar buttons
     document.getElementById('btn-filter-dropdown')?.addEventListener('click', () => {
-      this._hideToolsDropdown();
       this._toggleFilterPanel();
     });
     document.getElementById('btn-sort-dropdown')?.addEventListener('click', () => {
-      this._hideToolsDropdown();
       this._toggleSortPanel();
     });
     document.getElementById('btn-fields-dropdown')?.addEventListener('click', () => {
-      this._hideToolsDropdown();
       this._toggleFieldsPanel();
     });
     document.getElementById('btn-pipeline-dropdown')?.addEventListener('click', () => {
-      this._hideToolsDropdown();
       this._togglePipelinePanel();
     });
     document.getElementById('btn-import-dropdown')?.addEventListener('click', () => {
-      this._hideToolsDropdown();
       if (typeof showImportModal === 'function') {
         showImportModal();
       }
     });
     document.getElementById('btn-export-dropdown')?.addEventListener('click', () => {
-      this._hideToolsDropdown();
       this._showNewExportModal();
     });
 
-    // Close dropdown when clicking outside
+    // Close dropdowns when clicking outside
     document.addEventListener('click', (e) => {
-      const toolsContainer = document.querySelector('.tools-dropdown-container');
-      if (toolsContainer && !toolsContainer.contains(e.target)) {
-        this._hideToolsDropdown();
-      }
       const tagSelector = document.getElementById('set-tag-selector');
       if (tagSelector && !tagSelector.contains(e.target)) {
         this._hideSetTagDropdown();
@@ -43094,25 +43080,6 @@ class EODataWorkbench {
     const overlay = document.getElementById('loading-overlay');
     if (overlay) {
       overlay.remove();
-    }
-  }
-
-  // --------------------------------------------------------------------------
-  // Tools Dropdown (consolidated header actions)
-  // --------------------------------------------------------------------------
-
-  _toggleToolsDropdown() {
-    const dropdown = document.getElementById('tools-dropdown');
-    if (dropdown) {
-      const isVisible = dropdown.style.display !== 'none';
-      dropdown.style.display = isVisible ? 'none' : 'block';
-    }
-  }
-
-  _hideToolsDropdown() {
-    const dropdown = document.getElementById('tools-dropdown');
-    if (dropdown) {
-      dropdown.style.display = 'none';
     }
   }
 
