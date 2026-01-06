@@ -692,6 +692,7 @@ class EODataWorkbench {
     this.fileExplorerExpandedFolders = new Set(); // Track expanded folders in tree view
     this.fileExplorerSelectedSources = new Set(); // Track multi-selected sources for batch operations
     this.fileExplorerSelectedSets = new Set(); // Track multi-selected sets for batch operations
+    this.collapsedTableGroups = new Set(); // Track collapsed groups in grouped table view
 
     // Browser-Style Tab Manager - Everything is a tab like Chrome
     this.browserTabs = []; // Array of all open tabs
@@ -29757,40 +29758,102 @@ class EODataWorkbench {
         </tr>
       `;
     } else {
-      records.forEach((record, index) => {
-        const isSelected = this.selectedRecords.has(record.id);
-        const sourceInfo = showProvenance ? this._getRecordSourceInfo(record, set) : null;
-        html += `
-          <tr data-record-id="${record.id}" class="${isSelected ? 'selected' : ''}">
-            <td class="col-row-number">
-              <input type="checkbox" class="row-checkbox"
-                     data-record-id="${record.id}"
-                     ${isSelected ? 'checked' : ''}>
-            </td>
-            ${showProvenance ? `
-              <td class="col-provenance col-source"
-                  style="width: ${view?.config?.sourceColumnWidth || 120}px;"
-                  data-record-id="${record.id}"
-                  data-source-id="${this._escapeHtml(sourceInfo.sourceId)}"
-                  title="${this._escapeHtml(sourceInfo.tooltip)}">
-                <div class="provenance-cell">
-                  <span class="provenance-icon ${sourceInfo.type}">${sourceInfo.icon}</span>
-                  <span class="provenance-source-name" data-source="${this._escapeHtml(sourceInfo.source)}" data-source-id="${this._escapeHtml(sourceInfo.sourceId)}">${this._escapeHtml(sourceInfo.shortName)}</span>
+      // Check for grouping configuration
+      const groupFieldId = view?.config?.groupByFieldId;
+      const groupField = groupFieldId ? set?.fields?.find(f => f.id === groupFieldId) : null;
+      const colspanAll = fields.length + (showProvenance ? 3 : 2);
+
+      if (groupField) {
+        // Grouped table rendering (Airtable-style)
+        const groupedRecords = this._groupRecordsByField(records, groupField);
+
+        groupedRecords.forEach((group, groupIndex) => {
+          const isCollapsed = this.collapsedTableGroups.has(group.key);
+          const groupRecordCount = group.records.length;
+
+          // Render group header row
+          html += `
+            <tr class="table-group-header-row" data-group-key="${this._escapeHtml(group.key)}">
+              <td colspan="${colspanAll}" class="table-group-header-cell">
+                <div class="table-group-header">
+                  <button class="table-group-toggle" data-group-key="${this._escapeHtml(group.key)}">
+                    <i class="ph ${isCollapsed ? 'ph-caret-right' : 'ph-caret-down'}"></i>
+                  </button>
+                  ${group.color ? `<span class="select-tag color-${group.color}">${this._escapeHtml(group.displayName)}</span>` : `<span class="table-group-name">${this._escapeHtml(group.displayName)}</span>`}
+                  <span class="table-group-count">${groupRecordCount}</span>
                 </div>
               </td>
-            ` : ''}
-            ${fields.map(field => this._renderCell(record, field, searchTerm)).join('')}
-            <td class="col-add"></td>
-          </tr>
-        `;
-      });
+            </tr>
+          `;
+
+          // Render records in this group (if not collapsed)
+          if (!isCollapsed) {
+            group.records.forEach((record, index) => {
+              const isSelected = this.selectedRecords.has(record.id);
+              const sourceInfo = showProvenance ? this._getRecordSourceInfo(record, set) : null;
+              html += `
+                <tr data-record-id="${record.id}" data-group-key="${this._escapeHtml(group.key)}" class="${isSelected ? 'selected' : ''}">
+                  <td class="col-row-number">
+                    <input type="checkbox" class="row-checkbox"
+                           data-record-id="${record.id}"
+                           ${isSelected ? 'checked' : ''}>
+                  </td>
+                  ${showProvenance ? `
+                    <td class="col-provenance col-source"
+                        style="width: ${view?.config?.sourceColumnWidth || 120}px;"
+                        data-record-id="${record.id}"
+                        data-source-id="${this._escapeHtml(sourceInfo.sourceId)}"
+                        title="${this._escapeHtml(sourceInfo.tooltip)}">
+                      <div class="provenance-cell">
+                        <span class="provenance-icon ${sourceInfo.type}">${sourceInfo.icon}</span>
+                        <span class="provenance-source-name" data-source="${this._escapeHtml(sourceInfo.source)}" data-source-id="${this._escapeHtml(sourceInfo.sourceId)}">${this._escapeHtml(sourceInfo.shortName)}</span>
+                      </div>
+                    </td>
+                  ` : ''}
+                  ${fields.map(field => this._renderCell(record, field, searchTerm)).join('')}
+                  <td class="col-add"></td>
+                </tr>
+              `;
+            });
+          }
+        });
+      } else {
+        // Flat table rendering (no grouping)
+        records.forEach((record, index) => {
+          const isSelected = this.selectedRecords.has(record.id);
+          const sourceInfo = showProvenance ? this._getRecordSourceInfo(record, set) : null;
+          html += `
+            <tr data-record-id="${record.id}" class="${isSelected ? 'selected' : ''}">
+              <td class="col-row-number">
+                <input type="checkbox" class="row-checkbox"
+                       data-record-id="${record.id}"
+                       ${isSelected ? 'checked' : ''}>
+              </td>
+              ${showProvenance ? `
+                <td class="col-provenance col-source"
+                    style="width: ${view?.config?.sourceColumnWidth || 120}px;"
+                    data-record-id="${record.id}"
+                    data-source-id="${this._escapeHtml(sourceInfo.sourceId)}"
+                    title="${this._escapeHtml(sourceInfo.tooltip)}">
+                  <div class="provenance-cell">
+                    <span class="provenance-icon ${sourceInfo.type}">${sourceInfo.icon}</span>
+                    <span class="provenance-source-name" data-source="${this._escapeHtml(sourceInfo.source)}" data-source-id="${this._escapeHtml(sourceInfo.sourceId)}">${this._escapeHtml(sourceInfo.shortName)}</span>
+                  </div>
+                </td>
+              ` : ''}
+              ${fields.map(field => this._renderCell(record, field, searchTerm)).join('')}
+              <td class="col-add"></td>
+            </tr>
+          `;
+        });
+      }
 
       // Load More button if there are more records
       if (hasMoreRecords) {
         const loadMoreCount = Math.min(this.recordBatchSize, remainingRecords);
         html += `
           <tr class="load-more-row">
-            <td colspan="${fields.length + (showProvenance ? 3 : 2)}" class="load-more-cell">
+            <td colspan="${colspanAll}" class="load-more-cell">
               <button class="load-more-btn" id="load-more-records">
                 <i class="ph ph-caret-down"></i>
                 <span>Load ${loadMoreCount.toLocaleString()} more</span>
@@ -29930,6 +29993,77 @@ class EODataWorkbench {
       );
       this._renderTableView();
     }
+  }
+
+  /**
+   * Group records by a field's values (for grouped table view)
+   * Returns array of groups with { key, displayName, color, records }
+   */
+  _groupRecordsByField(records, groupField) {
+    const groups = new Map();
+
+    // For SELECT fields, use the choices order
+    if (groupField.type === FieldTypes.SELECT && groupField.options?.choices) {
+      // Pre-populate groups in choice order
+      groupField.options.choices.forEach(choice => {
+        groups.set(choice.id, {
+          key: choice.id,
+          displayName: choice.name,
+          color: choice.color || 'gray',
+          records: []
+        });
+      });
+    }
+
+    // Add uncategorized group
+    const uncategorizedKey = '__uncategorized__';
+    groups.set(uncategorizedKey, {
+      key: uncategorizedKey,
+      displayName: 'Uncategorized',
+      color: null,
+      records: []
+    });
+
+    // Group records
+    records.forEach(record => {
+      const value = record.values[groupField.id];
+
+      if (value == null || value === '') {
+        groups.get(uncategorizedKey).records.push(record);
+      } else if (groupField.type === FieldTypes.SELECT) {
+        // For SELECT fields, value is the choice ID
+        if (groups.has(value)) {
+          groups.get(value).records.push(record);
+        } else {
+          // Unknown choice - add to uncategorized
+          groups.get(uncategorizedKey).records.push(record);
+        }
+      } else {
+        // For other field types, use the value as the key
+        const key = String(value);
+        if (!groups.has(key)) {
+          groups.set(key, {
+            key: key,
+            displayName: key,
+            color: null,
+            records: []
+          });
+        }
+        groups.get(key).records.push(record);
+      }
+    });
+
+    // Convert to array and filter out empty groups (except uncategorized if it has records)
+    const result = [];
+    groups.forEach((group, key) => {
+      if (group.records.length > 0 || key !== uncategorizedKey) {
+        if (group.records.length > 0) {
+          result.push(group);
+        }
+      }
+    });
+
+    return result;
   }
 
   /**
@@ -30464,6 +30598,20 @@ class EODataWorkbench {
     // Delegated click handler for the entire table
     table.addEventListener('click', (e) => {
       const target = e.target;
+
+      // Table group toggle (for grouped views)
+      const groupToggle = target.closest('.table-group-toggle');
+      if (groupToggle) {
+        e.stopPropagation();
+        const groupKey = groupToggle.dataset.groupKey;
+        if (this.collapsedTableGroups.has(groupKey)) {
+          this.collapsedTableGroups.delete(groupKey);
+        } else {
+          this.collapsedTableGroups.add(groupKey);
+        }
+        this._renderTableView();
+        return;
+      }
 
       // Select all checkbox
       if (target.id === 'select-all') {
