@@ -4913,10 +4913,26 @@ class EODataWorkbench {
         </div>
         <div class="form-group">
           <label for="view-display" class="form-label">Display as</label>
-          <select id="view-display" class="form-select">
-            <option value="table">Table</option>
-            <option value="cards">Cards</option>
-          </select>
+          <div id="view-display-dropdown" class="icon-select-dropdown">
+            <div class="icon-select-trigger" tabindex="0">
+              <i class="ph ph-table"></i>
+              <span class="icon-select-label">Table</span>
+              <i class="ph ph-caret-down icon-select-caret"></i>
+            </div>
+            <div class="icon-select-options">
+              <div class="icon-select-option selected" data-value="table">
+                <i class="ph ph-table"></i>
+                <span>Table</span>
+                <i class="ph ph-check icon-select-check"></i>
+              </div>
+              <div class="icon-select-option" data-value="cards">
+                <i class="ph ph-cards"></i>
+                <span>Cards</span>
+                <i class="ph ph-check icon-select-check"></i>
+              </div>
+            </div>
+            <input type="hidden" id="view-display" value="table">
+          </div>
           <span class="form-hint">How should records be rendered?</span>
         </div>
       </div>
@@ -4932,7 +4948,10 @@ class EODataWorkbench {
     // Handle organize by change to update display options
     setTimeout(() => {
       const organizeSelect = document.getElementById('view-organize');
-      const displaySelect = document.getElementById('view-display');
+      const displayDropdown = document.getElementById('view-display-dropdown');
+      const displayInput = document.getElementById('view-display');
+      const trigger = displayDropdown?.querySelector('.icon-select-trigger');
+      const optionsContainer = displayDropdown?.querySelector('.icon-select-options');
 
       const updateDisplayOptions = () => {
         const organizeValue = organizeSelect?.value || 'none';
@@ -4944,44 +4963,93 @@ class EODataWorkbench {
         if (organizeType === 'none') {
           // Flat: Table or Cards
           displayOptions = [
-            { value: 'table', label: 'Table' },
-            { value: 'cards', label: 'Cards' }
+            { value: 'table', icon: 'ph-table', label: 'Table' },
+            { value: 'cards', icon: 'ph-cards', label: 'Cards' }
           ];
         } else if (organizeType === 'field') {
-          // Grouped by select field: Table (grouped), Kanban, or Cards
+          // Grouped by select field: Table (grouped), Kanban, Cards, or Graph
           displayOptions = [
-            { value: 'table', label: 'Table (grouped)' },
-            { value: 'kanban', label: 'Kanban board' },
-            { value: 'cards', label: 'Cards (grouped)' }
+            { value: 'table', icon: 'ph-table', label: 'Table (grouped)' },
+            { value: 'kanban', icon: 'ph-kanban', label: 'Kanban board' },
+            { value: 'cards', icon: 'ph-cards', label: 'Cards (grouped)' },
+            { value: 'graph', icon: 'ph-graph', label: 'Graph' }
           ];
         } else if (organizeType === 'date') {
           // By date: Calendar, Timeline, or Table
           displayOptions = [
-            { value: 'calendar', label: 'Calendar' },
-            { value: 'timeline', label: 'Timeline' },
-            { value: 'table', label: 'Table (by date)' }
+            { value: 'calendar', icon: 'ph-calendar-blank', label: 'Calendar' },
+            { value: 'timeline', icon: 'ph-clock-countdown', label: 'Timeline' },
+            { value: 'table', icon: 'ph-table', label: 'Table (by date)' }
           ];
         } else if (organizeType === 'link') {
           // By relationship: Graph or Table
           displayOptions = [
-            { value: 'graph', label: 'Graph' },
-            { value: 'table', label: 'Table' }
+            { value: 'graph', icon: 'ph-graph', label: 'Graph' },
+            { value: 'table', icon: 'ph-table', label: 'Table' }
           ];
         }
 
         // Update display select options
-        if (displaySelect) {
-          const currentValue = displaySelect.value;
-          displaySelect.innerHTML = displayOptions
-            .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
+        if (optionsContainer && displayInput) {
+          const currentValue = displayInput.value;
+          optionsContainer.innerHTML = displayOptions
+            .map(opt => `
+              <div class="icon-select-option ${opt.value === currentValue ? 'selected' : ''}" data-value="${opt.value}">
+                <i class="ph ${opt.icon}"></i>
+                <span>${opt.label}</span>
+                <i class="ph ph-check icon-select-check"></i>
+              </div>
+            `)
             .join('');
 
-          // Try to preserve selection if still valid
-          if (displayOptions.some(opt => opt.value === currentValue)) {
-            displaySelect.value = currentValue;
+          // Try to preserve selection if still valid, otherwise select first
+          const validOption = displayOptions.find(opt => opt.value === currentValue) || displayOptions[0];
+          if (validOption) {
+            displayInput.value = validOption.value;
+            const triggerIcon = trigger?.querySelector('i:first-child');
+            const triggerLabel = trigger?.querySelector('.icon-select-label');
+            if (triggerIcon) triggerIcon.className = `ph ${validOption.icon}`;
+            if (triggerLabel) triggerLabel.textContent = validOption.label;
+
+            // Update selected state
+            optionsContainer.querySelectorAll('.icon-select-option').forEach(opt => {
+              opt.classList.toggle('selected', opt.dataset.value === validOption.value);
+            });
           }
+
+          // Add click handlers to new options
+          optionsContainer.querySelectorAll('.icon-select-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+              const value = opt.dataset.value;
+              const option = displayOptions.find(o => o.value === value);
+              if (option) {
+                displayInput.value = value;
+                const triggerIcon = trigger?.querySelector('i:first-child');
+                const triggerLabel = trigger?.querySelector('.icon-select-label');
+                if (triggerIcon) triggerIcon.className = `ph ${option.icon}`;
+                if (triggerLabel) triggerLabel.textContent = option.label;
+
+                optionsContainer.querySelectorAll('.icon-select-option').forEach(o => {
+                  o.classList.toggle('selected', o.dataset.value === value);
+                });
+                displayDropdown.classList.remove('open');
+              }
+            });
+          });
         }
       };
+
+      // Toggle dropdown on trigger click
+      trigger?.addEventListener('click', () => {
+        displayDropdown.classList.toggle('open');
+      });
+
+      // Close on outside click
+      document.addEventListener('click', (e) => {
+        if (!displayDropdown?.contains(e.target)) {
+          displayDropdown?.classList.remove('open');
+        }
+      });
 
       // Initial update
       updateDisplayOptions();
@@ -5133,10 +5201,26 @@ class EODataWorkbench {
         </div>
         <div class="form-group">
           <label for="view-display" class="form-label">Display as</label>
-          <select id="view-display" class="form-select">
-            <option value="table">Table</option>
-            <option value="cards">Cards</option>
-          </select>
+          <div id="view-display-dropdown" class="icon-select-dropdown">
+            <div class="icon-select-trigger" tabindex="0">
+              <i class="ph ph-table"></i>
+              <span class="icon-select-label">Table</span>
+              <i class="ph ph-caret-down icon-select-caret"></i>
+            </div>
+            <div class="icon-select-options">
+              <div class="icon-select-option selected" data-value="table">
+                <i class="ph ph-table"></i>
+                <span>Table</span>
+                <i class="ph ph-check icon-select-check"></i>
+              </div>
+              <div class="icon-select-option" data-value="cards">
+                <i class="ph ph-cards"></i>
+                <span>Cards</span>
+                <i class="ph ph-check icon-select-check"></i>
+              </div>
+            </div>
+            <input type="hidden" id="view-display" value="table">
+          </div>
           <span class="form-hint">How should records be rendered?</span>
         </div>
       </div>
@@ -5222,7 +5306,10 @@ class EODataWorkbench {
     setTimeout(() => {
       const setSelect = document.getElementById('view-set-select');
       const organizeSelect = document.getElementById('view-organize');
-      const displaySelect = document.getElementById('view-display');
+      const displayDropdown = document.getElementById('view-display-dropdown');
+      const displayInput = document.getElementById('view-display');
+      const trigger = displayDropdown?.querySelector('.icon-select-trigger');
+      const optionsContainer = displayDropdown?.querySelector('.icon-select-options');
 
       const updateOrganizeOptions = () => {
         const setId = setSelect?.value;
@@ -5276,39 +5363,89 @@ class EODataWorkbench {
 
         if (organizeType === 'none') {
           displayOptions = [
-            { value: 'table', label: 'Table' },
-            { value: 'cards', label: 'Cards' }
+            { value: 'table', icon: 'ph-table', label: 'Table' },
+            { value: 'cards', icon: 'ph-cards', label: 'Cards' }
           ];
         } else if (organizeType === 'field') {
           displayOptions = [
-            { value: 'table', label: 'Table (grouped)' },
-            { value: 'kanban', label: 'Kanban board' },
-            { value: 'cards', label: 'Cards (grouped)' }
+            { value: 'table', icon: 'ph-table', label: 'Table (grouped)' },
+            { value: 'kanban', icon: 'ph-kanban', label: 'Kanban board' },
+            { value: 'cards', icon: 'ph-cards', label: 'Cards (grouped)' },
+            { value: 'graph', icon: 'ph-graph', label: 'Graph' }
           ];
         } else if (organizeType === 'date') {
           displayOptions = [
-            { value: 'calendar', label: 'Calendar' },
-            { value: 'timeline', label: 'Timeline' },
-            { value: 'table', label: 'Table (by date)' }
+            { value: 'calendar', icon: 'ph-calendar-blank', label: 'Calendar' },
+            { value: 'timeline', icon: 'ph-clock-countdown', label: 'Timeline' },
+            { value: 'table', icon: 'ph-table', label: 'Table (by date)' }
           ];
         } else if (organizeType === 'link') {
           displayOptions = [
-            { value: 'graph', label: 'Graph' },
-            { value: 'table', label: 'Table' }
+            { value: 'graph', icon: 'ph-graph', label: 'Graph' },
+            { value: 'table', icon: 'ph-table', label: 'Table' }
           ];
         }
 
-        if (displaySelect) {
-          const currentValue = displaySelect.value;
-          displaySelect.innerHTML = displayOptions
-            .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
+        if (optionsContainer && displayInput) {
+          const currentValue = displayInput.value;
+          optionsContainer.innerHTML = displayOptions
+            .map(opt => `
+              <div class="icon-select-option ${opt.value === currentValue ? 'selected' : ''}" data-value="${opt.value}">
+                <i class="ph ${opt.icon}"></i>
+                <span>${opt.label}</span>
+                <i class="ph ph-check icon-select-check"></i>
+              </div>
+            `)
             .join('');
 
-          if (displayOptions.some(opt => opt.value === currentValue)) {
-            displaySelect.value = currentValue;
+          // Try to preserve selection if still valid, otherwise select first
+          const validOption = displayOptions.find(opt => opt.value === currentValue) || displayOptions[0];
+          if (validOption) {
+            displayInput.value = validOption.value;
+            const triggerIcon = trigger?.querySelector('i:first-child');
+            const triggerLabel = trigger?.querySelector('.icon-select-label');
+            if (triggerIcon) triggerIcon.className = `ph ${validOption.icon}`;
+            if (triggerLabel) triggerLabel.textContent = validOption.label;
+
+            // Update selected state
+            optionsContainer.querySelectorAll('.icon-select-option').forEach(opt => {
+              opt.classList.toggle('selected', opt.dataset.value === validOption.value);
+            });
           }
+
+          // Add click handlers to new options
+          optionsContainer.querySelectorAll('.icon-select-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+              const value = opt.dataset.value;
+              const option = displayOptions.find(o => o.value === value);
+              if (option) {
+                displayInput.value = value;
+                const triggerIcon = trigger?.querySelector('i:first-child');
+                const triggerLabel = trigger?.querySelector('.icon-select-label');
+                if (triggerIcon) triggerIcon.className = `ph ${option.icon}`;
+                if (triggerLabel) triggerLabel.textContent = option.label;
+
+                optionsContainer.querySelectorAll('.icon-select-option').forEach(o => {
+                  o.classList.toggle('selected', o.dataset.value === value);
+                });
+                displayDropdown.classList.remove('open');
+              }
+            });
+          });
         }
       };
+
+      // Toggle dropdown on trigger click
+      trigger?.addEventListener('click', () => {
+        displayDropdown.classList.toggle('open');
+      });
+
+      // Close on outside click
+      document.addEventListener('click', (e) => {
+        if (!displayDropdown?.contains(e.target)) {
+          displayDropdown?.classList.remove('open');
+        }
+      });
 
       // Initial update
       updateOrganizeOptions();
