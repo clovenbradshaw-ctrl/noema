@@ -440,6 +440,8 @@ function createSet(name, icon = 'ph-table', options = {}) {
       createView('All Records', 'table')
     ],
     lenses: [], // Lenses are sub-objects of sets, pivoted around a particular field
+    // Display name field - defaults to first column if null
+    displayNameFieldId: null,
     // Dataset provenance for tracking origin
     datasetProvenance: {
       origin: sourceType === 'null' ? 'scratch' : 'import',
@@ -31283,6 +31285,32 @@ class EODataWorkbench {
   }
 
   /**
+   * Get the display name for a record based on the set's displayNameFieldId
+   * Falls back to the first column if displayNameFieldId is not set
+   * @param {Object} set - The set containing the record
+   * @param {Object} record - The record to get the display name for
+   * @returns {string} The display name or 'Untitled' if empty
+   */
+  _getRecordDisplayName(set, record) {
+    if (!set || !record) return 'Untitled';
+
+    // Use displayNameFieldId if set, otherwise fall back to first field
+    const displayFieldId = set.displayNameFieldId || set.fields?.[0]?.id;
+    if (!displayFieldId) return 'Untitled';
+
+    const value = record.values?.[displayFieldId];
+    if (value === null || value === undefined || value === '') return 'Untitled';
+
+    // Handle different value types
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (Array.isArray(value)) return value.join(', ') || 'Untitled';
+
+    return String(value) || 'Untitled';
+  }
+
+  /**
    * Show field modal with editable content and toggleable history
    * Opens when clicking on any cell in the table
    */
@@ -31295,7 +31323,7 @@ class EODataWorkbench {
     const value = record.values[fieldId];
     const fieldName = field.name || 'Field';
     const fieldIcon = FieldTypeIcons[field.type] || 'ph-circle';
-    const primaryFieldValue = record.values[set.primaryFieldId] || 'Untitled';
+    const displayName = this._getRecordDisplayName(set, record);
 
     // Check if field is editable
     const isEditable = ![FieldTypes.FORMULA, FieldTypes.ROLLUP, FieldTypes.COUNT, FieldTypes.AUTONUMBER].includes(field.type);
@@ -31324,7 +31352,7 @@ class EODataWorkbench {
       content: `
         <div class="field-modal-container">
           <div class="field-modal-record-context">
-            Record: ${this._escapeHtml(primaryFieldValue)}
+            Record: ${this._escapeHtml(displayName)}
           </div>
 
           <div class="field-modal-editor-section">
@@ -36614,8 +36642,19 @@ class EODataWorkbench {
         <i class="ph ph-eye-slash"></i>
         <span>Hide field</span>
       </div>
+      <div class="context-menu-divider"></div>
+      ${(() => {
+        // Check if this field is currently the display name field
+        const isCurrentDisplayName = set.displayNameFieldId === fieldId ||
+          (!set.displayNameFieldId && fieldIndex === 0);
+        return `
+          <div class="context-menu-item ${isCurrentDisplayName ? 'disabled' : ''}" data-action="set-display-name" ${isCurrentDisplayName ? 'style="opacity: 0.5; cursor: default;"' : ''}>
+            <i class="ph ${isCurrentDisplayName ? 'ph-check' : 'ph-identification-card'}"></i>
+            <span>${isCurrentDisplayName ? 'Display name column' : 'Set as display name'}</span>
+          </div>
+        `;
+      })()}
       ${!field.isPrimary ? `
-        <div class="context-menu-divider"></div>
         <div class="context-menu-item danger" data-action="delete">
           <i class="ph ph-trash"></i>
           <span>Delete field</span>
@@ -36708,6 +36747,9 @@ class EODataWorkbench {
             break;
           case 'hide':
             this._hideField(fieldId);
+            break;
+          case 'set-display-name':
+            this._setDisplayNameField(fieldId);
             break;
           case 'delete':
             this._deleteField(fieldId);
@@ -37092,6 +37134,46 @@ class EODataWorkbench {
 
     this._saveData();
     this._renderView();
+  }
+
+  /**
+   * Set a field as the display name column for records in this set
+   * @param {string} fieldId - The ID of the field to set as display name
+   */
+  _setDisplayNameField(fieldId) {
+    const set = this.getCurrentSet();
+    if (!set) return;
+
+    const field = set.fields?.find(f => f.id === fieldId);
+    if (!field) return;
+
+    // Get the previous display name field for activity logging
+    const previousFieldId = set.displayNameFieldId;
+    const previousField = previousFieldId
+      ? set.fields?.find(f => f.id === previousFieldId)
+      : set.fields?.[0];
+
+    // Update the display name field
+    set.displayNameFieldId = fieldId;
+
+    // Record activity for changing display name field
+    this._recordActivity({
+      action: 'update',
+      entityType: 'set',
+      name: set.name,
+      details: `Changed display name column from "${previousField?.name || 'first column'}" to "${field.name}"`,
+      payload: {
+        action: 'display_name_changed',
+        setId: set.id,
+        previousFieldId: previousFieldId,
+        newFieldId: fieldId,
+        previousFieldName: previousField?.name || null,
+        newFieldName: field.name
+      }
+    });
+
+    this._saveData();
+    this._showToast(`"${field.name}" is now the display name column`, 'success');
   }
 
   // --------------------------------------------------------------------------
