@@ -1,0 +1,3328 @@
+{
+"$schema": "https://example.org/schemas/definition-library/v1",
+"version": "1.0.0",
+"generated": "2026-01-06",
+"totalDefinitions": 100,
+"categories": [
+"identity",
+"contact",
+"temporal",
+"financial",
+"status",
+"relational",
+"organizational",
+"descriptive",
+"technical"
+],
+"definitions": [
+{
+"id": "definition.uniqueIdentifier",
+"meaning": "Unique Identifier",
+"plainLanguage": "A stable identifier used to uniquely refer to an entity across systems and time.",
+"refersTo": ["GenericEntity"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"http://purl.org/dc/terms/identifier",
+"http://www.w3.org/2006/vcard/ns#hasUID"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Changing this meaning would invalidate joins, references, and external integrations.",
+"category": "identity"
+},
+{
+"id": "definition.firstName",
+"meaning": "First Name",
+"plainLanguage": "The given name by which a person is primarily identified, typically assigned at birth.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/givenName",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/givenName",
+"http://www.w3.org/2006/vcard/ns#given-name"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority"]
+},
+"notes": "May change through legal name change; not reliable as identifier.",
+"category": "identity"
+},
+{
+"id": "definition.lastName",
+"meaning": "Last Name",
+"plainLanguage": "The family name or surname by which a person is identified.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/familyName",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/familyName",
+"http://www.w3.org/2006/vcard/ns#family-name"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority"]
+},
+"notes": "May change through marriage or legal process.",
+"category": "identity"
+},
+{
+"id": "definition.fullName",
+"meaning": "Full Name",
+"plainLanguage": "The complete name by which a person or organization is commonly identified.",
+"refersTo": ["Person", "Organization"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/name",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/name",
+"http://www.w3.org/2006/vcard/ns#fn"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "used for display and search"]
+},
+"notes": "Not reliable as an identifier; formatting and ordering may vary.",
+"category": "identity"
+},
+{
+"id": "definition.middleName",
+"meaning": "Middle Name",
+"plainLanguage": "An additional given name positioned between the first and last names.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/additionalName",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#additional-name"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority"]
+},
+"notes": "Optional in many cultures; may be absent or multiple.",
+"category": "identity"
+},
+{
+"id": "definition.prefix",
+"meaning": "Name Prefix",
+"plainLanguage": "An honorific or title appearing before a person's name.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/honorificPrefix",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/title",
+"http://www.w3.org/2006/vcard/ns#honorific-prefix"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Common values: Mr., Ms., Mrs., Dr., Prof.",
+"category": "identity"
+},
+{
+"id": "definition.suffix",
+"meaning": "Name Suffix",
+"plainLanguage": "A designation appearing after a person's name indicating generation, credentials, or honors.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/honorificSuffix",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#honorific-suffix"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Common values: Jr., Sr., III, Esq., PhD, MD.",
+"category": "identity"
+},
+{
+"id": "definition.dateOfBirth",
+"meaning": "Date of Birth",
+"plainLanguage": "The calendar date on which a person was born.",
+"refersTo": ["Person"],
+"stability": "stable",
+"time": "immutable",
+"authority": "external",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/birthDate",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#bday",
+"http://www.wikidata.org/prop/direct/P569"
+]
+},
+"valueShape": {
+"datatype": "xsd:date",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "external authority"]
+},
+"notes": "Used for age verification and identity confirmation.",
+"category": "identity"
+},
+{
+"id": "definition.age",
+"meaning": "Age",
+"plainLanguage": "The number of years a person has lived since birth.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "integer",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "derived value"]
+},
+"notes": "Should be calculated from dateOfBirth rather than stored independently.",
+"category": "identity"
+},
+{
+"id": "definition.gender",
+"meaning": "Gender",
+"plainLanguage": "The gender identity by which a person identifies themselves.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/gender",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/gender",
+"http://www.w3.org/2006/vcard/ns#hasGender"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "moderate sensitivity", "human authority"]
+},
+"notes": "Distinct from biological sex; may change through self-identification.",
+"category": "identity"
+},
+{
+"id": "definition.raceEthnicity",
+"meaning": "Race or Ethnicity",
+"plainLanguage": "The racial or ethnic group with which a person identifies.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "high",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.wikidata.org/prop/direct/P172",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "contextual stability", "human authority"]
+},
+"notes": "Categories vary by jurisdiction and reporting requirements.",
+"category": "identity"
+},
+{
+"id": "definition.socialSecurityNumber",
+"meaning": "Social Security Number",
+"plainLanguage": "A government-issued numeric identifier assigned to individuals for tax and benefit purposes.",
+"refersTo": ["Person"],
+"stability": "stable",
+"time": "immutable",
+"authority": "external",
+"sensitivity": "high",
+"interop": {
+"status": "deferred",
+"preferredURI": "https://schema.org/taxID",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "XXX-XX-XXXX",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "external authority", "identity theft risk"]
+},
+"notes": "US-specific; requires encryption at rest and in transit.",
+"category": "identity"
+},
+{
+"id": "definition.driversLicenseNumber",
+"meaning": "Driver's License Number",
+"plainLanguage": "A government-issued identifier authorizing an individual to operate motor vehicles.",
+"refersTo": ["Person"],
+"stability": "stable",
+"time": "versioned",
+"authority": "external",
+"sensitivity": "high",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "external authority"]
+},
+"notes": "Format varies by issuing jurisdiction; may be reissued.",
+"category": "identity"
+},
+{
+"id": "definition.passportNumber",
+"meaning": "Passport Number",
+"plainLanguage": "A government-issued identifier appearing on a travel document authorizing international travel.",
+"refersTo": ["Person"],
+"stability": "stable",
+"time": "versioned",
+"authority": "external",
+"sensitivity": "high",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "external authority"]
+},
+"notes": "Changes on renewal; format varies by country.",
+"category": "identity"
+},
+{
+"id": "definition.email",
+"meaning": "Email Address",
+"plainLanguage": "An electronic mail address used to contact a person or organization.",
+"refersTo": ["Person", "Organization"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/email",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#hasEmail",
+"http://xmlns.com/foaf/0.1/mbox"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "email",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "used for communication and login"]
+},
+"notes": "Should not be treated as a stable identifier.",
+"category": "contact"
+},
+{
+"id": "definition.phone",
+"meaning": "Phone Number",
+"plainLanguage": "A telephone number used to reach a person or organization by voice or text.",
+"refersTo": ["Person", "Organization"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/telephone",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#hasTelephone",
+"http://xmlns.com/foaf/0.1/phone"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "E.164",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "contextual stability"]
+},
+"notes": "Store in E.164 format for international compatibility.",
+"category": "contact"
+},
+{
+"id": "definition.mobilePhone",
+"meaning": "Mobile Phone Number",
+"plainLanguage": "A telephone number associated with a portable cellular device.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/telephone",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#Cell"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "E.164",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "contextual stability"]
+},
+"notes": "Often used for two-factor authentication.",
+"category": "contact"
+},
+{
+"id": "definition.workPhone",
+"meaning": "Work Phone Number",
+"plainLanguage": "A telephone number associated with a person's place of employment.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/telephone",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#Work"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "E.164",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability"]
+},
+"notes": "Tied to employment; changes with job changes.",
+"category": "contact"
+},
+{
+"id": "definition.fax",
+"meaning": "Fax Number",
+"plainLanguage": "A telephone number for receiving facsimile transmissions.",
+"refersTo": ["Person", "Organization"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/faxNumber",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#Fax"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "E.164",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Declining in usage; often organizational rather than personal.",
+"category": "contact"
+},
+{
+"id": "definition.streetAddress",
+"meaning": "Street Address",
+"plainLanguage": "The street number and name portion of a physical mailing address.",
+"refersTo": ["Location"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/streetAddress",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#street-address"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "contextual stability"]
+},
+"notes": "Part of postal address; combine with city, state, postal code.",
+"category": "contact"
+},
+{
+"id": "definition.addressLine2",
+"meaning": "Address Line 2",
+"plainLanguage": "Secondary address information such as apartment, suite, or unit number.",
+"refersTo": ["Location"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/streetAddress",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#extended-address"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "contextual stability"]
+},
+"notes": "Optional; vCard extended-address is deprecated in favor of combined streetAddress.",
+"category": "contact"
+},
+{
+"id": "definition.city",
+"meaning": "City",
+"plainLanguage": "The name of the municipality or locality within an address.",
+"refersTo": ["Location"],
+"stability": "stable",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/addressLocality",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#locality"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Municipal names rarely change but boundaries may shift.",
+"category": "contact"
+},
+{
+"id": "definition.state",
+"meaning": "State or Province",
+"plainLanguage": "The administrative region or territory within a country.",
+"refersTo": ["Location"],
+"stability": "stable",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/addressRegion",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#region"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "ISO-3166-2",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Use ISO 3166-2 codes for interoperability.",
+"category": "contact"
+},
+{
+"id": "definition.postalCode",
+"meaning": "Postal Code",
+"plainLanguage": "A code used by postal services to identify a geographic delivery area.",
+"refersTo": ["Location"],
+"stability": "stable",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/postalCode",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#postal-code"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Format varies by country; US uses 5 or 9 digit ZIP codes.",
+"category": "contact"
+},
+{
+"id": "definition.county",
+"meaning": "County",
+"plainLanguage": "An administrative division between city and state, typically used for local governance.",
+"refersTo": ["Location"],
+"stability": "stable",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": [
+"http://www.wikidata.org/prop/direct/P131"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "US-centric; other countries use different administrative divisions.",
+"category": "contact"
+},
+{
+"id": "definition.country",
+"meaning": "Country",
+"plainLanguage": "The nation or sovereign state associated with an address or entity.",
+"refersTo": ["Location"],
+"stability": "stable",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/addressCountry",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#country-name"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "ISO-3166-1",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Use ISO 3166-1 alpha-2 codes for interoperability.",
+"category": "contact"
+},
+{
+"id": "definition.latitude",
+"meaning": "Latitude",
+"plainLanguage": "The angular distance north or south of the equator, expressed in degrees.",
+"refersTo": ["Location"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/latitude",
+"alternativeURIs": [
+"http://www.w3.org/2003/01/geo/wgs84_pos#lat"
+]
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity when combined with longitude"]
+},
+"notes": "Range: -90 to 90; use WGS84 datum.",
+"category": "contact"
+},
+{
+"id": "definition.longitude",
+"meaning": "Longitude",
+"plainLanguage": "The angular distance east or west of the prime meridian, expressed in degrees.",
+"refersTo": ["Location"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/longitude",
+"alternativeURIs": [
+"http://www.w3.org/2003/01/geo/wgs84_pos#long"
+]
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity when combined with latitude"]
+},
+"notes": "Range: -180 to 180; use WGS84 datum.",
+"category": "contact"
+},
+{
+"id": "definition.fullAddress",
+"meaning": "Full Address",
+"plainLanguage": "A complete postal address including all components needed for mail delivery.",
+"refersTo": ["Location"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/address",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#hasAddress"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "contextual stability"]
+},
+"notes": "Prefer structured address components over concatenated string.",
+"category": "contact"
+},
+{
+"id": "definition.poBox",
+"meaning": "Post Office Box",
+"plainLanguage": "A numbered box at a post office where mail is held for collection.",
+"refersTo": ["Location"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/postOfficeBoxNumber",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#post-office-box"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Alternative to street address; cannot receive packages from some carriers.",
+"category": "contact"
+},
+{
+"id": "definition.createdDate",
+"meaning": "Created Date",
+"plainLanguage": "The date and time when this record was originally created.",
+"refersTo": ["Record"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://purl.org/dc/terms/created",
+"alternativeURIs": [
+"https://schema.org/dateCreated"
+]
+},
+"valueShape": {
+"datatype": "xsd:dateTime",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Often used for auditing, sorting, and lifecycle calculations.",
+"category": "temporal"
+},
+{
+"id": "definition.modifiedDate",
+"meaning": "Modified Date",
+"plainLanguage": "The date and time when this record was last updated.",
+"refersTo": ["Record"],
+"stability": "stable",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://purl.org/dc/terms/modified",
+"alternativeURIs": [
+"https://schema.org/dateModified"
+]
+},
+"valueShape": {
+"datatype": "xsd:dateTime",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Should be updated automatically by the system on any change.",
+"category": "temporal"
+},
+{
+"id": "definition.deletedDate",
+"meaning": "Deleted Date",
+"plainLanguage": "The date and time when this record was marked for deletion or removed.",
+"refersTo": ["Record"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/ns/prov#invalidatedAtTime",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "xsd:dateTime",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Used for soft deletes; null indicates active record.",
+"category": "temporal"
+},
+{
+"id": "definition.startDate",
+"meaning": "Start Date",
+"plainLanguage": "The date and time when an event, period, or validity begins.",
+"refersTo": ["Event", "Period"],
+"stability": "stable",
+"time": "immutable",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/startDate",
+"alternativeURIs": [
+"https://schema.org/validFrom"
+]
+},
+"valueShape": {
+"datatype": "xsd:dateTime",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Defines the beginning of a time-bounded entity.",
+"category": "temporal"
+},
+{
+"id": "definition.endDate",
+"meaning": "End Date",
+"plainLanguage": "The date and time when an event, period, or validity concludes.",
+"refersTo": ["Event", "Period"],
+"stability": "stable",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/endDate",
+"alternativeURIs": [
+"https://schema.org/validThrough",
+"https://schema.org/expires"
+]
+},
+"valueShape": {
+"datatype": "xsd:dateTime",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "May be null for ongoing or indefinite periods.",
+"category": "temporal"
+},
+{
+"id": "definition.timestamp",
+"meaning": "Timestamp",
+"plainLanguage": "A precise moment in time, typically including both date and time components.",
+"refersTo": ["Record", "Event"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/2001/XMLSchema#dateTime",
+"alternativeURIs": [
+"https://schema.org/DateTime"
+]
+},
+"valueShape": {
+"datatype": "xsd:dateTime",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Store in UTC; convert to local time for display.",
+"category": "temporal"
+},
+{
+"id": "definition.year",
+"meaning": "Year",
+"plainLanguage": "A four-digit representation of a calendar year.",
+"refersTo": ["Period"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/2001/XMLSchema#gYear",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "xsd:gYear",
+"format": "YYYY",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Use when only year precision is meaningful.",
+"category": "temporal"
+},
+{
+"id": "definition.month",
+"meaning": "Month",
+"plainLanguage": "A numeric representation of a month within a year.",
+"refersTo": ["Period"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/2001/XMLSchema#gMonth",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "xsd:gMonth",
+"format": "--MM",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Values 1-12; often combined with year for period references.",
+"category": "temporal"
+},
+{
+"id": "definition.day",
+"meaning": "Day",
+"plainLanguage": "A numeric representation of a day within a month.",
+"refersTo": ["Period"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/2001/XMLSchema#gDay",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "xsd:gDay",
+"format": "---DD",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Values 1-31; valid range depends on month.",
+"category": "temporal"
+},
+{
+"id": "definition.time",
+"meaning": "Time",
+"plainLanguage": "A representation of time of day without date information.",
+"refersTo": ["Event"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/2001/XMLSchema#time",
+"alternativeURIs": [
+"https://schema.org/Time"
+]
+},
+"valueShape": {
+"datatype": "xsd:time",
+"format": "HH:MM:SS",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "24-hour format; include timezone offset when relevant.",
+"category": "temporal"
+},
+{
+"id": "definition.duration",
+"meaning": "Duration",
+"plainLanguage": "The length of time between two points, expressed as a measurable interval.",
+"refersTo": ["Period"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/duration",
+"alternativeURIs": [
+"http://www.w3.org/2001/XMLSchema#duration"
+]
+},
+"valueShape": {
+"datatype": "xsd:duration",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "ISO 8601 format: P[n]Y[n]M[n]DT[n]H[n]M[n]S",
+"category": "temporal"
+},
+{
+"id": "definition.fiscalYear",
+"meaning": "Fiscal Year",
+"plainLanguage": "A twelve-month accounting period used for financial reporting, which may differ from the calendar year.",
+"refersTo": ["Period", "FinancialValue"],
+"stability": "stable",
+"time": "immutable",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "FYxxxx",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["no standard URI", "process authority"]
+},
+"notes": "Start date varies by organization; US federal is Oct 1.",
+"category": "temporal"
+},
+{
+"id": "definition.quarter",
+"meaning": "Quarter",
+"plainLanguage": "A three-month period representing one fourth of a fiscal or calendar year.",
+"refersTo": ["Period", "FinancialValue"],
+"stability": "stable",
+"time": "immutable",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "Qn",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["no standard URI", "process authority"]
+},
+"notes": "Values Q1-Q4; must be paired with year for unambiguous reference.",
+"category": "temporal"
+},
+{
+"id": "definition.date",
+"meaning": "Date",
+"plainLanguage": "A calendar date without time information.",
+"refersTo": ["Event", "Record"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://purl.org/dc/terms/date",
+"alternativeURIs": [
+"http://www.w3.org/2001/XMLSchema#date"
+]
+},
+"valueShape": {
+"datatype": "xsd:date",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Use when time precision is not required.",
+"category": "temporal"
+},
+{
+"id": "definition.amount",
+"meaning": "Amount",
+"plainLanguage": "A numeric monetary value expressed in a specified currency.",
+"refersTo": ["FinancialValue"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/amount",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "commonly used category"]
+},
+"notes": "Should be paired with a currency definition using ISO 4217 codes.",
+"category": "financial"
+},
+{
+"id": "definition.price",
+"meaning": "Price",
+"plainLanguage": "The monetary value asked or offered in exchange for a product or service.",
+"refersTo": ["Transaction", "Product"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/price",
+"alternativeURIs": [
+"http://purl.org/goodrelations/v1#hasCurrencyValue"
+]
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "process authority"]
+},
+"notes": "Prices change over time; version or timestamp for historical accuracy.",
+"category": "financial"
+},
+{
+"id": "definition.cost",
+"meaning": "Cost",
+"plainLanguage": "The monetary expenditure incurred to acquire or produce something.",
+"refersTo": ["FinancialValue", "Transaction"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/price",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity"]
+},
+"notes": "Distinct from price; represents buyer's perspective.",
+"category": "financial"
+},
+{
+"id": "definition.revenue",
+"meaning": "Revenue",
+"plainLanguage": "The total income generated from business activities before expenses are deducted.",
+"refersTo": ["Organization", "FinancialValue"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/yearlyRevenue",
+"alternativeURIs": [
+"http://www.wikidata.org/prop/direct/P2139"
+]
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity"]
+},
+"notes": "Typically aggregated over a period; pair with fiscal period.",
+"category": "financial"
+},
+{
+"id": "definition.balance",
+"meaning": "Balance",
+"plainLanguage": "The net amount remaining in an account after debits and credits.",
+"refersTo": ["FinancialValue", "Account"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "high",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "contextual stability", "commonly used"]
+},
+"notes": "Point-in-time value; changes with each transaction.",
+"category": "financial"
+},
+{
+"id": "definition.paymentAmount",
+"meaning": "Payment Amount",
+"plainLanguage": "The monetary sum transferred to satisfy an obligation or purchase.",
+"refersTo": ["Transaction", "FinancialValue"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/totalPaymentDue",
+"alternativeURIs": [
+"https://schema.org/minimumPaymentDue"
+]
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity"]
+},
+"notes": "Immutable once payment is recorded.",
+"category": "financial"
+},
+{
+"id": "definition.currency",
+"meaning": "Currency",
+"plainLanguage": "The system of money in which a monetary value is denominated.",
+"refersTo": ["FinancialValue"],
+"stability": "stable",
+"time": "immutable",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/currency",
+"alternativeURIs": [
+"https://schema.org/priceCurrency"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "ISO-4217",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Use ISO 4217 three-letter codes: USD, EUR, GBP, etc.",
+"category": "financial"
+},
+{
+"id": "definition.accountNumber",
+"meaning": "Account Number",
+"plainLanguage": "A numeric or alphanumeric identifier assigned to a financial or customer account.",
+"refersTo": ["Account"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "high",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/accountId",
+"alternativeURIs": [
+"https://schema.org/identifier"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "identity-level identifier"]
+},
+"notes": "Requires protection; often partially masked in display.",
+"category": "financial"
+},
+{
+"id": "definition.routingNumber",
+"meaning": "Routing Number",
+"plainLanguage": "A nine-digit code identifying a US financial institution for electronic transfers.",
+"refersTo": ["Organization"],
+"stability": "stable",
+"time": "immutable",
+"authority": "external",
+"sensitivity": "moderate",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "XXXXXXXXX",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "external authority"]
+},
+"notes": "US-specific ABA routing transit number; also called RTN.",
+"category": "financial"
+},
+{
+"id": "definition.creditCardNumber",
+"meaning": "Credit Card Number",
+"plainLanguage": "A numeric identifier embossed on a payment card used for transactions.",
+"refersTo": ["PaymentMethod"],
+"stability": "stable",
+"time": "versioned",
+"authority": "external",
+"sensitivity": "high",
+"interop": {
+"status": "deferred",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "PAN",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "PCI-DSS regulated", "external authority"]
+},
+"notes": "Subject to PCI-DSS; never store full PAN unencrypted.",
+"category": "financial"
+},
+{
+"id": "definition.transactionId",
+"meaning": "Transaction Identifier",
+"plainLanguage": "A unique code assigned to a specific financial or business transaction.",
+"refersTo": ["Transaction"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"https://schema.org/confirmationNumber"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Primary key for transaction records; must be globally unique.",
+"category": "financial"
+},
+{
+"id": "definition.invoiceNumber",
+"meaning": "Invoice Number",
+"plainLanguage": "A unique identifier assigned to a billing document requesting payment.",
+"refersTo": ["Transaction", "Document"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"https://schema.org/confirmationNumber"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Often sequential within an organization.",
+"category": "financial"
+},
+{
+"id": "definition.taxAmount",
+"meaning": "Tax Amount",
+"plainLanguage": "The monetary value of taxes applied to a transaction.",
+"refersTo": ["Transaction", "FinancialValue"],
+"stability": "stable",
+"time": "immutable",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "May require breakdown by tax jurisdiction.",
+"category": "financial"
+},
+{
+"id": "definition.discount",
+"meaning": "Discount",
+"plainLanguage": "A reduction from the standard price of a product or service.",
+"refersTo": ["Transaction", "FinancialValue"],
+"stability": "contextual",
+"time": "immutable",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/discount",
+"alternativeURIs": [
+"https://schema.org/discountCode",
+"https://schema.org/discountCurrency"
+]
+},
+"valueShape": {
+"datatype": "number",
+"format": "decimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "May be absolute amount or percentage; clarify in context.",
+"category": "financial"
+},
+{
+"id": "definition.status",
+"meaning": "Status",
+"plainLanguage": "A label indicating the current state of an entity within a defined process or lifecycle.",
+"refersTo": ["GenericEntity", "ProcessState"],
+"stability": "interpretive",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/status",
+"alternativeURIs": [
+"https://schema.org/actionStatus",
+"https://schema.org/orderStatus"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["interpretive meaning", "used in automation and filtering"]
+},
+"notes": "Meaning depends entirely on the process that defines valid states.",
+"category": "status"
+},
+{
+"id": "definition.type",
+"meaning": "Type",
+"plainLanguage": "A classification that identifies the fundamental kind or category of an entity.",
+"refersTo": ["GenericEntity"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://purl.org/dc/terms/type",
+"alternativeURIs": [
+"http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+"http://www.wikidata.org/prop/direct/P31"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Typically immutable after creation; changing type often requires new record.",
+"category": "status"
+},
+{
+"id": "definition.category",
+"meaning": "Category",
+"plainLanguage": "A grouping or classification used to organize entities by shared characteristics.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/category",
+"alternativeURIs": [
+"http://purl.org/dc/terms/subject",
+"http://www.w3.org/2004/02/skos/core#Concept"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority"]
+},
+"notes": "Categories may be hierarchical; see subcategory.",
+"category": "status"
+},
+{
+"id": "definition.subcategory",
+"meaning": "Subcategory",
+"plainLanguage": "A more specific classification nested within a broader category.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/2004/02/skos/core#narrower",
+"alternativeURIs": [
+"http://purl.org/dc/terms/isPartOf"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority"]
+},
+"notes": "Must reference a valid parent category.",
+"category": "status"
+},
+{
+"id": "definition.priority",
+"meaning": "Priority",
+"plainLanguage": "A ranking that indicates the relative importance or urgency of handling an item.",
+"refersTo": ["ProcessState", "GenericEntity"],
+"stability": "interpretive",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": [
+"https://schema.org/position"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["interpretive meaning", "human authority"]
+},
+"notes": "Common values: Low, Medium, High, Critical.",
+"category": "status"
+},
+{
+"id": "definition.active",
+"meaning": "Active Flag",
+"plainLanguage": "A boolean indicator showing whether an entity is currently in use or operational.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "boolean",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability"]
+},
+"notes": "Often used as soft-delete indicator; false = inactive.",
+"category": "status"
+},
+{
+"id": "definition.approved",
+"meaning": "Approved Flag",
+"plainLanguage": "A boolean indicator showing whether an entity has received formal approval.",
+"refersTo": ["ProcessState", "GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://purl.org/dc/terms/dateAccepted",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "boolean",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "process authority"]
+},
+"notes": "Often paired with approvedDate and approvedBy fields.",
+"category": "status"
+},
+{
+"id": "definition.verified",
+"meaning": "Verified Flag",
+"plainLanguage": "A boolean indicator showing whether information has been confirmed as accurate.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": [
+"http://www.w3.org/ns/prov#wasAttributedTo"
+]
+},
+"valueShape": {
+"datatype": "boolean",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "process authority"]
+},
+"notes": "Should track verification method and timestamp separately.",
+"category": "status"
+},
+{
+"id": "definition.source",
+"meaning": "Source",
+"plainLanguage": "The origin from which data or information was obtained.",
+"refersTo": ["Record", "GenericEntity"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://purl.org/dc/terms/source",
+"alternativeURIs": [
+"http://www.w3.org/ns/prov#wasDerivedFrom",
+"http://www.w3.org/ns/prov#hadPrimarySource"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Essential for data lineage and provenance tracking.",
+"category": "status"
+},
+{
+"id": "definition.channel",
+"meaning": "Channel",
+"plainLanguage": "The medium or pathway through which a transaction or communication occurred.",
+"refersTo": ["Transaction", "Event"],
+"stability": "interpretive",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["interpretive meaning", "no standard URI"]
+},
+"notes": "Common values: Web, Mobile, Phone, In-Person, API.",
+"category": "status"
+},
+{
+"id": "definition.tags",
+"meaning": "Tags",
+"plainLanguage": "User-assigned labels used for organizing, searching, or filtering content.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/keywords",
+"alternativeURIs": [
+"http://purl.org/dc/terms/subject",
+"http://www.w3.org/2004/02/skos/core#prefLabel"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority"]
+},
+"notes": "Freeform unless constrained by controlled vocabulary.",
+"category": "status"
+},
+{
+"id": "definition.parentId",
+"meaning": "Parent Identifier",
+"plainLanguage": "A reference to the hierarchically superior entity that contains or owns this entity.",
+"refersTo": ["GenericEntity"],
+"stability": "stable",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://purl.org/dc/terms/isPartOf",
+"alternativeURIs": [
+"https://schema.org/isPartOf",
+"http://www.w3.org/2004/02/skos/core#broader"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Creates tree structures; null indicates root-level entity.",
+"category": "relational"
+},
+{
+"id": "definition.customerId",
+"meaning": "Customer Identifier",
+"plainLanguage": "A unique reference to a person or organization that purchases goods or services.",
+"refersTo": ["Person", "Organization"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/customer",
+"alternativeURIs": [
+"https://schema.org/identifier"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "commonly used for joins"]
+},
+"notes": "Primary key for customer records across systems.",
+"category": "relational"
+},
+{
+"id": "definition.userId",
+"meaning": "User Identifier",
+"plainLanguage": "A unique reference to a person who interacts with a system or application.",
+"refersTo": ["Person"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/accountName"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "commonly used for authentication"]
+},
+"notes": "Distinct from customerId; may overlap if customer has account.",
+"category": "relational"
+},
+{
+"id": "definition.accountId",
+"meaning": "Account Identifier",
+"plainLanguage": "A unique reference to a user account or business account within a system.",
+"refersTo": ["Account"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/accountId",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/account"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity"]
+},
+"notes": "May represent financial account, user account, or business account.",
+"category": "relational"
+},
+{
+"id": "definition.organizationId",
+"meaning": "Organization Identifier",
+"plainLanguage": "A unique reference to a company, institution, or other organized entity.",
+"refersTo": ["Organization"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"https://schema.org/leiCode",
+"https://schema.org/duns",
+"https://schema.org/taxID"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "May link to external identifiers like DUNS or LEI.",
+"category": "relational"
+},
+{
+"id": "definition.caseId",
+"meaning": "Case Identifier",
+"plainLanguage": "A unique reference to a support case, legal case, or incident record.",
+"refersTo": ["Case"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "may contain legal information"]
+},
+"notes": "Format varies by domain: legal, support, medical, etc.",
+"category": "relational"
+},
+{
+"id": "definition.orderId",
+"meaning": "Order Identifier",
+"plainLanguage": "A unique reference to a purchase order or sales order.",
+"refersTo": ["Transaction"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/orderNumber",
+"alternativeURIs": [
+"https://schema.org/confirmationNumber"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Often displayed to customers; may follow sequential pattern.",
+"category": "relational"
+},
+{
+"id": "definition.productId",
+"meaning": "Product Identifier",
+"plainLanguage": "A unique reference to a specific good or service offered for sale.",
+"refersTo": ["Product"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/productID",
+"alternativeURIs": [
+"https://schema.org/sku",
+"https://schema.org/gtin",
+"https://schema.org/mpn"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "May link to SKU, GTIN, or manufacturer part number.",
+"category": "relational"
+},
+{
+"id": "definition.vendorId",
+"meaning": "Vendor Identifier",
+"plainLanguage": "A unique reference to a supplier or service provider.",
+"refersTo": ["Organization"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"https://schema.org/duns"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Used in procurement and accounts payable contexts.",
+"category": "relational"
+},
+{
+"id": "definition.employeeId",
+"meaning": "Employee Identifier",
+"plainLanguage": "A unique reference to a person employed by an organization.",
+"refersTo": ["Person"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "HR data"]
+},
+"notes": "Internal identifier; persists even if employee leaves and returns.",
+"category": "relational"
+},
+{
+"id": "definition.companyName",
+"meaning": "Company Name",
+"plainLanguage": "The official name under which an organization conducts business.",
+"refersTo": ["Organization"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/name",
+"alternativeURIs": [
+"https://schema.org/legalName",
+"http://xmlns.com/foaf/0.1/name"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "external authority"]
+},
+"notes": "May differ from legal name; see legalName for registered name.",
+"category": "organizational"
+},
+{
+"id": "definition.department",
+"meaning": "Department",
+"plainLanguage": "A division or unit within an organization responsible for a specific function.",
+"refersTo": ["Organization"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/department",
+"alternativeURIs": [
+"http://www.w3.org/ns/org#hasUnit",
+"http://www.w3.org/2006/vcard/ns#organization-unit"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "process authority"]
+},
+"notes": "Organizations frequently restructure departments.",
+"category": "organizational"
+},
+{
+"id": "definition.jobTitle",
+"meaning": "Job Title",
+"plainLanguage": "The official designation of a person's role within an organization.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/jobTitle",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#title",
+"http://xmlns.com/foaf/0.1/title"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "process authority"]
+},
+"notes": "Changes with promotions; maintain history if needed.",
+"category": "organizational"
+},
+{
+"id": "definition.role",
+"meaning": "Role",
+"plainLanguage": "A function or position that defines a person's responsibilities and permissions.",
+"refersTo": ["Person", "ProcessState"],
+"stability": "interpretive",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/roleName",
+"alternativeURIs": [
+"http://www.w3.org/ns/org#role",
+"http://www.w3.org/2006/vcard/ns#role"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "controlled-vocabulary",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["interpretive meaning", "process authority", "used in authorization"]
+},
+"notes": "Often used for access control; distinct from job title.",
+"category": "organizational"
+},
+{
+"id": "definition.manager",
+"meaning": "Manager",
+"plainLanguage": "The person to whom an employee reports within an organizational hierarchy.",
+"refersTo": ["Person"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "http://www.w3.org/ns/org#reportsTo",
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "process authority"]
+},
+"notes": "Reference to employeeId; changes with reorganizations.",
+"category": "organizational"
+},
+{
+"id": "definition.employeeNumber",
+"meaning": "Employee Number",
+"plainLanguage": "A sequential or formatted number assigned to identify an employee.",
+"refersTo": ["Person"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"http://purl.org/dc/terms/identifier"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity"]
+},
+"notes": "Often human-readable unlike UUID-based employeeId.",
+"category": "organizational"
+},
+{
+"id": "definition.hireDate",
+"meaning": "Hire Date",
+"plainLanguage": "The date on which a person began employment with an organization.",
+"refersTo": ["Person", "Event"],
+"stability": "stable",
+"time": "immutable",
+"authority": "process",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/startDate",
+"alternativeURIs": [
+"http://www.w3.org/ns/org#memberDuring"
+]
+},
+"valueShape": {
+"datatype": "xsd:date",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Used for tenure calculations and benefit eligibility.",
+"category": "organizational"
+},
+{
+"id": "definition.terminationDate",
+"meaning": "Termination Date",
+"plainLanguage": "The date on which a person's employment with an organization ended.",
+"refersTo": ["Person", "Event"],
+"stability": "stable",
+"time": "immutable",
+"authority": "process",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/endDate",
+"alternativeURIs": [
+"http://www.w3.org/ns/org#memberDuring"
+]
+},
+"valueShape": {
+"datatype": "xsd:date",
+"format": "ISO-8601",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity"]
+},
+"notes": "Null for current employees; may trigger access revocation.",
+"category": "organizational"
+},
+{
+"id": "definition.name",
+"meaning": "Name",
+"plainLanguage": "The primary label or title by which an entity is identified.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/name",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/name",
+"http://purl.org/dc/terms/title",
+"http://www.w3.org/2000/01/rdf-schema#label"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority"]
+},
+"notes": "Generic name property; use specific variants when context is known.",
+"category": "descriptive"
+},
+{
+"id": "definition.description",
+"meaning": "Description",
+"plainLanguage": "A textual explanation providing details about an entity.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/description",
+"alternativeURIs": [
+"http://purl.org/dc/terms/description",
+"http://www.w3.org/2000/01/rdf-schema#comment"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Free-form text; may contain markdown or HTML depending on context.",
+"category": "descriptive"
+},
+{
+"id": "definition.notes",
+"meaning": "Notes",
+"plainLanguage": "Free-form text containing supplementary information or observations.",
+"refersTo": ["Record", "GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "human",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/comment",
+"alternativeURIs": [
+"http://www.w3.org/2006/vcard/ns#note"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "human authority", "may contain sensitive info"]
+},
+"notes": "Unstructured; review for PII before sharing.",
+"category": "descriptive"
+},
+{
+"id": "definition.url",
+"meaning": "URL",
+"plainLanguage": "A web address pointing to a resource or page on the internet.",
+"refersTo": ["GenericEntity", "Document"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/url",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/homepage",
+"http://www.w3.org/2006/vcard/ns#url"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uri",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Validate format; URLs may become stale over time.",
+"category": "descriptive"
+},
+{
+"id": "definition.imageUrl",
+"meaning": "Image URL",
+"plainLanguage": "A web address pointing to an image file representing an entity.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/image",
+"alternativeURIs": [
+"http://xmlns.com/foaf/0.1/depiction",
+"http://www.w3.org/2006/vcard/ns#photo"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uri",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Should point to accessible image; consider caching.",
+"category": "descriptive"
+},
+{
+"id": "definition.filePath",
+"meaning": "File Path",
+"plainLanguage": "A location reference to a file within a storage system.",
+"refersTo": ["Document"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/contentUrl",
+"alternativeURIs": [
+"http://purl.org/dc/terms/identifier"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["contextual stability", "system-dependent"]
+},
+"notes": "Format varies by OS; prefer URLs or object storage keys.",
+"category": "descriptive"
+},
+{
+"id": "definition.code",
+"meaning": "Code",
+"plainLanguage": "A short alphanumeric identifier used for quick reference.",
+"refersTo": ["GenericEntity"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"https://schema.org/codeValue"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "alphanumeric",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Human-readable shorthand; often used in dropdowns.",
+"category": "descriptive"
+},
+{
+"id": "definition.sku",
+"meaning": "SKU",
+"plainLanguage": "A stock keeping unit code that uniquely identifies a product for inventory purposes.",
+"refersTo": ["Product"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/sku",
+"alternativeURIs": [
+"http://purl.org/goodrelations/v1#hasStockKeepingUnit"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "alphanumeric",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Internal to retailer; not universal like GTIN.",
+"category": "descriptive"
+},
+{
+"id": "definition.barcode",
+"meaning": "Barcode",
+"plainLanguage": "A machine-readable code printed on products for scanning and identification.",
+"refersTo": ["Product"],
+"stability": "stable",
+"time": "immutable",
+"authority": "external",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/gtin",
+"alternativeURIs": [
+"https://schema.org/gtin12",
+"https://schema.org/gtin13",
+"https://schema.org/gtin14"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "numeric",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "gtin12 for UPC, gtin13 for EAN, gtin14 for 14-digit.",
+"category": "descriptive"
+},
+{
+"id": "definition.uuid",
+"meaning": "UUID",
+"plainLanguage": "A universally unique identifier generated using standardized algorithms.",
+"refersTo": ["GenericEntity"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"http://purl.org/dc/terms/identifier"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "uuid",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "RFC 4122 format: 8-4-4-4-12 hexadecimal characters.",
+"category": "technical"
+},
+{
+"id": "definition.hash",
+"meaning": "Hash",
+"plainLanguage": "A fixed-length string computed from data to verify integrity or uniqueness.",
+"refersTo": ["Document", "Record"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/sha256",
+"alternativeURIs": [
+"http://www.w3.org/ns/spdx#checksum"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "hexadecimal",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Specify algorithm used; SHA-256 recommended.",
+"category": "technical"
+},
+{
+"id": "definition.version",
+"meaning": "Version",
+"plainLanguage": "A label indicating a specific iteration or release of an entity.",
+"refersTo": ["Document", "Product", "Record"],
+"stability": "stable",
+"time": "versioned",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/version",
+"alternativeURIs": [
+"https://schema.org/softwareVersion",
+"http://www.w3.org/2002/07/owl#versionInfo"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "semver",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Consider semantic versioning: MAJOR.MINOR.PATCH.",
+"category": "technical"
+},
+{
+"id": "definition.sequenceNumber",
+"meaning": "Sequence Number",
+"plainLanguage": "A numeric value indicating position or order within a series.",
+"refersTo": ["GenericEntity"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/position",
+"alternativeURIs": [
+"https://schema.org/serialNumber"
+]
+},
+"valueShape": {
+"datatype": "integer",
+"format": null,
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "May be auto-incremented; gaps possible if records deleted.",
+"category": "technical"
+},
+{
+"id": "definition.batchId",
+"meaning": "Batch Identifier",
+"plainLanguage": "A reference to a group of records or items processed together.",
+"refersTo": ["GenericEntity"],
+"stability": "stable",
+"time": "immutable",
+"authority": "system",
+"sensitivity": "low",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "safe",
+"drivers": []
+},
+"notes": "Useful for tracing bulk operations and rollbacks.",
+"category": "technical"
+},
+{
+"id": "definition.apiKey",
+"meaning": "API Key",
+"plainLanguage": "A secret token used to authenticate requests to an application programming interface.",
+"refersTo": ["Credential"],
+"stability": "stable",
+"time": "versioned",
+"authority": "system",
+"sensitivity": "high",
+"interop": {
+"status": "deferred",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "high",
+"drivers": ["high sensitivity", "security credential"]
+},
+"notes": "Never log or expose; rotate regularly; store hashed.",
+"category": "technical"
+},
+{
+"id": "definition.ipAddress",
+"meaning": "IP Address",
+"plainLanguage": "A numeric label identifying a device on a computer network.",
+"refersTo": ["Device", "Event"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "system",
+"sensitivity": "moderate",
+"interop": {
+"status": "local",
+"preferredURI": null,
+"alternativeURIs": []
+},
+"valueShape": {
+"datatype": "string",
+"format": "ipv4|ipv6",
+"cardinality": "single"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["moderate sensitivity", "contextual stability", "privacy implications"]
+},
+"notes": "May be PII in some jurisdictions; dynamic IPs change frequently.",
+"category": "technical"
+},
+{
+"id": "definition.externalIdentifier",
+"meaning": "External Identifier",
+"plainLanguage": "An identifier assigned by an external system to refer to the same entity.",
+"refersTo": ["GenericEntity"],
+"stability": "contextual",
+"time": "evolves",
+"authority": "external",
+"sensitivity": "moderate",
+"interop": {
+"status": "linked",
+"preferredURI": "https://schema.org/identifier",
+"alternativeURIs": [
+"http://www.w3.org/2002/07/owl#sameAs"
+]
+},
+"valueShape": {
+"datatype": "string",
+"format": "opaque",
+"cardinality": "multiple"
+},
+"usage": {
+"rollup": 0,
+"tiers": { "bindings": 0, "surfaces": 0, "logic": 0, "external": 0 }
+},
+"risk": {
+"status": "review",
+"drivers": ["external authority", "used for integration"]
+},
+"notes": "Changes may break synchronization with external systems.",
+"category": "technical"
+}
+]
+}
