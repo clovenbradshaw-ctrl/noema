@@ -2540,6 +2540,7 @@ html, body {
 
 .set-view-item span {
   flex: 1;
+  min-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
