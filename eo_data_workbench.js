@@ -26266,11 +26266,27 @@ class EODataWorkbench {
     // Attach event handlers
     document.getElementById('source-panel-view')?.addEventListener('click', () => {
       const source = inputSources[0];
-      if (source?.id) {
-        this._selectSource(source.id);
-      } else if (source?.setId) {
-        this._selectSet(source.setId, 'detail');
+      if (!source) {
+        this._showToast('No source available', 'info');
+        return;
       }
+      // Try to navigate to source first, then set
+      if (source.id) {
+        const foundSource = this.sources?.find(s => s.id === source.id);
+        if (foundSource) {
+          this._selectSource(source.id);
+          return;
+        }
+      }
+      if (source.setId) {
+        const foundSet = this.sets?.find(s => s.id === source.setId);
+        if (foundSet) {
+          this._selectSet(source.setId, 'detail');
+          return;
+        }
+      }
+      // Neither source nor set found
+      this._showToast('Source is no longer available', 'info');
     });
 
     document.getElementById('source-panel-add')?.addEventListener('click', () => {
@@ -26286,11 +26302,23 @@ class EODataWorkbench {
       item.addEventListener('click', () => {
         const sourceId = item.dataset.sourceId;
         const setId = item.dataset.setId;
-        if (sourceId && this.sources?.find(s => s.id === sourceId)) {
-          this._selectSource(sourceId);
-        } else if (setId && this.sets?.find(s => s.id === setId)) {
-          this._selectSet(setId, 'detail');
+        // Try to navigate to source first, then set
+        if (sourceId) {
+          const source = this.sources?.find(s => s.id === sourceId);
+          if (source) {
+            this._selectSource(sourceId);
+            return;
+          }
         }
+        if (setId) {
+          const set = this.sets?.find(s => s.id === setId);
+          if (set) {
+            this._selectSet(setId, 'detail');
+            return;
+          }
+        }
+        // Neither source nor set found - show feedback
+        this._showToast('Source is no longer available', 'info');
       });
     });
   }
