@@ -10612,7 +10612,7 @@ class EODataWorkbench {
       html += `
         <div class="nav-item definition-item ${isActive ? 'active' : ''} ${isPending ? 'pending' : ''} ${isStub ? 'stub' : ''}"
              data-definition-id="${definition.id}"
-             title="${this._escapeHtml(definition.description || definition.name)}${isPending ? ' (Pending approval)' : ''}${isStub ? ' (Stub - needs population)' : ''}">
+             title="${this._escapeHtml(definition.description || definition.name)}${isPending ? ' (Still developing)' : ''}${isStub ? ' (Meaning emerging)' : ''}">
           <i class="ph ${defIcon} definition-icon"></i>
           <div class="definition-info">
             <span class="definition-name">${this._escapeHtml(this._truncateName(definition.name, 20))}</span>
@@ -10623,7 +10623,7 @@ class EODataWorkbench {
               <i class="ph ph-clock"></i>
             </span>
           ` : isStub ? `
-            <span class="definition-stub-badge" title="Stub definition - needs population">
+            <span class="definition-stub-badge" title="Meaning still emerging">
               <i class="ph ph-warning-circle"></i>
             </span>
           ` : `
@@ -10919,11 +10919,11 @@ class EODataWorkbench {
       reasons.push('Used in automations');
     }
 
-    // Low stability with any usage is risky
-    if (stability.stability === 'Experimental') {
+    // Interpretive stability with any usage needs attention
+    if (stability.stability === 'Interpretive') {
       if (usage.total > 0) {
         riskScore += 2;
-        reasons.push('Experimental with active usage');
+        reasons.push('Interpretive meaning with active usage');
       }
     } else if (stability.stability === 'Superseded') {
       riskScore += 3;
@@ -11173,7 +11173,11 @@ class EODataWorkbench {
 
   /**
    * Determine the stability level of a definition.
-   * Stability: Stable, Contextual, Experimental (now Interpretive)
+   * EO-aligned stability levels:
+   * - Stable: Identity-level, externally grounded meaning
+   * - Contextual: Lifecycle or policy-bound meaning
+   * - Interpretive: Judgment or narrative-based meaning
+   *
    * @param {Object} definition - The definition object
    * @returns {Object} { stability: string, icon: string, color: string, description: string }
    */
@@ -11199,10 +11203,10 @@ class EODataWorkbench {
 
     if (isPending) {
       return {
-        stability: 'Experimental',
-        icon: 'ph-flask',
+        stability: 'Interpretive',
+        icon: 'ph-chat-circle-text',
         color: '#f59e0b',
-        description: 'This definition is pending review and may change'
+        description: 'Meaning based on judgment, still developing'
       };
     }
 
@@ -11211,7 +11215,7 @@ class EODataWorkbench {
         stability: 'Stable',
         icon: 'ph-seal-check',
         color: '#10b981',
-        description: 'Externally grounded and verified definition'
+        description: 'Identity-level meaning, externally grounded'
       };
     }
 
@@ -11220,15 +11224,15 @@ class EODataWorkbench {
         stability: 'Contextual',
         icon: 'ph-circle-dashed',
         color: '#6366f1',
-        description: 'Stable within project context'
+        description: 'Meaning stable within lifecycle or policy bounds'
       };
     }
 
     return {
-      stability: 'Experimental',
-      icon: 'ph-flask',
+      stability: 'Interpretive',
+      icon: 'ph-chat-circle-text',
       color: '#f59e0b',
-      description: 'Local definition, may evolve'
+      description: 'Meaning may evolve as understanding develops'
     };
   }
 
@@ -12131,7 +12135,7 @@ class EODataWorkbench {
       });
     });
 
-    // Delete definition button
+    // Remove meaning button
     document.querySelectorAll('.btn-delete-definition').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -12459,7 +12463,7 @@ class EODataWorkbench {
           <button class="btn btn-primary btn-sm" id="btn-apply-definition" title="Apply this definition to fields">
             <i class="ph ph-arrow-right"></i> Apply to Fields
           </button>
-          <button class="btn btn-icon btn-danger btn-sm" id="btn-delete-definition" title="Delete definition">
+          <button class="btn btn-icon btn-danger btn-sm" id="btn-delete-definition" title="Remove this meaning">
             <i class="ph ph-trash"></i>
           </button>
         </div>
@@ -18540,15 +18544,15 @@ class EODataWorkbench {
             </div>
             <div class="stats-progress-labels">
               <span class="stat-item complete">
-                <span class="stat-value">${completeCount}</span> complete
+                <span class="stat-value">${completeCount}</span> established
               </span>
               <span class="stat-divider">·</span>
               <span class="stat-item partial">
-                <span class="stat-value">${partialCount}</span> partial
+                <span class="stat-value">${partialCount}</span> developing
               </span>
               <span class="stat-divider">·</span>
               <span class="stat-item stub">
-                <span class="stat-value">${stubCount}</span> stubs
+                <span class="stat-value">${stubCount}</span> emerging
               </span>
             </div>
           </div>
@@ -18754,15 +18758,15 @@ class EODataWorkbench {
       });
     });
 
-    // Status
-    let statusClass = 'stub';
-    let statusLabel = 'Stub';
+    // Status - EO-aligned terminology
+    let statusClass = 'emerging';
+    let statusLabel = 'Emerging';
     if (hasDefinitionText) {
-      statusClass = 'complete';
-      statusLabel = 'Complete';
+      statusClass = 'established';
+      statusLabel = 'Established';
     } else if (def.status === 'partial') {
-      statusClass = 'partial';
-      statusLabel = 'Partial';
+      statusClass = 'developing';
+      statusLabel = 'Developing';
     }
 
     // Description
@@ -19658,12 +19662,12 @@ class EODataWorkbench {
 
     // Render status badge
     const statusBadge = isPending ? `
-      <span class="def-status-badge pending" title="This definition needs approval">
+      <span class="def-status-badge pending" title="This meaning is still developing">
         <i class="ph ph-clock"></i>
-        Pending
+        Developing
       </span>
     ` : `
-      <span class="def-status-badge active" title="This definition is active">
+      <span class="def-status-badge active" title="This meaning is established">
         <i class="ph ph-check-circle"></i>
         Active
       </span>
@@ -19693,7 +19697,7 @@ class EODataWorkbench {
         <button class="def-action-btn" data-action="refresh" title="Refresh from URI" ${!definition.sourceUri ? 'disabled' : ''}>
           <i class="ph ph-arrows-clockwise"></i>
         </button>
-        <button class="def-action-btn danger" data-action="delete" title="Delete definition">
+        <button class="def-action-btn danger" data-action="delete" title="Remove this meaning">
           <i class="ph ph-trash"></i>
         </button>
       </div>
