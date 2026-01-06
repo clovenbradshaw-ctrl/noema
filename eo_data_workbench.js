@@ -12354,7 +12354,7 @@ class EODataWorkbench {
                     <span class="eo-usage-tier-count">${usageInfo.breakdown.automations}</span>
                   </div>
                 </div>
-                <div class="eo-usage-tier ${(usageInfo.breakdown.apis + usageInfo.breakdown.exports) > 0 ? 'active external' : ''}">
+                <div class="eo-usage-tier eo-usage-tier-clickable ${(usageInfo.breakdown.apis + usageInfo.breakdown.exports) > 0 ? 'active external' : ''}" id="tier-apis-exports" title="Browse available URI APIs">
                   <div class="eo-usage-tier-header">
                     <i class="ph ph-arrow-square-out"></i>
                     <span class="eo-usage-tier-label">APIs & Exports</span>
@@ -12527,6 +12527,99 @@ class EODataWorkbench {
     if (markLocalBtn) {
       markLocalBtn.addEventListener('click', () => this._markDefinitionAsLocal(definition));
     }
+
+    // APIs & Exports tier click - opens URI APIs browser
+    const apisExportsTier = contentArea.querySelector('#tier-apis-exports');
+    if (apisExportsTier) {
+      apisExportsTier.addEventListener('click', () => this._openUriApisBrowserModal(definition));
+    }
+  }
+
+  /**
+   * Open modal to browse available URI API sources
+   */
+  _openUriApisBrowserModal(definition) {
+    // Get URI sources from the global registry
+    const sources = window.EO?.getAllURISources?.() || [];
+
+    // Group sources by category
+    const byCategory = {};
+    for (const source of sources) {
+      if (!byCategory[source.category]) {
+        byCategory[source.category] = [];
+      }
+      byCategory[source.category].push(source);
+    }
+
+    // Category display names and icons
+    const categoryMeta = {
+      knowledge: { name: 'Knowledge Bases', icon: 'ph-brain' },
+      government: { name: 'Government', icon: 'ph-buildings' },
+      geographic: { name: 'Geographic', icon: 'ph-map-pin' },
+      organization: { name: 'Organizations', icon: 'ph-briefcase' },
+      academic: { name: 'Academic', icon: 'ph-graduation-cap' },
+      legal: { name: 'Legal', icon: 'ph-scales' }
+    };
+
+    // Auth badge styling
+    const getAuthBadge = (auth) => {
+      switch (auth) {
+        case 'none': return '<span class="uri-auth-badge auth-none">No Auth</span>';
+        case 'username': return '<span class="uri-auth-badge auth-free">Free Account</span>';
+        case 'api_key_optional': return '<span class="uri-auth-badge auth-optional">Key Optional</span>';
+        case 'api_key': return '<span class="uri-auth-badge auth-required">API Key</span>';
+        case 'account': return '<span class="uri-auth-badge auth-account">Account</span>';
+        default: return '';
+      }
+    };
+
+    // Build the HTML
+    const categoriesHtml = Object.entries(byCategory).map(([category, categorySources]) => {
+      const meta = categoryMeta[category] || { name: category, icon: 'ph-folder' };
+      const sourcesHtml = categorySources.map(source => `
+        <div class="uri-source-item" data-source-id="${source.id}">
+          <div class="uri-source-info">
+            <div class="uri-source-name">
+              <span>${this._escapeHtml(source.name)}</span>
+              <span class="uri-tier-badge">Tier ${source.tier}</span>
+              ${getAuthBadge(source.auth)}
+            </div>
+            ${source.authNote ? `<div class="uri-source-note">${this._escapeHtml(source.authNote)}</div>` : ''}
+          </div>
+          <div class="uri-source-actions">
+            <a href="${this._escapeHtml(source.docs)}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-secondary" title="View documentation">
+              <i class="ph ph-arrow-square-out"></i> Docs
+            </a>
+          </div>
+        </div>
+      `).join('');
+
+      return `
+        <div class="uri-category-section">
+          <h4 class="uri-category-header">
+            <i class="ph ${meta.icon}"></i>
+            ${meta.name}
+            <span class="uri-category-count">${categorySources.length}</span>
+          </h4>
+          <div class="uri-sources-list">
+            ${sourcesHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const html = `
+      <div class="uri-apis-browser">
+        <p class="uri-browser-intro">
+          Browse available URI API sources for linking definitions to external standards and vocabularies.
+        </p>
+        <div class="uri-categories">
+          ${categoriesHtml}
+        </div>
+      </div>
+    `;
+
+    this._showModal('URI API Sources', html, null, { hideConfirm: true, cancelText: 'Close' });
   }
 
   /**
