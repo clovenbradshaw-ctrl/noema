@@ -6436,6 +6436,68 @@ tr.highlight-row {
   color: white;
 }
 
+/* Table Group Headers (Airtable-style grouped view) */
+.table-group-header-row {
+  background: var(--bg-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.table-group-header-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.table-group-header-cell {
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--border-primary);
+  border-top: 1px solid var(--border-primary);
+}
+
+.table-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.table-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.table-group-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.table-group-toggle i {
+  font-size: 12px;
+}
+
+.table-group-name {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.table-group-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 400;
+}
+
 /* Cell Types */
 .data-table td {
   font-size: 13px;
