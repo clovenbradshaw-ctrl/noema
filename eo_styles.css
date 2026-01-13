@@ -33179,15 +33179,15 @@ body.has-picked-up .browser-tab:hover {
    ============================================================================ */
 
 .data-pipeline-wizard {
-  max-width: 700px;
+  max-width: 800px;
 }
 
 .data-pipeline-wizard .data-pipeline-body.wizard-body {
   display: block;
   padding: 0;
   gap: 0;
-  min-height: 400px;
-  max-height: 500px;
+  min-height: 450px;
+  max-height: 600px;
   overflow-y: auto;
 }
 
@@ -33285,7 +33285,7 @@ body.has-picked-up .browser-tab:hover {
 .wizard-step-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 /* Step 1: Source Overview */
@@ -33829,7 +33829,7 @@ body.has-picked-up .browser-tab:hover {
 
 /* Field Types Step */
 .wizard-step-field-types {
-  padding: 24px;
+  padding: 28px;
 }
 
 .wizard-step-description {
@@ -33841,7 +33841,7 @@ body.has-picked-up .browser-tab:hover {
 .field-types-section {
   background: var(--bg-secondary, #16162a);
   border-radius: 10px;
-  padding: 16px;
+  padding: 18px;
 }
 
 .field-types-section.field-types-other {
@@ -33856,7 +33856,7 @@ body.has-picked-up .browser-tab:hover {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary, #fff);
-  margin: 0 0 14px 0;
+  margin: 0 0 16px 0;
 }
 
 .field-types-section .section-title i {
@@ -33876,14 +33876,14 @@ body.has-picked-up .browser-tab:hover {
 .field-types-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 280px;
+  gap: 10px;
+  max-height: 320px;
   overflow-y: auto;
 }
 
 .field-types-list.compact {
-  gap: 6px;
-  max-height: 180px;
+  gap: 8px;
+  max-height: 220px;
 }
 
 .field-type-row {
@@ -33891,14 +33891,14 @@ body.has-picked-up .browser-tab:hover {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   background: var(--bg-tertiary, #1a1a35);
   border-radius: 8px;
   transition: background 0.15s;
 }
 
 .field-type-row.compact {
-  padding: 8px 12px;
+  padding: 10px 14px;
 }
 
 .field-type-row:hover {
