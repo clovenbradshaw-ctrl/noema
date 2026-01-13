@@ -20442,6 +20442,13 @@ body.has-picked-up .browser-tab:hover {
   color: var(--success-500);
 }
 
+.source-cell-object {
+  color: var(--text-muted);
+  font-family: monospace;
+  font-size: 11px;
+  cursor: help;
+}
+
 /* More records notice */
 .source-more-records {
   display: flex;
