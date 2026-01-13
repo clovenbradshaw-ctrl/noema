@@ -1518,7 +1518,7 @@ class EODataWorkbench {
    * Render a source detail view when a source tab is active
    * Gets the source from currentSourceId and renders it
    */
-  _renderSourceDetail() {
+  async _renderSourceDetail() {
     const sourceId = this.currentSourceId;
     if (!sourceId) {
       console.warn('_renderSourceDetail: No currentSourceId set');
@@ -1533,8 +1533,14 @@ class EODataWorkbench {
       return;
     }
 
+    // Ensure source records are loaded from IndexedDB if needed
+    await this._ensureSourceRecords(source);
+
     // Render the source data view
     this._renderSourceDataView(source);
+
+    // Update status bar with source record count
+    this._updateSourceStatus(source);
   }
 
   /**
@@ -16662,6 +16668,9 @@ class EODataWorkbench {
 
     // Attach event handlers
     this._attachSourceViewerHandlers(source, derivedSets);
+
+    // Update status bar with source record count
+    this._updateSourceStatus(source);
   }
 
   /**
@@ -18386,13 +18395,14 @@ class EODataWorkbench {
 
   /**
    * Format source cell value for display
+   * Uses compact single-line format for source tables to maintain row heights
    */
   _formatSourceCellValue(value, options = {}) {
     if (value === null || value === undefined) return '<span class="null-value">null</span>';
     if (typeof value === 'boolean') return value ? 'true' : 'false';
-    // Handle objects and arrays with proper JSON rendering
+    // Handle objects and arrays with compact single-line display for source tables
     if (typeof value === 'object') {
-      return this._renderJsonKeyValue(value);
+      return this._renderSourceObjectCompact(value);
     }
     const str = String(value);
     // For long text, truncate and show tooltip
@@ -18401,6 +18411,46 @@ class EODataWorkbench {
       return `<span class="source-cell-longtext-content" title="${escapedStr}">${this._escapeHtml(str.substring(0, 50))}...</span>`;
     }
     return this._escapeHtml(str);
+  }
+
+  /**
+   * Render object/array as compact single-line string for source tables
+   * This keeps row heights consistent by avoiding multi-line JSON displays
+   */
+  _renderSourceObjectCompact(value) {
+    if (value === null) return '<span class="null-value">null</span>';
+    if (value === undefined) return '<span class="null-value">null</span>';
+
+    // Arrays - show count and preview
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return '<span class="source-cell-object">[]</span>';
+      }
+      const preview = value.slice(0, 2).map(item =>
+        typeof item === 'object' ? (Array.isArray(item) ? '[...]' : '{...}') : String(item).substring(0, 15)
+      ).join(', ');
+      const hasMore = value.length > 2 ? `, +${value.length - 2}` : '';
+      const fullJson = JSON.stringify(value);
+      return `<span class="source-cell-object" title="${this._escapeHtml(fullJson)}">[${this._escapeHtml(preview)}${hasMore}]</span>`;
+    }
+
+    // Objects - show key count and preview
+    const keys = Object.keys(value);
+    if (keys.length === 0) {
+      return '<span class="source-cell-object">{}</span>';
+    }
+
+    // Show first 2 key:value pairs inline
+    const preview = keys.slice(0, 2).map(key => {
+      const val = value[key];
+      const valStr = val === null ? 'null'
+        : typeof val === 'object' ? (Array.isArray(val) ? `[${val.length}]` : '{...}')
+        : String(val).substring(0, 10);
+      return `${key}: ${valStr}`;
+    }).join(', ');
+    const hasMore = keys.length > 2 ? `, +${keys.length - 2}` : '';
+    const fullJson = JSON.stringify(value);
+    return `<span class="source-cell-object" title="${this._escapeHtml(fullJson)}">{${this._escapeHtml(preview)}${hasMore}}</span>`;
   }
 
   /**
@@ -43940,6 +43990,29 @@ class EODataWorkbench {
     }
 
     // Update bulk actions toolbar
+    this._updateBulkActionsToolbar();
+  }
+
+  /**
+   * Update status bar when viewing a source (not a set)
+   */
+  _updateSourceStatus(source) {
+    if (!source) return;
+
+    const recordCount = source.records?.length || source.recordCount || 0;
+
+    if (this.elements.recordCount) {
+      this.elements.recordCount.querySelector('span:last-child').textContent =
+        `${recordCount.toLocaleString()} record${recordCount !== 1 ? 's' : ''}`;
+    }
+
+    // Sources don't have selection, so show 0 selected
+    if (this.elements.selectedCount) {
+      this.elements.selectedCount.querySelector('span:last-child').textContent =
+        '0 selected';
+    }
+
+    // Hide bulk actions toolbar for sources (read-only)
     this._updateBulkActionsToolbar();
   }
 
