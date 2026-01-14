@@ -10828,9 +10828,9 @@ class EODataWorkbench {
    */
   _renderIdentityOptions(currentIdentity) {
     const options = [
-      { value: 'Declared', icon: 'ph-stamp', color: '#6366f1', description: 'Meaning exists because an authority asserts it' },
-      { value: 'Stabilized', icon: 'ph-check-circle', color: '#10b981', description: 'Meaning persists because systems agree and reinforce it' },
-      { value: 'Contested', icon: 'ph-warning', color: '#f59e0b', description: 'Meaning is disputed, provisional, or actively evolving' }
+      { value: 'Declared', icon: 'ph-stamp', color: '#6366f1', description: 'Meaning exists because someone with authority said so. The definition holds as long as the authority holds. If the declaring party loses legitimacy, changes their mind, or disappears, the meaning collapses.' },
+      { value: 'Stabilized', icon: 'ph-check-circle', color: '#10b981', description: 'Meaning persists because multiple systems, processes, or actors have converged on it and now reinforce each other. No single authority owns it — it has become infrastructural.' },
+      { value: 'Contested', icon: 'ph-warning', color: '#f59e0b', description: 'Meaning is actively disputed, under review, or has multiple competing interpretations in play. No stable consensus exists.' }
     ];
 
     return options.map(opt => {
@@ -10854,9 +10854,9 @@ class EODataWorkbench {
    */
   _renderSpaceOptions(currentSpace) {
     const options = [
-      { value: 'Local', icon: 'ph-house', color: '#64748b', description: 'Bounded to this workspace/project' },
-      { value: 'Federated', icon: 'ph-handshake', color: '#10b981', description: 'Travels with explicit translation rules' },
-      { value: 'Universal', icon: 'ph-globe', color: '#6366f1', description: 'Same meaning everywhere (linked to standard URI)' }
+      { value: 'Local', icon: 'ph-house', color: '#64748b', description: 'Meaning applies only within this specific context. It makes no claims about compatibility with anything outside. Translation is not expected.' },
+      { value: 'Federated', icon: 'ph-handshake', color: '#10b981', description: 'Meaning travels across contexts but requires explicit translation rules. The definition includes mappings that explain how it relates to definitions elsewhere.' },
+      { value: 'Universal', icon: 'ph-globe', color: '#6366f1', description: 'Meaning is the same everywhere. The definition points to a shared standard and commits to its semantics without local modification.' }
     ];
 
     return options.map(opt => {
@@ -10880,9 +10880,9 @@ class EODataWorkbench {
    */
   _renderTimeOptions(currentTime) {
     const options = [
-      { value: 'Immutable', icon: 'ph-lock-simple', color: '#6366f1', description: 'Fixed at creation, should not change' },
-      { value: 'Versioned', icon: 'ph-clock-counter-clockwise', color: '#8b5cf6', description: 'Changes at defined epochs (v1 → v2)' },
-      { value: 'Evolving', icon: 'ph-arrows-clockwise', color: '#f59e0b', description: 'Continuously updating' }
+      { value: 'Immutable', icon: 'ph-lock-simple', color: '#6366f1', description: 'Meaning is fixed at the moment of definition and should never change. If circumstances change, create a new definition rather than mutating this one.' },
+      { value: 'Versioned', icon: 'ph-clock-counter-clockwise', color: '#8b5cf6', description: 'Meaning changes at discrete, documented moments. Each version is internally stable. History is preserved and queryable.' },
+      { value: 'Evolving', icon: 'ph-arrows-clockwise', color: '#f59e0b', description: 'Meaning is continuously reinterpreted and may shift without formal versioning. The current state is provisional.' }
     ];
 
     return options.map(opt => {
