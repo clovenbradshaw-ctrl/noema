@@ -34049,6 +34049,53 @@ body.has-picked-up .browser-tab:hover {
   color: #f97316;
 }
 
+/* JSON field type styling */
+.field-type-row.json-field {
+  border-left: 3px solid var(--primary, #60a5fa);
+}
+
+.json-subfields-info {
+  margin-top: 4px;
+}
+
+.json-subfields-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--primary, #60a5fa);
+  background: rgba(96, 165, 250, 0.1);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.json-subfields-label i {
+  font-size: 12px;
+}
+
+.json-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: rgba(96, 165, 250, 0.15);
+  border: 1px solid var(--primary, #60a5fa);
+  border-radius: 6px;
+  color: var(--primary, #60a5fa);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.json-expand-btn:hover {
+  background: rgba(96, 165, 250, 0.25);
+}
+
+.json-expand-btn i {
+  font-size: 14px;
+}
+
 /* Field type dropdown wrapper */
 .field-type-select-wrapper {
   display: flex;
