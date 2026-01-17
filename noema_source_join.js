@@ -7054,7 +7054,8 @@ class DataPipelineUI {
       { id: 'email', name: 'Email', icon: 'ph-envelope' },
       { id: 'url', name: 'URL', icon: 'ph-globe' },
       { id: 'phone', name: 'Phone', icon: 'ph-phone' },
-      { id: 'select', name: 'Select', icon: 'ph-list-bullets' }
+      { id: 'select', name: 'Select', icon: 'ph-list-bullets' },
+      { id: 'json', name: 'JSON', icon: 'ph-brackets-curly' }
     ];
   }
 
@@ -7203,12 +7204,14 @@ class DataPipelineUI {
       number: 0,
       checkbox: 0,
       longText: 0,
-      text: 0
+      text: 0,
+      json: 0
     };
 
     let nonEmptyCount = 0;
     const sampleValues = [];
     const uniqueValues = new Set();
+    let jsonSubFields = null; // Track JSON structure for expansion
 
     // Patterns for type detection
     const patterns = {
@@ -7221,12 +7224,57 @@ class DataPipelineUI {
       boolean: /^(true|false|yes|no|1|0)$/i
     };
 
+    // Helper to detect JSON sub-fields structure
+    const extractJsonSubFields = (values) => {
+      const subFieldCounts = {};
+      for (const val of values) {
+        if (Array.isArray(val)) {
+          for (const item of val) {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+              for (const key of Object.keys(item)) {
+                subFieldCounts[key] = (subFieldCounts[key] || 0) + 1;
+              }
+            }
+          }
+        } else if (val && typeof val === 'object') {
+          for (const key of Object.keys(val)) {
+            subFieldCounts[key] = (subFieldCounts[key] || 0) + 1;
+          }
+        }
+      }
+      // Return fields that appear in at least 50% of records
+      const threshold = values.length * 0.5;
+      return Object.entries(subFieldCounts)
+        .filter(([k, count]) => count >= Math.max(1, threshold))
+        .map(([k]) => k);
+    };
+
     for (let i = 0; i < sampleSize; i++) {
       const record = records[i];
       const value = record.values?.[fieldName] ?? record[fieldName];
       if (value === null || value === undefined || value === '') continue;
 
       nonEmptyCount++;
+
+      // Check for JSON/object type BEFORE converting to string
+      const isObject = value && typeof value === 'object';
+      const isArray = Array.isArray(value);
+
+      if (isObject || isArray) {
+        typeCounts.json++;
+        // Create a proper JSON sample value
+        if (sampleValues.length < 5) {
+          try {
+            const jsonStr = JSON.stringify(value);
+            sampleValues.push(jsonStr.length > 50 ? jsonStr.slice(0, 47) + '...' : jsonStr);
+          } catch (e) {
+            sampleValues.push(isArray ? `[Array: ${value.length} items]` : '[Object]');
+          }
+        }
+        uniqueValues.add(isArray ? `array_${value.length}` : 'object');
+        continue;
+      }
+
       const strValue = String(value).trim();
       uniqueValues.add(strValue.toLowerCase());
 
@@ -7255,6 +7303,19 @@ class DataPipelineUI {
       }
     }
 
+    // Extract JSON sub-fields if we detected JSON values
+    if (typeCounts.json > 0) {
+      const jsonValues = [];
+      for (let i = 0; i < sampleSize && jsonValues.length < 20; i++) {
+        const record = records[i];
+        const value = record.values?.[fieldName] ?? record[fieldName];
+        if (value && typeof value === 'object') {
+          jsonValues.push(value);
+        }
+      }
+      jsonSubFields = extractJsonSubFields(jsonValues);
+    }
+
     if (nonEmptyCount === 0) {
       return { type: 'text', confidence: 0.5, wasInferred: false, sampleValues: [] };
     }
@@ -7270,6 +7331,19 @@ class DataPipelineUI {
       .sort((a, b) => b.confidence - a.confidence);
 
     const threshold = 0.7;
+
+    // Check JSON first - if we have objects/arrays, they should be JSON type
+    if (typeCounts.json / nonEmptyCount > 0.5) {
+      return {
+        type: 'json',
+        confidence: typeCounts.json / nonEmptyCount,
+        wasInferred: true,
+        sampleValues,
+        candidates,
+        jsonSubFields, // Include sub-field info for expansion option
+        canExpand: jsonSubFields && jsonSubFields.length > 0
+      };
+    }
 
     // Check specific types first (ordered by specificity)
     if (typeCounts.email / nonEmptyCount > threshold) {
@@ -7313,6 +7387,139 @@ class DataPipelineUI {
   _inferFieldType(records, fieldName) {
     const result = this._inferFieldTypeWithDetails(records, fieldName);
     return result.type;
+  }
+
+  /**
+   * Expand a JSON field into separate sub-fields.
+   * This creates new fields for each property in the JSON object/array.
+   * @param {number} fieldIndex - Index of the JSON field in _selectedFields
+   */
+  _expandJsonField(fieldIndex) {
+    const field = this._selectedFields[fieldIndex];
+    if (!field || field.type !== 'json') return;
+
+    const subFields = field.typeInfo?.jsonSubFields || [];
+    if (subFields.length === 0) return;
+
+    // Get the source for this field
+    const source = this._sources.find(s => s.id === field.sourceId)?.source;
+    if (!source?.records) return;
+
+    // Create new fields for each sub-field
+    const newFields = [];
+    const baseFieldName = field.name;
+
+    for (const subFieldName of subFields) {
+      const newFieldName = `${baseFieldName}.${subFieldName}`;
+
+      // Extract values for this sub-field from all records
+      const subValues = [];
+      for (const record of source.records.slice(0, 100)) {
+        const parentValue = record.values?.[baseFieldName] ?? record[baseFieldName];
+        if (parentValue && typeof parentValue === 'object') {
+          if (Array.isArray(parentValue)) {
+            // For arrays, get value from first item
+            const firstItem = parentValue[0];
+            if (firstItem && typeof firstItem === 'object') {
+              subValues.push(firstItem[subFieldName]);
+            }
+          } else {
+            subValues.push(parentValue[subFieldName]);
+          }
+        }
+      }
+
+      // Infer type for the sub-field based on extracted values
+      const typeInfo = this._inferSubFieldType(subValues);
+
+      newFields.push({
+        name: newFieldName,
+        sourceId: field.sourceId,
+        sourceName: field.sourceName,
+        include: true,
+        type: typeInfo.type,
+        typeInfo: {
+          ...typeInfo,
+          wasInferred: true,
+          expandedFrom: baseFieldName
+        }
+      });
+    }
+
+    // Replace the JSON field with the expanded sub-fields
+    this._selectedFields.splice(fieldIndex, 1, ...newFields);
+
+    // Mark the original JSON field as expanded in source records
+    // (this will be used when creating the set to properly extract values)
+    if (!this._expandedJsonFields) {
+      this._expandedJsonFields = {};
+    }
+    this._expandedJsonFields[baseFieldName] = subFields;
+
+    // Re-render the UI
+    this._render();
+    this._attachEventListeners();
+  }
+
+  /**
+   * Infer type for a sub-field based on extracted values
+   * @param {Array} values - Extracted values from records
+   * @returns {Object} Type info with type, confidence, and sample values
+   */
+  _inferSubFieldType(values) {
+    const validValues = values.filter(v => v !== null && v !== undefined && v !== '');
+    if (validValues.length === 0) {
+      return { type: 'text', confidence: 0.5, sampleValues: [] };
+    }
+
+    const sampleValues = [];
+    let jsonCount = 0;
+    let textCount = 0;
+    let numberCount = 0;
+    let boolCount = 0;
+
+    for (const value of validValues.slice(0, 50)) {
+      // Check for nested objects/arrays
+      if (value && typeof value === 'object') {
+        jsonCount++;
+        if (sampleValues.length < 5) {
+          try {
+            const jsonStr = JSON.stringify(value);
+            sampleValues.push(jsonStr.length > 50 ? jsonStr.slice(0, 47) + '...' : jsonStr);
+          } catch (e) {
+            sampleValues.push('[Object]');
+          }
+        }
+      } else if (typeof value === 'number') {
+        numberCount++;
+        if (sampleValues.length < 5) {
+          sampleValues.push(String(value));
+        }
+      } else if (typeof value === 'boolean') {
+        boolCount++;
+        if (sampleValues.length < 5) {
+          sampleValues.push(String(value));
+        }
+      } else {
+        textCount++;
+        if (sampleValues.length < 5) {
+          const strVal = String(value);
+          sampleValues.push(strVal.length > 50 ? strVal.slice(0, 47) + '...' : strVal);
+        }
+      }
+    }
+
+    const total = validValues.length;
+    if (jsonCount / total > 0.5) {
+      return { type: 'json', confidence: jsonCount / total, sampleValues };
+    }
+    if (numberCount / total > 0.7) {
+      return { type: 'number', confidence: numberCount / total, sampleValues };
+    }
+    if (boolCount / total > 0.7) {
+      return { type: 'checkbox', confidence: boolCount / total, sampleValues };
+    }
+    return { type: 'text', confidence: 0.8, sampleValues };
   }
 
   /**
@@ -7810,7 +8017,8 @@ class DataPipelineUI {
         url: 'ph-globe',
         phone: 'ph-phone',
         select: 'ph-list-bullets',
-        raw: 'ph-file-text'
+        raw: 'ph-file-text',
+        json: 'ph-brackets-curly'
       };
       return icons[type] || 'ph-text-aa';
     };
@@ -7827,7 +8035,8 @@ class DataPipelineUI {
         url: 'URL',
         phone: 'Phone',
         select: 'Select',
-        raw: 'Raw'
+        raw: 'Raw',
+        json: 'JSON'
       };
       return names[type] || 'Text';
     };
@@ -7864,8 +8073,11 @@ class DataPipelineUI {
               <div class="field-types-list">
                 ${inferredFields.map((field, idx) => {
                   const fieldIdx = this._selectedFields.findIndex(f => f.name === field.name && f.sourceId === field.sourceId);
+                  const isJson = field.type === 'json';
+                  const hasSubFields = field.typeInfo?.jsonSubFields?.length > 0;
+                  const subFields = field.typeInfo?.jsonSubFields || [];
                   return `
-                    <div class="field-type-row" data-field-index="${fieldIdx}">
+                    <div class="field-type-row ${isJson ? 'json-field' : ''}" data-field-index="${fieldIdx}">
                       <div class="field-info">
                         <span class="field-name">${this._escapeHtml(field.name)}</span>
                         ${field.typeInfo?.sampleValues?.length > 0 ? `
@@ -7873,9 +8085,23 @@ class DataPipelineUI {
                             e.g., ${this._escapeHtml(field.typeInfo.sampleValues[0])}
                           </span>
                         ` : ''}
+                        ${isJson && hasSubFields ? `
+                          <div class="json-subfields-info">
+                            <span class="json-subfields-label">
+                              <i class="ph ph-tree-structure"></i>
+                              ${subFields.length} nested field${subFields.length !== 1 ? 's' : ''}: ${subFields.slice(0, 3).join(', ')}${subFields.length > 3 ? '...' : ''}
+                            </span>
+                          </div>
+                        ` : ''}
                       </div>
                       <div class="field-type-controls">
                         ${renderConfidenceBadge(field.typeInfo?.confidence || 0.5)}
+                        ${isJson && hasSubFields ? `
+                          <button class="json-expand-btn" data-field-index="${fieldIdx}" title="Expand into ${subFields.length} separate fields">
+                            <i class="ph ph-arrows-out-simple"></i>
+                            Expand
+                          </button>
+                        ` : ''}
                         <div class="field-type-select-wrapper">
                           <i class="ph ${getTypeIcon(field.type)}"></i>
                           <select class="field-type-dropdown" data-field-index="${fieldIdx}">
@@ -8371,10 +8597,22 @@ class DataPipelineUI {
               email: 'ph-envelope',
               url: 'ph-globe',
               phone: 'ph-phone',
-              select: 'ph-list-bullets'
+              select: 'ph-list-bullets',
+              json: 'ph-brackets-curly'
             };
             icon.className = `ph ${iconMap[e.target.value] || 'ph-text-aa'}`;
           }
+        }
+      });
+    });
+
+    // JSON expand buttons - expand JSON field into separate sub-fields
+    this.container.querySelectorAll('.json-expand-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const fieldIndex = parseInt(e.target.closest('.json-expand-btn').dataset.fieldIndex);
+        if (!isNaN(fieldIndex)) {
+          this._expandJsonField(fieldIndex);
         }
       });
     });
