@@ -40241,18 +40241,9 @@ class EODataWorkbench {
         this._closeModal();
         this._showSetFromSourceUI(selectedSourceIds[0]);
       } else {
-        // Multiple sources selected - directly execute union merge
+        // Multiple sources selected - show merge options modal
         this._closeModal();
-        const mergeConfig = {
-          name: name || 'Merged Set',
-          strategy: 'union',
-          joinType: 'inner',
-          joinColumns: [],
-          splitTypes: false,
-          includeSource: true,  // Track source origin by default
-          sourceIds: selectedSourceIds
-        };
-        this._executeMerge(mergeConfig);
+        this._showMergeOptionsModal(name, selectedSourceIds);
       }
     });
 
