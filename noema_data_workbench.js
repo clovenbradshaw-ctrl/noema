@@ -738,6 +738,11 @@ class EODataWorkbench {
 
     // Panel tab history for "reopen tab" feature
     this.panelTabHistory = [];
+
+    // Tab Bookmarks - Saved tabs organized in nested folders
+    this.bookmarks = [];        // Array of bookmarked tabs and folders
+    this.bookmarkFolders = [];  // Flat list of all folders for easy lookup
+    this.expandedBookmarkFolders = new Set(); // Track which folders are expanded in UI
   }
 
   // --------------------------------------------------------------------------
@@ -1365,12 +1370,22 @@ class EODataWorkbench {
     // Remove any existing context menu
     document.querySelectorAll('.tab-context-menu').forEach(m => m.remove());
 
+    const isBookmarked = this._isTabBookmarked(tabId);
     const menu = document.createElement('div');
     menu.className = 'tab-context-menu';
     menu.innerHTML = `
       <div class="context-menu-item" data-action="pin">
         <i class="ph ${tab.isPinned ? 'ph-push-pin-slash' : 'ph-push-pin'}"></i>
         ${tab.isPinned ? 'Unpin' : 'Pin'}
+      </div>
+      <div class="context-menu-item" data-action="bookmark">
+        <i class="ph ${isBookmarked ? 'ph-bookmark-simple-fill' : 'ph-bookmark-simple'}"></i>
+        ${isBookmarked ? 'Remove Bookmark' : 'Bookmark'}
+      </div>
+      <div class="context-menu-item has-submenu" data-action="bookmark-to-folder">
+        <i class="ph ph-folder-plus"></i>
+        Add to Folder
+        <i class="ph ph-caret-right submenu-arrow"></i>
       </div>
       <div class="context-menu-item" data-action="duplicate">
         <i class="ph ph-copy"></i>
@@ -1407,11 +1422,26 @@ class EODataWorkbench {
 
     // Handle menu actions
     menu.querySelectorAll('.context-menu-item:not(.disabled)').forEach(item => {
+      // Handle "Add to Folder" submenu hover
+      if (item.dataset.action === 'bookmark-to-folder') {
+        item.addEventListener('mouseenter', (e) => {
+          this._showBookmarkFolderSubmenu(e, item, tab, menu);
+        });
+        return;
+      }
+
       item.addEventListener('click', () => {
         const action = item.dataset.action;
         switch (action) {
           case 'pin':
             this.toggleTabPin(tabId);
+            break;
+          case 'bookmark':
+            if (isBookmarked) {
+              this._removeBookmark(tabId);
+            } else {
+              this._addBookmark(tab);
+            }
             break;
           case 'duplicate':
             this.openTab(tab.type, {
@@ -1442,6 +1472,764 @@ class EODataWorkbench {
     setTimeout(() => {
       document.addEventListener('click', () => menu.remove(), { once: true });
     }, 0);
+  }
+
+  // --------------------------------------------------------------------------
+  // Bookmark Management
+  // --------------------------------------------------------------------------
+
+  /**
+   * Check if a tab is bookmarked
+   */
+  _isTabBookmarked(tabId) {
+    return this._findBookmarkByTabId(tabId) !== null;
+  }
+
+  /**
+   * Find a bookmark by tab ID (searches recursively in folders)
+   */
+  _findBookmarkByTabId(tabId, items = this.bookmarks) {
+    for (const item of items) {
+      if (item.type === 'bookmark' && item.tabId === tabId) {
+        return item;
+      }
+      if (item.type === 'folder' && item.children) {
+        const found = this._findBookmarkByTabId(tabId, item.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find bookmark by matching tab properties (for opening bookmarked tabs)
+   */
+  _findBookmarkByTabProps(tabType, contentId, items = this.bookmarks) {
+    for (const item of items) {
+      if (item.type === 'bookmark' && item.tabType === tabType && item.contentId === contentId) {
+        return item;
+      }
+      if (item.type === 'folder' && item.children) {
+        const found = this._findBookmarkByTabProps(tabType, contentId, item.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Add a bookmark for a tab
+   */
+  _addBookmark(tab, folderId = null) {
+    const bookmark = {
+      id: `bookmark-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'bookmark',
+      tabId: tab.id,
+      tabType: tab.type,
+      contentId: tab.contentId,
+      title: tab.title,
+      icon: tab.icon,
+      viewState: tab.viewState ? { ...tab.viewState } : null,
+      createdAt: Date.now()
+    };
+
+    if (folderId) {
+      const folder = this._findFolderById(folderId);
+      if (folder) {
+        folder.children.push(bookmark);
+      } else {
+        this.bookmarks.push(bookmark);
+      }
+    } else {
+      this.bookmarks.push(bookmark);
+    }
+
+    this._saveData();
+    this._renderBookmarksDropdown();
+    return bookmark;
+  }
+
+  /**
+   * Remove a bookmark by tab ID
+   */
+  _removeBookmark(tabId) {
+    this._removeBookmarkFromList(tabId, this.bookmarks);
+    this._saveData();
+    this._renderBookmarksDropdown();
+  }
+
+  /**
+   * Recursively remove bookmark from list
+   */
+  _removeBookmarkFromList(tabId, items) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item.type === 'bookmark' && item.tabId === tabId) {
+        items.splice(i, 1);
+        return true;
+      }
+      if (item.type === 'folder' && item.children) {
+        if (this._removeBookmarkFromList(tabId, item.children)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Remove bookmark by its own ID
+   */
+  _removeBookmarkById(bookmarkId) {
+    this._removeItemById(bookmarkId, this.bookmarks);
+    this._saveData();
+    this._renderBookmarksDropdown();
+  }
+
+  /**
+   * Recursively remove item by ID
+   */
+  _removeItemById(itemId, items) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item.id === itemId) {
+        items.splice(i, 1);
+        return true;
+      }
+      if (item.type === 'folder' && item.children) {
+        if (this._removeItemById(itemId, item.children)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Create a new bookmark folder
+   */
+  _createBookmarkFolder(name, parentFolderId = null) {
+    const folder = {
+      id: `folder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'folder',
+      name: name,
+      children: [],
+      createdAt: Date.now()
+    };
+
+    if (parentFolderId) {
+      const parentFolder = this._findFolderById(parentFolderId);
+      if (parentFolder) {
+        parentFolder.children.push(folder);
+      } else {
+        this.bookmarks.push(folder);
+      }
+    } else {
+      this.bookmarks.push(folder);
+    }
+
+    this.bookmarkFolders.push(folder);
+    this._saveData();
+    this._renderBookmarksDropdown();
+    return folder;
+  }
+
+  /**
+   * Find folder by ID (recursively)
+   */
+  _findFolderById(folderId, items = this.bookmarks) {
+    for (const item of items) {
+      if (item.type === 'folder' && item.id === folderId) {
+        return item;
+      }
+      if (item.type === 'folder' && item.children) {
+        const found = this._findFolderById(folderId, item.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Rename a bookmark folder
+   */
+  _renameBookmarkFolder(folderId, newName) {
+    const folder = this._findFolderById(folderId);
+    if (folder) {
+      folder.name = newName;
+      this._saveData();
+      this._renderBookmarksDropdown();
+    }
+  }
+
+  /**
+   * Delete a bookmark folder (and optionally its contents)
+   */
+  _deleteBookmarkFolder(folderId, deleteContents = false) {
+    const folder = this._findFolderById(folderId);
+    if (!folder) return;
+
+    if (!deleteContents && folder.children.length > 0) {
+      // Move children to parent level
+      this._moveChildrenToParent(folderId);
+    }
+
+    // Remove folder from bookmarkFolders list
+    const folderIndex = this.bookmarkFolders.findIndex(f => f.id === folderId);
+    if (folderIndex > -1) {
+      this.bookmarkFolders.splice(folderIndex, 1);
+    }
+
+    // Remove folder from bookmarks tree
+    this._removeItemById(folderId, this.bookmarks);
+    this._saveData();
+    this._renderBookmarksDropdown();
+  }
+
+  /**
+   * Move folder children to parent level
+   */
+  _moveChildrenToParent(folderId) {
+    const moveChildren = (items, parentItems = null) => {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type === 'folder' && item.id === folderId) {
+          const targetList = parentItems || this.bookmarks;
+          const insertIndex = targetList.indexOf(item);
+          // Insert children at folder's position
+          targetList.splice(insertIndex, 0, ...item.children);
+          item.children = [];
+          return true;
+        }
+        if (item.type === 'folder' && item.children) {
+          if (moveChildren(item.children, items)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    moveChildren(this.bookmarks);
+  }
+
+  /**
+   * Move a bookmark to a folder
+   */
+  _moveBookmarkToFolder(bookmarkId, targetFolderId) {
+    // Find and remove bookmark from current location
+    let bookmark = null;
+    const removeBookmark = (items) => {
+      for (let i = items.length - 1; i >= 0; i--) {
+        if (items[i].id === bookmarkId) {
+          bookmark = items.splice(i, 1)[0];
+          return true;
+        }
+        if (items[i].type === 'folder' && items[i].children) {
+          if (removeBookmark(items[i].children)) return true;
+        }
+      }
+      return false;
+    };
+    removeBookmark(this.bookmarks);
+
+    if (!bookmark) return;
+
+    // Add to target folder or root
+    if (targetFolderId) {
+      const folder = this._findFolderById(targetFolderId);
+      if (folder) {
+        folder.children.push(bookmark);
+      } else {
+        this.bookmarks.push(bookmark);
+      }
+    } else {
+      this.bookmarks.push(bookmark);
+    }
+
+    this._saveData();
+    this._renderBookmarksDropdown();
+  }
+
+  /**
+   * Open a bookmarked tab
+   */
+  _openBookmark(bookmark) {
+    this.openTab(bookmark.tabType, {
+      contentId: bookmark.contentId,
+      title: bookmark.title,
+      icon: bookmark.icon,
+      viewState: bookmark.viewState ? { ...bookmark.viewState } : undefined
+    });
+  }
+
+  /**
+   * Show folder submenu for "Add to Folder" context menu item
+   */
+  _showBookmarkFolderSubmenu(e, menuItem, tab, parentMenu) {
+    // Remove existing submenus
+    document.querySelectorAll('.bookmark-folder-submenu').forEach(m => m.remove());
+
+    const submenu = document.createElement('div');
+    submenu.className = 'bookmark-folder-submenu tab-context-menu';
+
+    // Get all folders (flattened with indent)
+    const folders = this._getFlattenedFolders();
+
+    let submenuHtml = `
+      <div class="context-menu-item" data-folder-id="">
+        <i class="ph ph-bookmark-simple"></i>
+        Bookmarks (root)
+      </div>
+    `;
+
+    if (folders.length > 0) {
+      submenuHtml += '<div class="context-menu-divider"></div>';
+      folders.forEach(f => {
+        const indent = '&nbsp;&nbsp;'.repeat(f.depth);
+        submenuHtml += `
+          <div class="context-menu-item" data-folder-id="${f.id}">
+            <i class="ph ph-folder"></i>
+            ${indent}${this._escapeHtml(f.name)}
+          </div>
+        `;
+      });
+    }
+
+    submenuHtml += `
+      <div class="context-menu-divider"></div>
+      <div class="context-menu-item" data-action="new-folder">
+        <i class="ph ph-folder-plus"></i>
+        New Folder...
+      </div>
+    `;
+
+    submenu.innerHTML = submenuHtml;
+
+    // Position submenu
+    const rect = menuItem.getBoundingClientRect();
+    submenu.style.position = 'fixed';
+    submenu.style.left = `${rect.right}px`;
+    submenu.style.top = `${rect.top}px`;
+    submenu.style.zIndex = '10001';
+
+    document.body.appendChild(submenu);
+
+    // Handle folder selection
+    submenu.querySelectorAll('.context-menu-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = item.dataset.action;
+        if (action === 'new-folder') {
+          this._promptNewFolder((folderName) => {
+            if (folderName) {
+              const folder = this._createBookmarkFolder(folderName);
+              this._addBookmark(tab, folder.id);
+            }
+          });
+        } else {
+          const folderId = item.dataset.folderId || null;
+          this._addBookmark(tab, folderId);
+        }
+        submenu.remove();
+        parentMenu.remove();
+      });
+    });
+
+    // Remove submenu when mouse leaves both menu items
+    let hideTimeout;
+    const hideSubmenu = () => {
+      hideTimeout = setTimeout(() => submenu.remove(), 150);
+    };
+    const cancelHide = () => {
+      clearTimeout(hideTimeout);
+    };
+
+    menuItem.addEventListener('mouseleave', hideSubmenu);
+    submenu.addEventListener('mouseenter', cancelHide);
+    submenu.addEventListener('mouseleave', hideSubmenu);
+  }
+
+  /**
+   * Get flattened list of folders with depth info
+   */
+  _getFlattenedFolders(items = this.bookmarks, depth = 0) {
+    const result = [];
+    for (const item of items) {
+      if (item.type === 'folder') {
+        result.push({ id: item.id, name: item.name, depth });
+        if (item.children) {
+          result.push(...this._getFlattenedFolders(item.children, depth + 1));
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Prompt user to create a new folder
+   */
+  _promptNewFolder(callback, parentFolderId = null) {
+    const modal = document.createElement('div');
+    modal.className = 'eo-modal-overlay';
+    modal.innerHTML = `
+      <div class="eo-modal bookmark-folder-modal">
+        <div class="eo-modal-header">
+          <h3>New Bookmark Folder</h3>
+          <button class="eo-modal-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="eo-modal-body">
+          <div class="form-group">
+            <label>Folder Name</label>
+            <input type="text" id="new-folder-name" placeholder="Enter folder name..." autofocus>
+          </div>
+        </div>
+        <div class="eo-modal-footer">
+          <button class="btn btn-secondary" id="cancel-folder">Cancel</button>
+          <button class="btn btn-primary" id="create-folder">Create</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector('#new-folder-name');
+    const createBtn = modal.querySelector('#create-folder');
+    const cancelBtn = modal.querySelector('#cancel-folder');
+    const closeBtn = modal.querySelector('.eo-modal-close');
+
+    const close = () => modal.remove();
+
+    const create = () => {
+      const name = input.value.trim();
+      if (name) {
+        callback(name, parentFolderId);
+      }
+      close();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') create();
+      if (e.key === 'Escape') close();
+    });
+
+    createBtn.addEventListener('click', create);
+    cancelBtn.addEventListener('click', close);
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+
+    setTimeout(() => input.focus(), 50);
+  }
+
+  /**
+   * Render the bookmarks dropdown
+   */
+  _renderBookmarksDropdown() {
+    const dropdown = document.getElementById('bookmarks-dropdown');
+    if (!dropdown) return;
+
+    const content = dropdown.querySelector('.bookmarks-dropdown-content');
+    if (!content) return;
+
+    if (this.bookmarks.length === 0) {
+      content.innerHTML = `
+        <div class="bookmarks-empty">
+          <i class="ph ph-bookmark-simple"></i>
+          <p>No bookmarks yet</p>
+          <span>Right-click a tab to bookmark it</span>
+        </div>
+      `;
+      return;
+    }
+
+    content.innerHTML = this._renderBookmarkItems(this.bookmarks);
+    this._attachBookmarkEventHandlers(content);
+  }
+
+  /**
+   * Render bookmark items recursively
+   */
+  _renderBookmarkItems(items, depth = 0) {
+    return items.map(item => {
+      if (item.type === 'folder') {
+        const isExpanded = this.expandedBookmarkFolders.has(item.id);
+        return `
+          <div class="bookmark-folder ${isExpanded ? 'expanded' : ''}" data-folder-id="${item.id}" style="padding-left: ${depth * 12}px">
+            <div class="bookmark-folder-header">
+              <i class="ph ${isExpanded ? 'ph-caret-down' : 'ph-caret-right'} folder-toggle"></i>
+              <i class="ph ph-folder${isExpanded ? '-open' : ''}"></i>
+              <span class="folder-name">${this._escapeHtml(item.name)}</span>
+              <span class="folder-count">${item.children.length}</span>
+              <div class="bookmark-actions">
+                <button class="bookmark-action" data-action="rename-folder" title="Rename">
+                  <i class="ph ph-pencil-simple"></i>
+                </button>
+                <button class="bookmark-action" data-action="delete-folder" title="Delete">
+                  <i class="ph ph-trash"></i>
+                </button>
+              </div>
+            </div>
+            <div class="bookmark-folder-children" ${!isExpanded ? 'style="display: none;"' : ''}>
+              ${this._renderBookmarkItems(item.children, depth + 1)}
+            </div>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="bookmark-item" data-bookmark-id="${item.id}" style="padding-left: ${depth * 12 + 24}px">
+            <i class="ph ${item.icon || 'ph-bookmark-simple'}"></i>
+            <span class="bookmark-title">${this._escapeHtml(item.title)}</span>
+            <div class="bookmark-actions">
+              <button class="bookmark-action" data-action="remove" title="Remove">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }
+    }).join('');
+  }
+
+  /**
+   * Attach event handlers to bookmark items
+   */
+  _attachBookmarkEventHandlers(container) {
+    // Bookmark item clicks - open the bookmarked tab
+    container.querySelectorAll('.bookmark-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.bookmark-action')) return;
+        const bookmarkId = item.dataset.bookmarkId;
+        const bookmark = this._findBookmarkById(bookmarkId);
+        if (bookmark) {
+          this._openBookmark(bookmark);
+          this._hideBookmarksDropdown();
+        }
+      });
+
+      // Remove button
+      item.querySelector('[data-action="remove"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const bookmarkId = item.dataset.bookmarkId;
+        this._removeBookmarkById(bookmarkId);
+      });
+    });
+
+    // Folder header clicks - toggle expand/collapse
+    container.querySelectorAll('.bookmark-folder-header').forEach(header => {
+      const folder = header.closest('.bookmark-folder');
+      const folderId = folder.dataset.folderId;
+
+      header.addEventListener('click', (e) => {
+        if (e.target.closest('.bookmark-action')) return;
+        this._toggleBookmarkFolder(folderId);
+      });
+
+      // Rename button
+      header.querySelector('[data-action="rename-folder"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._promptRenameFolder(folderId);
+      });
+
+      // Delete button
+      header.querySelector('[data-action="delete-folder"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._promptDeleteFolder(folderId);
+      });
+    });
+  }
+
+  /**
+   * Find bookmark by ID
+   */
+  _findBookmarkById(bookmarkId, items = this.bookmarks) {
+    for (const item of items) {
+      if (item.id === bookmarkId) return item;
+      if (item.type === 'folder' && item.children) {
+        const found = this._findBookmarkById(bookmarkId, item.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Toggle bookmark folder expand/collapse
+   */
+  _toggleBookmarkFolder(folderId) {
+    if (this.expandedBookmarkFolders.has(folderId)) {
+      this.expandedBookmarkFolders.delete(folderId);
+    } else {
+      this.expandedBookmarkFolders.add(folderId);
+    }
+    this._saveData();
+    this._renderBookmarksDropdown();
+  }
+
+  /**
+   * Prompt to rename a folder
+   */
+  _promptRenameFolder(folderId) {
+    const folder = this._findFolderById(folderId);
+    if (!folder) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'eo-modal-overlay';
+    modal.innerHTML = `
+      <div class="eo-modal bookmark-folder-modal">
+        <div class="eo-modal-header">
+          <h3>Rename Folder</h3>
+          <button class="eo-modal-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="eo-modal-body">
+          <div class="form-group">
+            <label>Folder Name</label>
+            <input type="text" id="rename-folder-name" value="${this._escapeHtml(folder.name)}" autofocus>
+          </div>
+        </div>
+        <div class="eo-modal-footer">
+          <button class="btn btn-secondary" id="cancel-rename">Cancel</button>
+          <button class="btn btn-primary" id="confirm-rename">Rename</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector('#rename-folder-name');
+    const confirmBtn = modal.querySelector('#confirm-rename');
+    const cancelBtn = modal.querySelector('#cancel-rename');
+    const closeBtn = modal.querySelector('.eo-modal-close');
+
+    const close = () => modal.remove();
+    const rename = () => {
+      const newName = input.value.trim();
+      if (newName) {
+        this._renameBookmarkFolder(folderId, newName);
+      }
+      close();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') rename();
+      if (e.key === 'Escape') close();
+    });
+    input.select();
+
+    confirmBtn.addEventListener('click', rename);
+    cancelBtn.addEventListener('click', close);
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+
+    setTimeout(() => input.focus(), 50);
+  }
+
+  /**
+   * Prompt to delete a folder
+   */
+  _promptDeleteFolder(folderId) {
+    const folder = this._findFolderById(folderId);
+    if (!folder) return;
+
+    const hasChildren = folder.children && folder.children.length > 0;
+    const modal = document.createElement('div');
+    modal.className = 'eo-modal-overlay';
+    modal.innerHTML = `
+      <div class="eo-modal bookmark-folder-modal">
+        <div class="eo-modal-header">
+          <h3>Delete Folder</h3>
+          <button class="eo-modal-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="eo-modal-body">
+          <p>Delete folder "${this._escapeHtml(folder.name)}"?</p>
+          ${hasChildren ? `
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="delete-contents">
+                Also delete ${folder.children.length} item${folder.children.length > 1 ? 's' : ''} inside
+              </label>
+            </div>
+          ` : ''}
+        </div>
+        <div class="eo-modal-footer">
+          <button class="btn btn-secondary" id="cancel-delete">Cancel</button>
+          <button class="btn btn-danger" id="confirm-delete">Delete</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const confirmBtn = modal.querySelector('#confirm-delete');
+    const cancelBtn = modal.querySelector('#cancel-delete');
+    const closeBtn = modal.querySelector('.eo-modal-close');
+    const deleteContentsCheckbox = modal.querySelector('#delete-contents');
+
+    const close = () => modal.remove();
+    const deleteFolder = () => {
+      const deleteContents = deleteContentsCheckbox?.checked || false;
+      this._deleteBookmarkFolder(folderId, deleteContents);
+      close();
+    };
+
+    confirmBtn.addEventListener('click', deleteFolder);
+    cancelBtn.addEventListener('click', close);
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+  }
+
+  /**
+   * Show/hide bookmarks dropdown
+   */
+  _toggleBookmarksDropdown() {
+    const dropdown = document.getElementById('bookmarks-dropdown');
+    if (!dropdown) return;
+
+    const isVisible = dropdown.style.display !== 'none';
+    if (isVisible) {
+      this._hideBookmarksDropdown();
+    } else {
+      this._showBookmarksDropdown();
+    }
+  }
+
+  _showBookmarksDropdown() {
+    const dropdown = document.getElementById('bookmarks-dropdown');
+    const btn = document.getElementById('bookmarks-btn');
+    if (!dropdown || !btn) return;
+
+    // Position dropdown below button
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.right = `${window.innerWidth - rect.right}px`;
+    dropdown.style.display = 'block';
+
+    this._renderBookmarksDropdown();
+
+    // Close on click outside
+    setTimeout(() => {
+      document.addEventListener('click', this._handleBookmarksClickOutside);
+    }, 0);
+  }
+
+  _hideBookmarksDropdown() {
+    const dropdown = document.getElementById('bookmarks-dropdown');
+    if (dropdown) {
+      dropdown.style.display = 'none';
+    }
+    document.removeEventListener('click', this._handleBookmarksClickOutside);
+  }
+
+  _handleBookmarksClickOutside = (e) => {
+    const dropdown = document.getElementById('bookmarks-dropdown');
+    const btn = document.getElementById('bookmarks-btn');
+    if (!dropdown?.contains(e.target) && !btn?.contains(e.target)) {
+      this._hideBookmarksDropdown();
+    }
   }
 
   /**
@@ -3021,7 +3809,11 @@ class EODataWorkbench {
       newTabBtn: document.getElementById('new-tab-btn'),
       tabListBtn: document.getElementById('tab-list-btn'),
       tabScrollLeft: document.getElementById('tab-scroll-left'),
-      tabScrollRight: document.getElementById('tab-scroll-right')
+      tabScrollRight: document.getElementById('tab-scroll-right'),
+      // Bookmarks elements
+      bookmarksBtn: document.getElementById('bookmarks-btn'),
+      bookmarksDropdown: document.getElementById('bookmarks-dropdown'),
+      bookmarksNewFolder: document.getElementById('bookmarks-new-folder')
     };
 
     // Tab management state
@@ -3407,6 +4199,22 @@ class EODataWorkbench {
       this._toggleTabListDropdown();
     });
 
+    // Bookmarks button
+    this.elements.bookmarksBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleBookmarksDropdown();
+    });
+
+    // Bookmarks new folder button
+    this.elements.bookmarksNewFolder?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._promptNewFolder((name) => {
+        if (name) {
+          this._createBookmarkFolder(name);
+        }
+      });
+    });
+
     // Tab scroll buttons
     this.elements.tabScrollLeft?.addEventListener('click', () => this._scrollTabs('left'));
     this.elements.tabScrollRight?.addEventListener('click', () => this._scrollTabs('right'));
@@ -3581,6 +4389,11 @@ class EODataWorkbench {
         this.browserTabs = parsed.browserTabs || [];
         this.activeTabId = parsed.activeTabId || null;
         this.recentlyClosedTabs = parsed.recentlyClosedTabs || [];
+
+        // Load bookmarks (saved tabs in nested folders)
+        this.bookmarks = parsed.bookmarks || [];
+        this.bookmarkFolders = parsed.bookmarkFolders || [];
+        this.expandedBookmarkFolders = new Set(parsed.expandedBookmarkFolders || []);
 
         // Load records for current set immediately if using lazy loading
         if (this._useLazyLoading && this.currentSetId) {
@@ -3961,6 +4774,9 @@ class EODataWorkbench {
         browserTabs: this.browserTabs || [],
         activeTabId: this.activeTabId,
         recentlyClosedTabs: [],
+        bookmarks: this.bookmarks || [],
+        bookmarkFolders: this.bookmarkFolders || [],
+        expandedBookmarkFolders: Array.from(this.expandedBookmarkFolders || []),
         _storageVersion: 2,
         _syncSave: true // Mark as sync save
       };
@@ -4039,6 +4855,9 @@ class EODataWorkbench {
         browserTabs: this.browserTabs || [],
         activeTabId: this.activeTabId,
         recentlyClosedTabs: recentlyClosedToSave,
+        bookmarks: this.bookmarks || [],
+        bookmarkFolders: this.bookmarkFolders || [],
+        expandedBookmarkFolders: Array.from(this.expandedBookmarkFolders || []),
         _storageVersion: 2, // Mark as hybrid storage format
         _hasIndexedDB: !!storage
       };

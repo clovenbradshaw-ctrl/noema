@@ -325,9 +325,25 @@
           <i class="ph ph-plus"></i>
         </button>
         <div class="tab-bar-actions">
+          <button class="tab-bar-action-btn" id="bookmarks-btn" title="Bookmarks">
+            <i class="ph ph-bookmark-simple"></i>
+          </button>
           <button class="tab-bar-action-btn" id="tab-list-btn" title="View all tabs">
             <i class="ph ph-caret-down"></i>
           </button>
+        </div>
+      </div>
+
+      <!-- Bookmarks Dropdown -->
+      <div class="bookmarks-dropdown" id="bookmarks-dropdown" style="display: none;">
+        <div class="bookmarks-dropdown-header">
+          <span>Bookmarks</span>
+          <button class="bookmarks-new-folder-btn" id="bookmarks-new-folder" title="New folder">
+            <i class="ph ph-folder-plus"></i>
+          </button>
+        </div>
+        <div class="bookmarks-dropdown-content">
+          <!-- Bookmark items rendered dynamically -->
         </div>
       </div>
 
