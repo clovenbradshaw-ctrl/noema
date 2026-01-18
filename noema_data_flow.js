@@ -19,16 +19,26 @@
  */
 
 // ============================================================================
-// Node Categories (Simplified Taxonomy)
+// Node Categories - TouchDesigner-Inspired Operator Families
 // ============================================================================
 
 /**
- * Three main categories instead of exposing all Nine Operators
+ * Six operator families (TouchDesigner-inspired, Noema-specific)
+ * Each family has a distinct color and purpose
  */
 const DataFlowCategory = Object.freeze({
-  SOURCE: 'source',       // Where data comes from (Set, Lens, Focus, Import)
-  TRANSFORM: 'transform', // What you do to data (Filter, Join, Transform, etc.)
-  OUTPUT: 'output'        // Results and actions (Aggregate, Preview, Save, Export)
+  // Legacy aliases for backward compatibility
+  SOURCE: 'given',
+  TRANSFORM: 'shape',
+  OUTPUT: 'emit',
+
+  // New families (TouchDesigner-inspired)
+  GIVEN: 'given',       // Where data originates (immutable sources) - Indigo
+  SHAPE: 'shape',       // How data is sculpted (row/column ops) - Amber
+  SYNTH: 'synth',       // How data is synthesized (aggregations) - Violet
+  AGENT: 'agent',       // Where AI acts (LLM operations) - Cyan
+  FLOW: 'flow',         // How data flows (control structures) - Rose
+  EMIT: 'emit'          // Where data goes (outputs/side effects) - Emerald
 });
 
 // ============================================================================
@@ -37,114 +47,297 @@ const DataFlowCategory = Object.freeze({
 
 /**
  * Available node types in the Data Flow canvas
+ * Organized by operator family
  */
 const DataFlowNodeType = Object.freeze({
-  // Source nodes
+  // ═══════════════════════════════════════════════════════════════
+  // GIVEN - Where data originates (immutable sources)
+  // ═══════════════════════════════════════════════════════════════
   SET: 'set',           // Pull records from a Set
   LENS: 'lens',         // Use a saved Lens
   FOCUS: 'focus',       // Start from specific record
-  IMPORT: 'import',     // Load external data
+  IMPORT: 'import',     // Load external data (CSV/JSON/API)
+  QUERY: 'query',       // SQL-like query interface
+  WEBHOOK_IN: 'webhookIn', // Receive external data via webhook
 
-  // Transform nodes
+  // ═══════════════════════════════════════════════════════════════
+  // SHAPE - How data is sculpted (row/column operations)
+  // ═══════════════════════════════════════════════════════════════
   FILTER: 'filter',     // SEG - Keep matching records
-  JOIN: 'join',         // CON - Connect to related records
+  SORT: 'sort',         // Order records by field(s)
+  SELECT: 'select',     // DES - Choose/rename fields
   TRANSFORM: 'transform', // ALT - Modify field values
-  SELECT: 'select',     // DES - Choose fields to keep
+  DEDUPE: 'dedupe',     // Remove duplicate records
+  FLATTEN: 'flatten',   // Unnest arrays
+  UNWIND: 'unwind',     // One record per array item
   HANDLE_NULLS: 'handleNulls', // NUL - Deal with missing values
-  BRANCH: 'branch',     // Split flow on condition
-  LOOP: 'loop',         // Iterate over records
   CODE: 'code',         // Custom JavaScript
 
-  // Output nodes
-  AGGREGATE: 'aggregate', // SYN - Calculate summaries
+  // ═══════════════════════════════════════════════════════════════
+  // SYNTH - How data is synthesized (aggregations)
+  // ═══════════════════════════════════════════════════════════════
+  AGGREGATE: 'aggregate', // SYN - Calculate summaries (SUM, AVG, COUNT)
+  GROUP: 'group',       // Group records by field(s)
+  PIVOT: 'pivot',       // Rows to columns transformation
+  ROLLUP: 'rollup',     // Hierarchical aggregation
+  WINDOW: 'window',     // Running calculations (moving avg, rank)
+  DISTINCT: 'distinct', // Unique values extraction
+
+  // ═══════════════════════════════════════════════════════════════
+  // AGENT - Where AI acts (LLM operations)
+  // ═══════════════════════════════════════════════════════════════
+  AI_CLASSIFY: 'aiClassify', // Categorize records with AI
+  AI_EXTRACT: 'aiExtract',   // Extract structured data
+  AI_GENERATE: 'aiGenerate', // Create new content
+  AI_EMBED: 'aiEmbed',       // Vector embeddings
+  AI_SUMMARIZE: 'aiSummarize', // Condense records
+  AI_MATCH: 'aiMatch',       // Fuzzy/semantic join
+
+  // ═══════════════════════════════════════════════════════════════
+  // FLOW - How data flows (control structures)
+  // ═══════════════════════════════════════════════════════════════
+  BRANCH: 'branch',     // If/else split (true/false outputs)
+  SWITCH: 'switch',     // Multi-way split (case outputs)
+  MERGE: 'merge',       // Combine multiple streams
+  JOIN: 'join',         // CON - Join on key
+  LOOP: 'loop',         // Iterate with sub-flow
+  ERROR: 'error',       // Handle failures gracefully
+
+  // ═══════════════════════════════════════════════════════════════
+  // EMIT - Where data goes (outputs/side effects)
+  // ═══════════════════════════════════════════════════════════════
   PREVIEW: 'preview',   // View current data state
   SAVE: 'save',         // Write to Set
-  EXPORT: 'export',     // Download as CSV/JSON
-  AI_ACTION: 'aiAction' // Send to AI for analysis
+  EXPORT: 'export',     // Download as CSV/JSON/Excel
+  WEBHOOK_OUT: 'webhookOut', // Send to external URL
+  LOG: 'log',           // Debug output to console
+
+  // Legacy alias for backward compatibility
+  AI_ACTION: 'aiClassify'
 });
 
 /**
- * Map node types to categories
+ * Map node types to operator families
  */
 const NodeTypeCategory = {
-  [DataFlowNodeType.SET]: DataFlowCategory.SOURCE,
-  [DataFlowNodeType.LENS]: DataFlowCategory.SOURCE,
-  [DataFlowNodeType.FOCUS]: DataFlowCategory.SOURCE,
-  [DataFlowNodeType.IMPORT]: DataFlowCategory.SOURCE,
+  // GIVEN - Sources
+  [DataFlowNodeType.SET]: DataFlowCategory.GIVEN,
+  [DataFlowNodeType.LENS]: DataFlowCategory.GIVEN,
+  [DataFlowNodeType.FOCUS]: DataFlowCategory.GIVEN,
+  [DataFlowNodeType.IMPORT]: DataFlowCategory.GIVEN,
+  [DataFlowNodeType.QUERY]: DataFlowCategory.GIVEN,
+  [DataFlowNodeType.WEBHOOK_IN]: DataFlowCategory.GIVEN,
 
-  [DataFlowNodeType.FILTER]: DataFlowCategory.TRANSFORM,
-  [DataFlowNodeType.JOIN]: DataFlowCategory.TRANSFORM,
-  [DataFlowNodeType.TRANSFORM]: DataFlowCategory.TRANSFORM,
-  [DataFlowNodeType.SELECT]: DataFlowCategory.TRANSFORM,
-  [DataFlowNodeType.HANDLE_NULLS]: DataFlowCategory.TRANSFORM,
-  [DataFlowNodeType.BRANCH]: DataFlowCategory.TRANSFORM,
-  [DataFlowNodeType.LOOP]: DataFlowCategory.TRANSFORM,
-  [DataFlowNodeType.CODE]: DataFlowCategory.TRANSFORM,
+  // SHAPE - Row/Column Operations
+  [DataFlowNodeType.FILTER]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.SORT]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.SELECT]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.TRANSFORM]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.DEDUPE]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.FLATTEN]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.UNWIND]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.HANDLE_NULLS]: DataFlowCategory.SHAPE,
+  [DataFlowNodeType.CODE]: DataFlowCategory.SHAPE,
 
-  [DataFlowNodeType.AGGREGATE]: DataFlowCategory.OUTPUT,
-  [DataFlowNodeType.PREVIEW]: DataFlowCategory.OUTPUT,
-  [DataFlowNodeType.SAVE]: DataFlowCategory.OUTPUT,
-  [DataFlowNodeType.EXPORT]: DataFlowCategory.OUTPUT,
-  [DataFlowNodeType.AI_ACTION]: DataFlowCategory.OUTPUT
+  // SYNTH - Aggregations
+  [DataFlowNodeType.AGGREGATE]: DataFlowCategory.SYNTH,
+  [DataFlowNodeType.GROUP]: DataFlowCategory.SYNTH,
+  [DataFlowNodeType.PIVOT]: DataFlowCategory.SYNTH,
+  [DataFlowNodeType.ROLLUP]: DataFlowCategory.SYNTH,
+  [DataFlowNodeType.WINDOW]: DataFlowCategory.SYNTH,
+  [DataFlowNodeType.DISTINCT]: DataFlowCategory.SYNTH,
+
+  // AGENT - AI Operations
+  [DataFlowNodeType.AI_CLASSIFY]: DataFlowCategory.AGENT,
+  [DataFlowNodeType.AI_EXTRACT]: DataFlowCategory.AGENT,
+  [DataFlowNodeType.AI_GENERATE]: DataFlowCategory.AGENT,
+  [DataFlowNodeType.AI_EMBED]: DataFlowCategory.AGENT,
+  [DataFlowNodeType.AI_SUMMARIZE]: DataFlowCategory.AGENT,
+  [DataFlowNodeType.AI_MATCH]: DataFlowCategory.AGENT,
+
+  // FLOW - Control Structures
+  [DataFlowNodeType.BRANCH]: DataFlowCategory.FLOW,
+  [DataFlowNodeType.SWITCH]: DataFlowCategory.FLOW,
+  [DataFlowNodeType.MERGE]: DataFlowCategory.FLOW,
+  [DataFlowNodeType.JOIN]: DataFlowCategory.FLOW,
+  [DataFlowNodeType.LOOP]: DataFlowCategory.FLOW,
+  [DataFlowNodeType.ERROR]: DataFlowCategory.FLOW,
+
+  // EMIT - Outputs
+  [DataFlowNodeType.PREVIEW]: DataFlowCategory.EMIT,
+  [DataFlowNodeType.SAVE]: DataFlowCategory.EMIT,
+  [DataFlowNodeType.EXPORT]: DataFlowCategory.EMIT,
+  [DataFlowNodeType.WEBHOOK_OUT]: DataFlowCategory.EMIT,
+  [DataFlowNodeType.LOG]: DataFlowCategory.EMIT
 };
 
 /**
  * Human-readable labels for node types
  */
 const DataFlowNodeLabels = {
+  // GIVEN
   [DataFlowNodeType.SET]: 'Set',
   [DataFlowNodeType.LENS]: 'Lens',
   [DataFlowNodeType.FOCUS]: 'Focus',
   [DataFlowNodeType.IMPORT]: 'Import',
+  [DataFlowNodeType.QUERY]: 'Query',
+  [DataFlowNodeType.WEBHOOK_IN]: 'Webhook In',
 
+  // SHAPE
   [DataFlowNodeType.FILTER]: 'Filter',
-  [DataFlowNodeType.JOIN]: 'Join',
-  [DataFlowNodeType.TRANSFORM]: 'Transform',
+  [DataFlowNodeType.SORT]: 'Sort',
   [DataFlowNodeType.SELECT]: 'Select',
+  [DataFlowNodeType.TRANSFORM]: 'Transform',
+  [DataFlowNodeType.DEDUPE]: 'Dedupe',
+  [DataFlowNodeType.FLATTEN]: 'Flatten',
+  [DataFlowNodeType.UNWIND]: 'Unwind',
   [DataFlowNodeType.HANDLE_NULLS]: 'Handle Nulls',
-  [DataFlowNodeType.BRANCH]: 'Branch',
-  [DataFlowNodeType.LOOP]: 'Loop',
   [DataFlowNodeType.CODE]: 'Code',
 
+  // SYNTH
   [DataFlowNodeType.AGGREGATE]: 'Aggregate',
+  [DataFlowNodeType.GROUP]: 'Group',
+  [DataFlowNodeType.PIVOT]: 'Pivot',
+  [DataFlowNodeType.ROLLUP]: 'Rollup',
+  [DataFlowNodeType.WINDOW]: 'Window',
+  [DataFlowNodeType.DISTINCT]: 'Distinct',
+
+  // AGENT
+  [DataFlowNodeType.AI_CLASSIFY]: 'AI Classify',
+  [DataFlowNodeType.AI_EXTRACT]: 'AI Extract',
+  [DataFlowNodeType.AI_GENERATE]: 'AI Generate',
+  [DataFlowNodeType.AI_EMBED]: 'AI Embed',
+  [DataFlowNodeType.AI_SUMMARIZE]: 'AI Summarize',
+  [DataFlowNodeType.AI_MATCH]: 'AI Match',
+
+  // FLOW
+  [DataFlowNodeType.BRANCH]: 'Branch',
+  [DataFlowNodeType.SWITCH]: 'Switch',
+  [DataFlowNodeType.MERGE]: 'Merge',
+  [DataFlowNodeType.JOIN]: 'Join',
+  [DataFlowNodeType.LOOP]: 'Loop',
+  [DataFlowNodeType.ERROR]: 'Error Handler',
+
+  // EMIT
   [DataFlowNodeType.PREVIEW]: 'Preview',
   [DataFlowNodeType.SAVE]: 'Save',
   [DataFlowNodeType.EXPORT]: 'Export',
-  [DataFlowNodeType.AI_ACTION]: 'AI Action'
+  [DataFlowNodeType.WEBHOOK_OUT]: 'Webhook Out',
+  [DataFlowNodeType.LOG]: 'Log'
 };
 
 /**
  * Icons for each node type (using Phosphor icons)
  */
 const DataFlowNodeIcons = {
+  // GIVEN
   [DataFlowNodeType.SET]: 'ph-package',
   [DataFlowNodeType.LENS]: 'ph-magnifying-glass',
   [DataFlowNodeType.FOCUS]: 'ph-crosshair',
   [DataFlowNodeType.IMPORT]: 'ph-download',
+  [DataFlowNodeType.QUERY]: 'ph-database',
+  [DataFlowNodeType.WEBHOOK_IN]: 'ph-arrow-square-in',
 
+  // SHAPE
   [DataFlowNodeType.FILTER]: 'ph-funnel',
-  [DataFlowNodeType.JOIN]: 'ph-link',
-  [DataFlowNodeType.TRANSFORM]: 'ph-pencil-simple',
+  [DataFlowNodeType.SORT]: 'ph-sort-ascending',
   [DataFlowNodeType.SELECT]: 'ph-list-checks',
+  [DataFlowNodeType.TRANSFORM]: 'ph-pencil-simple',
+  [DataFlowNodeType.DEDUPE]: 'ph-users-three',
+  [DataFlowNodeType.FLATTEN]: 'ph-arrows-out-line-vertical',
+  [DataFlowNodeType.UNWIND]: 'ph-list-numbers',
   [DataFlowNodeType.HANDLE_NULLS]: 'ph-prohibit',
-  [DataFlowNodeType.BRANCH]: 'ph-git-branch',
-  [DataFlowNodeType.LOOP]: 'ph-arrows-clockwise',
   [DataFlowNodeType.CODE]: 'ph-code',
 
-  [DataFlowNodeType.AGGREGATE]: 'ph-chart-bar',
+  // SYNTH
+  [DataFlowNodeType.AGGREGATE]: 'ph-sigma',
+  [DataFlowNodeType.GROUP]: 'ph-folders',
+  [DataFlowNodeType.PIVOT]: 'ph-table',
+  [DataFlowNodeType.ROLLUP]: 'ph-tree-structure',
+  [DataFlowNodeType.WINDOW]: 'ph-chart-line',
+  [DataFlowNodeType.DISTINCT]: 'ph-fingerprint',
+
+  // AGENT
+  [DataFlowNodeType.AI_CLASSIFY]: 'ph-tag',
+  [DataFlowNodeType.AI_EXTRACT]: 'ph-scan',
+  [DataFlowNodeType.AI_GENERATE]: 'ph-sparkle',
+  [DataFlowNodeType.AI_EMBED]: 'ph-cube',
+  [DataFlowNodeType.AI_SUMMARIZE]: 'ph-note',
+  [DataFlowNodeType.AI_MATCH]: 'ph-link-simple',
+
+  // FLOW
+  [DataFlowNodeType.BRANCH]: 'ph-git-branch',
+  [DataFlowNodeType.SWITCH]: 'ph-signpost',
+  [DataFlowNodeType.MERGE]: 'ph-git-merge',
+  [DataFlowNodeType.JOIN]: 'ph-link',
+  [DataFlowNodeType.LOOP]: 'ph-arrows-clockwise',
+  [DataFlowNodeType.ERROR]: 'ph-warning',
+
+  // EMIT
   [DataFlowNodeType.PREVIEW]: 'ph-eye',
   [DataFlowNodeType.SAVE]: 'ph-floppy-disk',
   [DataFlowNodeType.EXPORT]: 'ph-export',
-  [DataFlowNodeType.AI_ACTION]: 'ph-robot'
+  [DataFlowNodeType.WEBHOOK_OUT]: 'ph-arrow-square-out',
+  [DataFlowNodeType.LOG]: 'ph-terminal'
 };
 
 /**
- * Category colors (subtle, clean)
+ * Category/Family colors (TouchDesigner-inspired, distinct)
  */
 const CategoryColors = {
-  [DataFlowCategory.SOURCE]: '#6366f1',   // Indigo for sources
-  [DataFlowCategory.TRANSFORM]: '#8b5cf6', // Violet for transforms
-  [DataFlowCategory.OUTPUT]: '#10b981'     // Emerald for outputs
+  [DataFlowCategory.GIVEN]: '#6366f1',   // Indigo - Where data originates
+  [DataFlowCategory.SHAPE]: '#f59e0b',   // Amber - How data is sculpted
+  [DataFlowCategory.SYNTH]: '#8b5cf6',   // Violet - How data is synthesized
+  [DataFlowCategory.AGENT]: '#06b6d4',   // Cyan - Where AI acts
+  [DataFlowCategory.FLOW]: '#f43f5e',    // Rose - How data flows
+  [DataFlowCategory.EMIT]: '#10b981',    // Emerald - Where data goes
+
+  // Legacy aliases
+  [DataFlowCategory.SOURCE]: '#6366f1',
+  [DataFlowCategory.TRANSFORM]: '#f59e0b',
+  [DataFlowCategory.OUTPUT]: '#10b981'
+};
+
+/**
+ * Category metadata for UI display
+ */
+const CategoryMeta = {
+  [DataFlowCategory.GIVEN]: {
+    label: 'GIVEN',
+    description: 'Where data originates',
+    icon: 'ph-package',
+    color: '#6366f1'
+  },
+  [DataFlowCategory.SHAPE]: {
+    label: 'SHAPE',
+    description: 'How data is sculpted',
+    icon: 'ph-lightning',
+    color: '#f59e0b'
+  },
+  [DataFlowCategory.SYNTH]: {
+    label: 'SYNTH',
+    description: 'How data is synthesized',
+    icon: 'ph-sigma',
+    color: '#8b5cf6'
+  },
+  [DataFlowCategory.AGENT]: {
+    label: 'AGENT',
+    description: 'Where AI acts',
+    icon: 'ph-robot',
+    color: '#06b6d4'
+  },
+  [DataFlowCategory.FLOW]: {
+    label: 'FLOW',
+    description: 'How data flows',
+    icon: 'ph-git-branch',
+    color: '#f43f5e'
+  },
+  [DataFlowCategory.EMIT]: {
+    label: 'EMIT',
+    description: 'Where data goes',
+    icon: 'ph-export',
+    color: '#10b981'
+  }
 };
 
 // ============================================================================
@@ -210,6 +403,9 @@ class DataFlowNode {
    */
   _getDefaultConfig() {
     switch (this.type) {
+      // ═══════════════════════════════════════════════════════════════
+      // GIVEN - Source Nodes
+      // ═══════════════════════════════════════════════════════════════
       case DataFlowNodeType.SET:
         return { setId: null, setName: '', fields: [] };
 
@@ -222,44 +418,125 @@ class DataFlowNode {
       case DataFlowNodeType.IMPORT:
         return { source: 'csv', data: null, fileName: '' };
 
+      case DataFlowNodeType.QUERY:
+        return { query: '', language: 'sql' };
+
+      case DataFlowNodeType.WEBHOOK_IN:
+        return { endpoint: '', method: 'POST', auth: null };
+
+      // ═══════════════════════════════════════════════════════════════
+      // SHAPE - Transform Nodes
+      // ═══════════════════════════════════════════════════════════════
       case DataFlowNodeType.FILTER:
         return { field: '', operator: 'eq', value: '', conditions: [], logic: 'AND' };
 
-      case DataFlowNodeType.JOIN:
-        return { targetSetId: null, joinField: '', joinType: 'inner' };
-
-      case DataFlowNodeType.TRANSFORM:
-        return { field: '', expression: '', operation: 'map' };
+      case DataFlowNodeType.SORT:
+        return { field: '', direction: 'asc', nullsFirst: false };
 
       case DataFlowNodeType.SELECT:
-        return { fields: [], renames: {} };
+        return { fields: [], renames: {}, exclude: [] };
+
+      case DataFlowNodeType.TRANSFORM:
+        return { field: '', expression: '', operation: 'map', newField: '' };
+
+      case DataFlowNodeType.DEDUPE:
+        return { fields: [], keepFirst: true };
+
+      case DataFlowNodeType.FLATTEN:
+        return { field: '', separator: '.' };
+
+      case DataFlowNodeType.UNWIND:
+        return { field: '', includeIndex: false };
 
       case DataFlowNodeType.HANDLE_NULLS:
         return { strategy: 'default', defaultValue: '', perField: {} };
 
+      case DataFlowNodeType.CODE:
+        return {
+          code: '// Input records available as `records`\n// Return transformed records\nreturn records;',
+          language: 'javascript'
+        };
+
+      // ═══════════════════════════════════════════════════════════════
+      // SYNTH - Aggregation Nodes
+      // ═══════════════════════════════════════════════════════════════
+      case DataFlowNodeType.AGGREGATE:
+        return { function: 'SUM', field: '', groupBy: [], alias: '' };
+
+      case DataFlowNodeType.GROUP:
+        return { groupBy: [], aggregations: [] };
+
+      case DataFlowNodeType.PIVOT:
+        return { rowField: '', columnField: '', valueField: '', aggregation: 'SUM' };
+
+      case DataFlowNodeType.ROLLUP:
+        return { groupBy: [], aggregation: 'SUM', field: '' };
+
+      case DataFlowNodeType.WINDOW:
+        return { function: 'ROW_NUMBER', partitionBy: [], orderBy: '', alias: '' };
+
+      case DataFlowNodeType.DISTINCT:
+        return { fields: [] };
+
+      // ═══════════════════════════════════════════════════════════════
+      // AGENT - AI Nodes
+      // ═══════════════════════════════════════════════════════════════
+      case DataFlowNodeType.AI_CLASSIFY:
+        return { prompt: '', categories: [], outputField: 'category', model: 'default' };
+
+      case DataFlowNodeType.AI_EXTRACT:
+        return { prompt: '', schema: {}, outputField: 'extracted', model: 'default' };
+
+      case DataFlowNodeType.AI_GENERATE:
+        return { prompt: '', outputField: 'generated', model: 'default' };
+
+      case DataFlowNodeType.AI_EMBED:
+        return { field: '', outputField: 'embedding', model: 'default' };
+
+      case DataFlowNodeType.AI_SUMMARIZE:
+        return { field: '', maxLength: 100, outputField: 'summary', model: 'default' };
+
+      case DataFlowNodeType.AI_MATCH:
+        return { targetSetId: null, threshold: 0.8, outputField: 'match_score' };
+
+      // ═══════════════════════════════════════════════════════════════
+      // FLOW - Control Nodes
+      // ═══════════════════════════════════════════════════════════════
       case DataFlowNodeType.BRANCH:
         return { field: '', operator: 'eq', value: '' };
 
+      case DataFlowNodeType.SWITCH:
+        return { field: '', cases: [], defaultCase: 'other' };
+
+      case DataFlowNodeType.MERGE:
+        return { strategy: 'concat', dedupeBy: null };
+
+      case DataFlowNodeType.JOIN:
+        return { targetSetId: null, joinField: '', joinType: 'inner', targetField: '' };
+
       case DataFlowNodeType.LOOP:
-        return { iterateOver: 'records' };
+        return { iterateOver: 'records', maxIterations: 1000 };
 
-      case DataFlowNodeType.CODE:
-        return { code: '// Input data is in `input`\n// Return transformed data\nreturn input;', language: 'javascript' };
+      case DataFlowNodeType.ERROR:
+        return { strategy: 'skip', fallbackValue: null, logErrors: true };
 
-      case DataFlowNodeType.AGGREGATE:
-        return { function: 'SUM', field: '', groupBy: '' };
-
+      // ═══════════════════════════════════════════════════════════════
+      // EMIT - Output Nodes
+      // ═══════════════════════════════════════════════════════════════
       case DataFlowNodeType.PREVIEW:
-        return { maxRecords: 100 };
+        return { maxRecords: 100, columns: [] };
 
       case DataFlowNodeType.SAVE:
-        return { targetSetId: null, createNew: false, setName: '' };
+        return { targetSetId: null, createNew: false, setName: '', updateMode: 'replace' };
 
       case DataFlowNodeType.EXPORT:
-        return { format: 'csv', fileName: 'export' };
+        return { format: 'csv', fileName: 'export', includeHeaders: true };
 
-      case DataFlowNodeType.AI_ACTION:
-        return { action: 'classify', prompt: '', outputField: 'ai_result' };
+      case DataFlowNodeType.WEBHOOK_OUT:
+        return { url: '', method: 'POST', headers: {}, auth: null };
+
+      case DataFlowNodeType.LOG:
+        return { label: '', level: 'info', fields: [] };
 
       default:
         return {};
@@ -340,53 +617,103 @@ class DataFlowNode {
    * Get a short summary of the config for display on card
    */
   getConfigSummary() {
+    const opSymbols = { eq: '=', ne: '!=', gt: '>', lt: '<', gte: '>=', lte: '<=', contains: '~' };
+
     switch (this.type) {
+      // GIVEN
       case DataFlowNodeType.SET:
         return this.config.setName || 'Select a Set';
-
       case DataFlowNodeType.LENS:
         return this.config.lensName || 'Select a Lens';
+      case DataFlowNodeType.FOCUS:
+        return this.config.recordId || 'Select record';
+      case DataFlowNodeType.IMPORT:
+        return this.config.fileName || 'Load file';
+      case DataFlowNodeType.QUERY:
+        return this.config.query ? `${this.config.language}: ...` : 'Write query';
+      case DataFlowNodeType.WEBHOOK_IN:
+        return this.config.endpoint || 'Configure endpoint';
 
+      // SHAPE
       case DataFlowNodeType.FILTER:
         if (!this.config.field) return 'Configure filter';
-        const op = this.config.operator === 'eq' ? '=' :
-                   this.config.operator === 'ne' ? '!=' :
-                   this.config.operator === 'gt' ? '>' :
-                   this.config.operator === 'lt' ? '<' :
-                   this.config.operator;
-        return `${this.config.field} ${op} "${this.config.value}"`;
-
-      case DataFlowNodeType.JOIN:
-        return this.config.targetSetId
-          ? `\u2192 ${this.config.targetSetName || this.config.targetSetId}`
-          : 'Configure join';
-
+        return `${this.config.field} ${opSymbols[this.config.operator] || this.config.operator} "${this.config.value}"`;
+      case DataFlowNodeType.SORT:
+        return this.config.field ? `${this.config.field} ${this.config.direction}` : 'Configure sort';
+      case DataFlowNodeType.SELECT:
+        const selectCount = this.config.fields?.length || 0;
+        return selectCount ? `${selectCount} fields` : 'Select fields';
       case DataFlowNodeType.TRANSFORM:
         return this.config.expression || 'Configure transform';
-
-      case DataFlowNodeType.SELECT:
-        const count = this.config.fields?.length || 0;
-        return count ? `${count} fields` : 'Select fields';
-
+      case DataFlowNodeType.DEDUPE:
+        const dedupeCount = this.config.fields?.length || 0;
+        return dedupeCount ? `By ${dedupeCount} fields` : 'Configure dedupe';
+      case DataFlowNodeType.FLATTEN:
+        return this.config.field || 'Select field';
+      case DataFlowNodeType.UNWIND:
+        return this.config.field || 'Select array field';
       case DataFlowNodeType.HANDLE_NULLS:
-        return `Default: ${this.config.defaultValue || 'null'}`;
-
-      case DataFlowNodeType.BRANCH:
-        return this.config.field
-          ? `If ${this.config.field} ${this.config.operator} ${this.config.value}`
-          : 'Configure condition';
-
+        return `${this.config.strategy}: ${this.config.defaultValue || 'null'}`;
       case DataFlowNodeType.CODE:
         const lines = (this.config.code || '').split('\n').length;
-        return `${lines} lines`;
+        return `${lines} lines of code`;
 
+      // SYNTH
       case DataFlowNodeType.AGGREGATE:
-        return this.config.function
-          ? `${this.config.function}(${this.config.field || '*'})`
-          : 'Configure aggregation';
+        return this.config.function ? `${this.config.function}(${this.config.field || '*'})` : 'Configure';
+      case DataFlowNodeType.GROUP:
+        const groupCount = this.config.groupBy?.length || 0;
+        return groupCount ? `By ${groupCount} fields` : 'Configure group';
+      case DataFlowNodeType.PIVOT:
+        return this.config.rowField || 'Configure pivot';
+      case DataFlowNodeType.ROLLUP:
+        return `${this.config.aggregation || 'SUM'} rollup`;
+      case DataFlowNodeType.WINDOW:
+        return `${this.config.function || 'ROW_NUMBER'}()`;
+      case DataFlowNodeType.DISTINCT:
+        const distinctCount = this.config.fields?.length || 0;
+        return distinctCount ? `${distinctCount} fields` : 'All fields';
 
-      case DataFlowNodeType.AI_ACTION:
-        return this.config.action || 'Configure AI action';
+      // AGENT
+      case DataFlowNodeType.AI_CLASSIFY:
+        return this.config.categories?.length ? `${this.config.categories.length} categories` : 'Configure';
+      case DataFlowNodeType.AI_EXTRACT:
+        return this.config.prompt ? 'Extraction configured' : 'Configure extraction';
+      case DataFlowNodeType.AI_GENERATE:
+        return this.config.prompt ? 'Generation configured' : 'Configure generation';
+      case DataFlowNodeType.AI_EMBED:
+        return this.config.field || 'Select field';
+      case DataFlowNodeType.AI_SUMMARIZE:
+        return this.config.field || 'Select field';
+      case DataFlowNodeType.AI_MATCH:
+        return this.config.targetSetId ? 'Match configured' : 'Configure match';
+
+      // FLOW
+      case DataFlowNodeType.BRANCH:
+        return this.config.field ? `If ${this.config.field} ${opSymbols[this.config.operator] || '='} ${this.config.value}` : 'Configure';
+      case DataFlowNodeType.SWITCH:
+        const caseCount = this.config.cases?.length || 0;
+        return caseCount ? `${caseCount} cases` : 'Configure cases';
+      case DataFlowNodeType.MERGE:
+        return this.config.strategy || 'concat';
+      case DataFlowNodeType.JOIN:
+        return this.config.targetSetId ? `${this.config.joinType} join` : 'Configure join';
+      case DataFlowNodeType.LOOP:
+        return `Over ${this.config.iterateOver}`;
+      case DataFlowNodeType.ERROR:
+        return this.config.strategy || 'skip';
+
+      // EMIT
+      case DataFlowNodeType.PREVIEW:
+        return `Max ${this.config.maxRecords} records`;
+      case DataFlowNodeType.SAVE:
+        return this.config.setName || this.config.targetSetId || 'Configure save';
+      case DataFlowNodeType.EXPORT:
+        return `${this.config.format.toUpperCase()}: ${this.config.fileName}`;
+      case DataFlowNodeType.WEBHOOK_OUT:
+        return this.config.url || 'Configure URL';
+      case DataFlowNodeType.LOG:
+        return this.config.label || this.config.level;
 
       default:
         return '';
@@ -397,14 +724,24 @@ class DataFlowNode {
    * Check if this is a source node (no inputs)
    */
   isSource() {
-    return this.category === DataFlowCategory.SOURCE;
+    return this.category === DataFlowCategory.GIVEN ||
+           this.category === DataFlowCategory.SOURCE; // Legacy alias
   }
 
   /**
    * Check if this is a branch node (multiple outputs)
    */
   isBranch() {
-    return this.type === DataFlowNodeType.BRANCH;
+    return this.type === DataFlowNodeType.BRANCH ||
+           this.type === DataFlowNodeType.SWITCH;
+  }
+
+  /**
+   * Check if this is a merge node (multiple inputs)
+   */
+  isMerge() {
+    return this.type === DataFlowNodeType.MERGE ||
+           this.type === DataFlowNodeType.JOIN;
   }
 
   /**
@@ -1506,6 +1843,7 @@ if (typeof window !== 'undefined') {
   window.DataFlowNodeLabels = DataFlowNodeLabels;
   window.DataFlowNodeIcons = DataFlowNodeIcons;
   window.CategoryColors = CategoryColors;
+  window.CategoryMeta = CategoryMeta;
   window.ExecutionState = ExecutionState;
   window.DataFlowNode = DataFlowNode;
   window.DataFlowWire = DataFlowWire;
@@ -1520,6 +1858,7 @@ if (typeof module !== 'undefined' && module.exports) {
     DataFlowNodeLabels,
     DataFlowNodeIcons,
     CategoryColors,
+    CategoryMeta,
     ExecutionState,
     DataFlowNode,
     DataFlowWire,
