@@ -33883,9 +33883,30 @@ class EODataWorkbench {
         return;
       }
 
+      // FDM display mode containers click - show data viewer
+      // This handles table, graph, raw, summary modes
+      const fdmContent = target.closest('.fdm-table, .fdm-table-container, .fdm-graph-container, .fdm-raw-container, .fdm-summary, .fdm-chips-container');
+      if (fdmContent && !target.closest('.fdm-mode-btn')) {
+        e.stopPropagation();
+        const cell = fdmContent.closest('td[data-field-id]');
+        const recordId = cell?.closest('tr')?.dataset.recordId;
+        const fieldId = cell?.dataset.fieldId;
+        if (recordId && fieldId) {
+          const set = this.getCurrentSet();
+          const record = set?.records.find(r => r.id === recordId);
+          const field = set?.fields.find(f => f.id === fieldId);
+          if (record && field) {
+            const value = record.values[fieldId];
+            this._showJsonDataViewer(value, field.name);
+          }
+        }
+        return;
+      }
+
       // Cell click - open semantic triplet modal for editing with history
       // For JSON fields, open the data viewer instead
-      const cell = target.closest('td.cell-editable');
+      // Use td[data-field-id] to find the main cell, not inner nested tds
+      const cell = target.closest('td[data-field-id].cell-editable');
       if (cell && !cell.classList.contains('cell-editing')) {
         e.stopPropagation(); // Prevent row click
         const recordId = cell.closest('tr')?.dataset.recordId;
