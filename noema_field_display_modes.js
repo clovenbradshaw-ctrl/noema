@@ -25,6 +25,7 @@ const FieldDisplayModes = {
   TABLE: 'table',
   GRAPH: 'graph',
   RAW: 'raw',
+  NAVIGATE: 'navigate', // n8n-style drill-down navigation
   KEY_VALUE: 'keyValue' // Legacy mode for backwards compatibility
 };
 
@@ -88,7 +89,8 @@ class FieldDisplayModesManager {
         summary: { template: '{count} items' },
         chips: { maxVisible: 6, showTypes: true, expandable: true },
         table: { columns: null, sortBy: null, maxRows: 5 },
-        graph: { layout: 'dagre', showLabels: true }
+        graph: { layout: 'dagre', showLabels: true },
+        navigate: { maxItems: 50, showTypes: true }
       }
     };
   }
@@ -242,6 +244,8 @@ class FieldDisplayModesManager {
         return this.renderGraph(parsed, horizon, displayConfig.modes.graph);
       case FieldDisplayModes.RAW:
         return this.renderRaw(value, searchTerm);
+      case FieldDisplayModes.NAVIGATE:
+        return this.renderNavigate(value, field, displayConfig.modes.navigate);
       case FieldDisplayModes.KEY_VALUE:
       default:
         return this.renderChips(parsed, horizon, displayConfig.modes.chips, searchTerm);
@@ -676,11 +680,42 @@ class FieldDisplayModesManager {
   }
 
   /**
+   * Render Navigate Mode (n8n-style drill-down)
+   */
+  renderNavigate(value, field, config = {}) {
+    // Check if JsonNavigator is available
+    if (typeof JsonNavigator === 'undefined' || typeof jsonNavigatorManager === 'undefined') {
+      // Fallback to chips if navigator not loaded
+      const parsed = this.parseNestedData(value);
+      return this.renderChips(parsed, HorizonLevels.DETAILED, {}, '');
+    }
+
+    // Generate unique container ID for this cell
+    const containerId = `jnav-${field.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Initialize the navigator manager if needed
+    jsonNavigatorManager.init();
+
+    // Create and render the navigator
+    const html = jsonNavigatorManager.createNavigator(containerId, value, {
+      maxItems: config.maxItems || 50,
+      showTypes: config.showTypes !== false
+    });
+
+    // Wrap with mode toggle
+    let result = html;
+    result += this._renderInlineModeToggle();
+
+    return result;
+  }
+
+  /**
    * Render inline mode toggle buttons
    */
   _renderInlineModeToggle() {
     return `
       <div class="fdm-mode-toggle" title="Switch display mode">
+        <button class="fdm-mode-btn" data-mode="navigate" title="Navigate"><i class="ph ph-compass"></i></button>
         <button class="fdm-mode-btn" data-mode="summary" title="Summary"><i class="ph ph-list-numbers"></i></button>
         <button class="fdm-mode-btn" data-mode="chips" title="Chips"><i class="ph ph-squares-four"></i></button>
         <button class="fdm-mode-btn" data-mode="table" title="Table"><i class="ph ph-table"></i></button>
@@ -725,6 +760,7 @@ class FieldDisplayModesManager {
    */
   renderModeSelector(currentMode = FieldDisplayModes.CHIPS) {
     const modes = [
+      { id: FieldDisplayModes.NAVIGATE, label: 'Navigate', icon: 'ph-compass', desc: 'Drill-down navigation' },
       { id: FieldDisplayModes.SUMMARY, label: 'Summary', icon: 'ph-list-numbers' },
       { id: FieldDisplayModes.CHIPS, label: 'Chips', icon: 'ph-squares-four' },
       { id: FieldDisplayModes.TABLE, label: 'Table', icon: 'ph-table' },
